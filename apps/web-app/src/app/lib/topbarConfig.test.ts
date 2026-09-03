@@ -186,6 +186,35 @@ describe("resolveBackAction", () => {
 });
 
 describe("buildTopbarRight", () => {
+  it("offers the pencil on the bank payment page and hides it while editing", () => {
+    const args = {
+      chatEditContactId: null,
+      isProfileEditing: false,
+      openReceiveScan: vi.fn(),
+      openScan: vi.fn(),
+      t: (key: string) => key,
+      toggleMenu: vi.fn(),
+    };
+    const button = buildTopbarRight({
+      ...args,
+      route: { kind: "bankPayment", spdPayload: "SPD*1.0" },
+    });
+
+    button?.onClick();
+
+    expect(button?.icon).toBe("edit");
+    expect(button?.label).toBe("spdPaymentEditFields");
+    expect(assignMock).toHaveBeenLastCalledWith(
+      "#wallet/bank-payment/SPD*1.0/edit",
+    );
+    expect(
+      buildTopbarRight({
+        ...args,
+        route: { kind: "bankPayment", spdPayload: "SPD*1.0", editing: true },
+      }),
+    ).toBeNull();
+  });
+
   it("opens the receive scanner from the top-up page", () => {
     const openReceiveScan = vi.fn();
     const button = buildTopbarRight({
@@ -202,5 +231,20 @@ describe("buildTopbarRight", () => {
 
     expect(button?.icon).toBe("scan");
     expect(openReceiveScan).toHaveBeenCalledOnce();
+  });
+});
+
+describe("resolveBackAction for bank payment editing", () => {
+  it("leaves the edit form back to the same payment", () => {
+    expect(
+      backHashFor({
+        kind: "bankPayment",
+        spdPayload: "SPD*1.0",
+        editing: true,
+      }),
+    ).toBe("#wallet/bank-payment/SPD*1.0");
+    expect(backHashFor({ kind: "bankPayment", spdPayload: "SPD*1.0" })).toBe(
+      "#wallet",
+    );
   });
 });

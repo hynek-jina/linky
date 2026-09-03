@@ -36,6 +36,18 @@ Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
   writable: true,
 });
 
+const setInputValue = (input: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  if (!setter) {
+    throw new Error("HTML input value setter missing");
+  }
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
 const t = (key: string): string => {
   if (key === "spdPaymentRequestReimbursementCountOther") {
     return "Ask {count} contacts to pay";
@@ -63,6 +75,7 @@ describe("SpdPaymentPage offer recipients", () => {
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={2}
           initialOfferDelaySec={0}
+          isEditing={false}
           offerContacts={[
             { id: "a", name: "Alice", npub: "npub1alice" },
             { id: "b", name: "Bob", npub: "npub1bob" },
@@ -140,6 +153,7 @@ describe("SpdPaymentPage offer recipients", () => {
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={3}
           initialOfferDelaySec={5}
+          isEditing={false}
           offerContacts={[
             { id: "a", name: "Alice", npub: "npub1alice" },
             { id: "b", name: "Bob", npub: "npub1bob" },
@@ -202,6 +216,7 @@ describe("SpdPaymentPage offer recipients", () => {
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={1}
           initialOfferDelaySec={0}
+          isEditing={false}
           offerContacts={[
             { id: "contact-a", name: "Alice", npub: "npub1alice" },
           ]}
@@ -236,6 +251,7 @@ describe("SpdPaymentPage offer recipients", () => {
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={1}
           initialOfferDelaySec={0}
+          isEditing={false}
           offerContacts={[
             {
               id: "contact-a",
@@ -257,5 +273,198 @@ describe("SpdPaymentPage offer recipients", () => {
     );
     expect(candidates[0]?.textContent).toContain("Last time 02:05");
     expect(candidates[1]?.textContent).not.toContain("Last time");
+  });
+
+  const renderEditable = async (
+    container: HTMLElement,
+    spdPayload: string,
+    onRequestReimbursement: () => Promise<{
+      chatId: string;
+      offerId: string;
+    } | null>,
+  ) => {
+    const root = createRoot(container);
+    const render = async (isEditing: boolean) => {
+      await act(async () => {
+        root.render(
+          <SpdPaymentPage
+            cashuBalanceAfterMelt={100_000}
+            initialOfferContactCount={1}
+            initialOfferDelaySec={0}
+            isEditing={isEditing}
+            offerContacts={[
+              { id: "contact-a", name: "Alice", npub: "npub1alice" },
+            ]}
+            onRequestReimbursement={onRequestReimbursement}
+            spdPayload={spdPayload}
+            t={t}
+          />,
+        );
+      });
+    };
+    await render(false);
+    return render;
+  };
+
+  const fieldInput = (container: HTMLElement, key: string) => {
+    const input = container.querySelector<HTMLInputElement>(
+      `#bank-payment-field-${key}`,
+    );
+    if (!input) throw new Error(`input ${key} missing`);
+    return input;
+  };
+
+  const rowValues = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll(".bank-payment-value")).map(
+      (value) => value.textContent,
+    );
+
+  it("sends the confirmed edits instead of the scanned fields", async () => {
+    const onRequestReimbursement = vi.fn(async () => null);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const spdPayload =
+      "SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK*X-VS:111";
+    const render = await renderEditable(
+      container,
+      spdPayload,
+      onRequestReimbursement,
+    );
+
+    expect(rowValues(container)).toEqual(["1265098001/5500", "111"]);
+    expect(container.querySelector(".bank-payment-recipient")).toBeNull();
+
+    await render(true);
+
+    expect(container.querySelector(".bank-payment-request")).toBeNull();
+    expect(container.querySelector(".bank-payment-offer-contact")).toBeNull();
+    expect(container.querySelector(".bank-payment-offer-delay")).toBeNull();
+    expect(fieldInput(container, "AM").value).toBe("480");
+    expect(fieldInput(container, "ACC").value).toBe("1265098001/5500");
+    expect(fieldInput(container, "X-VS").value).toBe("111");
+    expect(fieldInput(container, "MSG").value).toBe("");
+    expect(container.querySelector(".input-public-value")?.textContent).toBe(
+      "CZK",
+    );
+
+    await act(async () => {
+      setInputValue(fieldInput(container, "AM"), "100");
+      setInputValue(fieldInput(container, "ACC"), "19-2000145399/0800");
+      setInputValue(fieldInput(container, "X-VS"), "222");
+      setInputValue(fieldInput(container, "MSG"), "Oběd");
+    });
+
+    expect(container.querySelector(".bank-payment-amount")?.textContent).toBe(
+      "10000 sat",
+    );
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(".bank-payment-edit-confirm")
+        ?.click();
+    });
+    expect(navigateTo).toHaveBeenLastCalledWith({
+      route: "bankPayment",
+      spdPayload,
+    });
+
+    await render(false);
+
+    expect(
+      Array.from(container.querySelectorAll(".bank-payment-row")).map(
+        (row) => row.textContent,
+      ),
+    ).toEqual([
+      "spdPaymentAccount19-2000145399/0800",
+      "spdPaymentVariableSymbol222",
+      "spdPaymentMessageOběd",
+    ]);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(".bank-payment-request")
+        ?.click();
+    });
+
+    expect(onRequestReimbursement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountSat: 10_000,
+        spdPayload:
+          "SPD*1.0*ACC:CZ6508000000192000145399*AM:100*CC:CZK*X-VS:222*MSG:Ob%C4%9Bd",
+      }),
+    );
+  });
+
+  it("flags invalid account and BIC edits and drops a draft left by navigation", async () => {
+    const onRequestReimbursement = vi.fn(async () => null);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const spdPayload = "SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK";
+    const render = await renderEditable(
+      container,
+      spdPayload,
+      onRequestReimbursement,
+    );
+    await render(true);
+
+    const confirmButton = () =>
+      container.querySelector<HTMLButtonElement>(".bank-payment-edit-confirm");
+    const errorText = () =>
+      container.querySelector(".bank-payment-error")?.textContent ?? null;
+    const errorRowInputId = () =>
+      container
+        .querySelector(".bank-payment-error")
+        ?.closest(".bank-payment-edit-row")
+        ?.querySelector("input")?.id ?? null;
+
+    await act(async () => {
+      setInputValue(fieldInput(container, "ACC"), "");
+    });
+    expect(errorText()).toBe("spdPaymentMissingAccount");
+    expect(errorRowInputId()).toBe("bank-payment-field-ACC");
+    expect(confirmButton()?.disabled).toBe(true);
+
+    await act(async () => {
+      setInputValue(fieldInput(container, "ACC"), "1234/0800");
+    });
+    expect(errorText()).toBe("spdPaymentInvalidAccount");
+    expect(fieldInput(container, "ACC").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
+
+    await act(async () => {
+      setInputValue(fieldInput(container, "ACC"), "1265098001/5500");
+      setInputValue(fieldInput(container, "BIC"), "GIBA");
+    });
+    expect(errorText()).toBe("spdPaymentInvalidBic");
+    expect(errorRowInputId()).toBe("bank-payment-field-BIC");
+
+    await act(async () => {
+      setInputValue(fieldInput(container, "AM"), "12,345");
+    });
+    expect(errorText()).toBe("spdPaymentInvalidAmount");
+
+    // Topbar back / hardware back leave the form without confirming.
+    await render(false);
+
+    expect(rowValues(container)).toEqual(["1265098001/5500"]);
+    expect(
+      container.querySelector<HTMLButtonElement>(".bank-payment-request")
+        ?.disabled,
+    ).toBe(false);
+
+    await render(true);
+    expect(fieldInput(container, "AM").value).toBe("480");
+    expect(fieldInput(container, "BIC").value).toBe("");
+    await render(false);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(".bank-payment-request")
+        ?.click();
+    });
+    expect(onRequestReimbursement).toHaveBeenCalledWith(
+      expect.objectContaining({ spdPayload }),
+    );
   });
 });

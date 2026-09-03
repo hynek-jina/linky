@@ -14,6 +14,8 @@ const decodeSegment = (value: string): string | null => {
   }
 };
 
+export const BANK_PAYMENT_EDIT_SUFFIX = "/edit";
+
 const decodeHashSegment = (hash: string, prefix: string): string | null =>
   hash.startsWith(prefix) ? decodeSegment(hash.slice(prefix.length)) : null;
 
@@ -48,7 +50,7 @@ export type Route =
   | { kind: "topupNoAmount" }
   | { kind: "topupInvoice" }
   | { kind: "manualPay" }
-  | { kind: "bankPayment"; spdPayload: string }
+  | { kind: "bankPayment"; spdPayload: string; editing?: true }
   | { kind: "lnAddressPay"; lnAddress: string }
   | { kind: "cashuTokens" }
   | { kind: "cashuTokenNew" }
@@ -115,8 +117,20 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#wallet/pay") return { kind: "manualPay" };
 
   const bankPaymentPrefix = "#wallet/bank-payment/";
-  const spdPayload = decodeHashSegment(hash, bankPaymentPrefix);
-  if (spdPayload) return { kind: "bankPayment", spdPayload };
+  if (hash.startsWith(bankPaymentPrefix)) {
+    const editing = hash.endsWith(BANK_PAYMENT_EDIT_SUFFIX);
+    const spdPayload = decodeSegment(
+      hash.slice(
+        bankPaymentPrefix.length,
+        editing ? -BANK_PAYMENT_EDIT_SUFFIX.length : undefined,
+      ),
+    );
+    if (spdPayload) {
+      return editing
+        ? { kind: "bankPayment", spdPayload, editing: true }
+        : { kind: "bankPayment", spdPayload };
+    }
+  }
 
   if (hash === "#wallet/tokens") return { kind: "cashuTokens" };
 

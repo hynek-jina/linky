@@ -4769,7 +4769,6 @@ button.bank-payment-amount-button:hover {
   box-shadow: none;
 }
 
-.bank-payment-recipient,
 .bank-payment-hint {
   margin: 0;
 }
@@ -5092,6 +5091,24 @@ button.bank-payment-amount-button:hover {
 .bank-payment-value {
   color: #dbeafe;
   overflow-wrap: anywhere;
+}
+
+.bank-payment-edit {
+  gap: 12px;
+}
+
+.bank-payment-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-payment-edit-row label {
+  margin: 0;
+}
+
+.bank-payment-edit-row input[aria-invalid="true"] {
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.55);
 }
 
 .bank-payment-copy.transaction-detail-copy {

@@ -28,7 +28,7 @@ const formatCashuFee = (ppk: number): string => {
 };
 
 const formatPercent = (percent: number): string =>
-  `~${percent.toFixed(percent >= 10 ? 0 : 1).replace(/\.0$/, "")} %`;
+  `~${percent.toFixed(1).replace(/\.0$/, "")} %`;
 
 // The probe invoice must come from a real Lightning-backed mint (a dev
 // FakeWallet invoice cannot be quoted), so this ignores the env presets.

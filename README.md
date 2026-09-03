@@ -46,6 +46,7 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 - Payments:
   - Lightning invoice and LN address payment
   - contact payment via Cashu message flow
+  - proxy payment of a scanned bank QR (SPD, EPC, PAY by square) with editable fields before the offer is sent
 - Push: optional Bun push service in `apps/push/` for generic Web Push notifications on new outer inbox `kind: 1059` events
 - Debug pages for Evolu current/history data and owner/rotation diagnostics
 

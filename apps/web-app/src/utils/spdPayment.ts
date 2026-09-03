@@ -1,4 +1,13 @@
-import { decode as decodePayBySquare, PaymentOptions } from "bysquare/pay";
+import {
+  decode as decodePayBySquare,
+  encode as encodePayBySquare,
+  PaymentOptions,
+} from "bysquare/pay";
+import {
+  getDomesticBankAccountCountry,
+  isValidBic,
+  normalizeBankAccountInput,
+} from "./bankAccount";
 
 export type BankPaymentFormat = "bysquare" | "epc" | "spd";
 
@@ -48,7 +57,14 @@ export const parseSpdPayment = (input: string): SpdPayment => {
     fields[key] = value;
   }
 
-  if (!String(fields["ACC"] ?? "").trim()) {
+  // SPD carries the BIC inside ACC as `IBAN+BIC`; keep it as its own field so
+  // every format exposes the same shape.
+  const [iban = "", bic = ""] = String(fields["ACC"] ?? "").split("+");
+  if (iban.trim()) fields["ACC"] = iban.trim();
+  else delete fields["ACC"];
+  if (bic.trim() && !fields["BIC"]) fields["BIC"] = bic.trim();
+
+  if (!fields["ACC"]) {
     throw new Error("spd-missing-account");
   }
 
@@ -193,6 +209,215 @@ export const getBankPaymentOfferCurrency = (
     tryParseBankPayment(input)?.fields["CC"] ?? "",
   ).toUpperCase();
   return currency === "CZK" || currency === "EUR" ? currency : null;
+};
+
+export type BankPaymentFieldKey =
+  | "ACC"
+  | "AM"
+  | "BIC"
+  | "DT"
+  | "MSG"
+  | "RF"
+  | "RN"
+  | "X-KS"
+  | "X-SS"
+  | "X-VS";
+
+const SPD_EDITABLE_FIELD_KEYS: readonly BankPaymentFieldKey[] = [
+  "RN",
+  "ACC",
+  "BIC",
+  "RF",
+  "X-VS",
+  "X-SS",
+  "X-KS",
+  "MSG",
+  "DT",
+];
+
+const EPC_EDITABLE_FIELD_KEYS: readonly BankPaymentFieldKey[] = [
+  "RN",
+  "ACC",
+  "BIC",
+  "RF",
+  "MSG",
+];
+
+// Fields a user may change before forwarding the payment, in display order.
+// The amount is edited separately; the currency stays fixed because it
+// selects which contacts can be asked to pay.
+export const getBankPaymentEditableFieldKeys = (
+  format: BankPaymentFormat,
+): readonly BankPaymentFieldKey[] =>
+  format === "epc" ? EPC_EDITABLE_FIELD_KEYS : SPD_EDITABLE_FIELD_KEYS;
+
+const normalizeBankPaymentAmount = (value: string): string => {
+  const normalized = value.trim().replace(/\s/g, "").replace(",", ".");
+  if (!normalized) return "";
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    throw new Error("bank-payment-invalid-amount");
+  }
+  return normalized;
+};
+
+// Accepts an IBAN or a Czech/Slovak domestic account number; the country of
+// the scanned IBAN decides which one a domestic number becomes.
+const normalizeBankPaymentAccount = (
+  value: string,
+  originalIban: string,
+): string => {
+  if (!value.trim()) return "";
+  const iban = normalizeBankAccountInput(
+    value,
+    getDomesticBankAccountCountry(originalIban) ?? "CZ",
+  );
+  if (!iban) throw new Error("bank-payment-invalid-account");
+  return iban;
+};
+
+const normalizeBankPaymentBic = (value: string): string => {
+  const bic = value.replace(/\s/g, "").toUpperCase();
+  if (bic && !isValidBic(bic)) throw new Error("bank-payment-invalid-bic");
+  return bic;
+};
+
+const normalizeBankPaymentField = (
+  payment: BankPayment,
+  key: string,
+  value: string,
+): string => {
+  switch (key) {
+    case "ACC":
+      return normalizeBankPaymentAccount(value, payment.fields["ACC"] ?? "");
+    case "AM":
+      return normalizeBankPaymentAmount(value);
+    case "BIC":
+      return normalizeBankPaymentBic(value);
+    default:
+      return value.trim();
+  }
+};
+
+const mergeBankPaymentFields = (
+  payment: BankPayment,
+  edits: Record<string, string>,
+): Record<string, string> => {
+  const fields = { ...payment.fields };
+  for (const [key, value] of Object.entries(edits)) {
+    const normalized = normalizeBankPaymentField(payment, key, value);
+    if (normalized) fields[key] = normalized;
+    else delete fields[key];
+  }
+  return fields;
+};
+
+// The SPD spec only allows 0-9, A-Z, space, $, +, -, ., / and : unescaped;
+// lowercase letters are kept as-is because scanned payloads commonly carry
+// them and bank apps accept them, while escaping would bloat the QR.
+const SPD_UNESCAPED_CHAR = /^[0-9A-Za-z $+\-./:]$/;
+
+const encodeSpdValue = (value: string): string => {
+  let encoded = "";
+  for (const char of value) {
+    if (SPD_UNESCAPED_CHAR.test(char)) {
+      encoded += char;
+      continue;
+    }
+    for (const byte of new TextEncoder().encode(char)) {
+      encoded += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+    }
+  }
+  return encoded;
+};
+
+// CRC32 authenticates the original string, so it is dropped once any field
+// changes. The BIC travels inside ACC, as the SPD spec defines it.
+const serializeSpdPayment = (fields: Record<string, string>): string =>
+  [
+    "SPD",
+    "1.0",
+    ...Object.entries(fields).flatMap(([key, value]) => {
+      if (key === "CRC32" || key === "BIC") return [];
+      const encoded =
+        key === "ACC" && fields["BIC"]
+          ? `${encodeSpdValue(value)}+${encodeSpdValue(fields["BIC"])}`
+          : encodeSpdValue(value);
+      return [`${key}:${encoded}`];
+    }),
+  ].join("*");
+
+const serializeEpcPayment = (
+  payload: string,
+  fields: Record<string, string>,
+): string => {
+  const lines = payload.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length < 11) lines.push("");
+  lines[4] = fields["BIC"] ?? "";
+  lines[5] = fields["RN"] ?? "";
+  lines[6] = fields["ACC"] ?? "";
+  lines[7] = `EUR${fields["AM"] ?? ""}`;
+  lines[9] = fields["RF"] ?? "";
+  lines[10] = fields["MSG"] ?? "";
+  return lines.join("\n");
+};
+
+const serializePayBySquarePayment = (
+  payload: string,
+  fields: Record<string, string>,
+): string => {
+  const model = decodePayBySquare(payload);
+  const payment = model.payments[0];
+  if (!payment || payment.type !== PaymentOptions.PaymentOrder) {
+    throw new Error("bank-payment-unsupported-bysquare-type");
+  }
+
+  const next = {
+    ...payment,
+    bankAccounts: [
+      { iban: fields["ACC"] ?? "" },
+      ...payment.bankAccounts.slice(1),
+    ],
+    beneficiary: { ...payment.beneficiary, name: fields["RN"] ?? "" },
+  };
+  const bic = fields["BIC"];
+  if (bic && next.bankAccounts[0]) next.bankAccounts[0].bic = bic;
+
+  delete next.amount;
+  delete next.constantSymbol;
+  delete next.originatorsReferenceInformation;
+  delete next.paymentDueDate;
+  delete next.paymentNote;
+  delete next.specificSymbol;
+  delete next.variableSymbol;
+  if (fields["AM"]) next.amount = Number(fields["AM"]);
+  if (fields["X-KS"]) next.constantSymbol = fields["X-KS"];
+  if (fields["RF"]) next.originatorsReferenceInformation = fields["RF"];
+  if (fields["DT"]) next.paymentDueDate = fields["DT"];
+  if (fields["MSG"]) next.paymentNote = fields["MSG"];
+  if (fields["X-SS"]) next.specificSymbol = fields["X-SS"];
+  if (fields["X-VS"]) next.variableSymbol = fields["X-VS"];
+
+  return encodePayBySquare({
+    ...model,
+    payments: [next, ...model.payments.slice(1)],
+  });
+};
+
+// Re-encodes the payment in its original QR format with the edited fields
+// applied; empty values remove the field. Throws when the result is not a
+// valid payment (e.g. missing account or malformed amount).
+export const updateBankPaymentFields = (
+  payment: BankPayment,
+  edits: Record<string, string>,
+): BankPayment => {
+  const fields = mergeBankPaymentFields(payment, edits);
+  const payload =
+    payment.format === "spd"
+      ? serializeSpdPayment(fields)
+      : payment.format === "epc"
+        ? serializeEpcPayment(payment.payload, fields)
+        : serializePayBySquarePayment(payment.payload, fields);
+  return parseBankPayment(payload);
 };
 
 const openSpdPaymentOniOS = async (spdPayload: string): Promise<void> => {
