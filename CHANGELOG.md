@@ -14,11 +14,27 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### en-US
 
-- Removed automatic swapping to the main mint. Changing the main mint no longer moves existing balances; funds move only when you tap "Melt to main mint" on the tokens page.
+### cs-CZ
+
+## [26.9.6] - 2026-09-03
+
+### en-US
+
+- Scanned bank QR payments (SPD, EPC, PAY by square) can be edited before sending the offer; account and BIC are checked.
+- Contact search: faster, results stream in, Linky users and NIP-05 matches come first, accent-insensitive.
+- Lightning addresses work in any letter case; fixed-amount LNURL payments survive re-quotes; server errors are shown.
+- Receive amounts can be pasted from the clipboard.
+- Mint fee estimate shows one decimal.
+- No more automatic swapping to the main mint.
 
 ### cs-CZ
 
-- Odstraněn automatický převod do hlavního mintu. Změna hlavního mintu už nepřesouvá stávající zůstatky; prostředky se převedou jen po klepnutí na „Směnit" na stránce tokenů.
+- Bankovní QR platby (SPD, EPC, PAY by square) lze před odesláním nabídky upravit; účet a BIC se kontrolují.
+- Hledání kontaktů: rychlejší, výsledky přibývají průběžně, uživatelé Linky a NIP-05 shody první, bez ohledu na diakritiku.
+- Lightning adresy nezávisí na velikosti písmen; LNURL platby s pevnou částkou přežijí přepočet; chyby serveru se zobrazí.
+- Částku k přijetí lze vložit ze schránky.
+- Odhad poplatku mintu má jedno desetinné místo.
+- Zrušen automatický převod do hlavního mintu.
 
 ## [26.9.5] - 2026-09-01
 
