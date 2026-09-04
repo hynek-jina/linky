@@ -18,7 +18,7 @@ interface DerivedNostrKeys {
   nsec: string;
 }
 
-export interface EvoluOwnerMnemonicRequest {
+interface EvoluOwnerMnemonicRequest {
   readonly index?: number;
   readonly role: OwnerRole;
 }
@@ -85,7 +85,7 @@ export const deriveCashuBip85MnemonicFromSlip39 = async (
   }
 };
 
-export const deriveEvoluOwnerMnemonicsFromSlip39 = async (
+const deriveEvoluOwnerMnemonicsFromSlip39 = async (
   rawText: string,
   requests: ReadonlyArray<EvoluOwnerMnemonicRequest>,
 ): Promise<ReadonlyArray<string> | null> => {

@@ -8,29 +8,8 @@ export interface KnownNostrMessageIdentityIndex {
   wrapIds: ReadonlySet<string>;
 }
 
-interface NostrMessageIdentityInput {
-  clientId?: unknown;
-  contactId?: unknown;
-  direction?: unknown;
-  rumorId?: unknown;
-  wrapId?: unknown;
-}
-
 export const getLocalNostrMessageRumorKey = (
   message: Pick<LocalNostrMessage, "contactId" | "direction" | "rumorId">,
-): string => {
-  const rumorId = normalizeText(message.rumorId);
-  if (!rumorId) return "";
-
-  const contactId = normalizeText(message.contactId);
-  const direction = normalizeText(message.direction);
-  if (!contactId || (direction !== "in" && direction !== "out")) return "";
-
-  return `${contactId}|${direction}|${rumorId}`;
-};
-
-const getNostrMessageRumorKeyFromInput = (
-  message: NostrMessageIdentityInput,
 ): string => {
   const rumorId = normalizeText(message.rumorId);
   if (!rumorId) return "";
@@ -63,22 +42,6 @@ export const buildKnownNostrMessageIdentityIndex = (
   }
 
   return { clientIds, rumorKeys, wrapIds };
-};
-
-export const hasKnownNostrMessageIdentity = (
-  index: KnownNostrMessageIdentityIndex,
-  message: NostrMessageIdentityInput,
-): boolean => {
-  const wrapId = normalizeText(message.wrapId);
-  if (wrapId && index.wrapIds.has(wrapId)) return true;
-
-  const clientId = normalizeText(message.clientId);
-  if (clientId && index.clientIds.has(clientId)) return true;
-
-  const rumorKey = getNostrMessageRumorKeyFromInput(message);
-  if (rumorKey && index.rumorKeys.has(rumorKey)) return true;
-
-  return false;
 };
 
 const pickPreferredMessage = (

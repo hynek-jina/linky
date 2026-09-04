@@ -122,7 +122,7 @@ const readObjectField = (value: unknown, field: string): unknown => {
   return Reflect.get(value, field);
 };
 
-export interface LinkyBankPaymentOfferSpdRecord {
+interface LinkyBankPaymentOfferSpdRecord {
   createdAtSec: number;
   ownerPubkey: string;
   sentCandidateKeys: string[];
@@ -276,7 +276,7 @@ export const forgetLinkyBankPaymentOfferSpdPayload = (
   }
 };
 
-export interface LinkyBankPaymentOfferStaggerRecipient {
+interface LinkyBankPaymentOfferStaggerRecipient {
   contactId: string;
   contactPubHex: string;
   dueAtSec: number;
@@ -533,16 +533,6 @@ export const getLinkyBankPaymentOfferMessageText = (
   return getOfferText(amountText, status);
 };
 
-export const shouldPushLinkyBankPaymentOfferStatus = (
-  status: LinkyBankPaymentOfferStatus,
-): boolean =>
-  status === "accepted" ||
-  status === "accepted_by_other" ||
-  status === "bank_details_sent" ||
-  status === "bank_paid" ||
-  status === "declined" ||
-  status === "offered";
-
 export const getLinkyBankPaymentOfferInfo = (
   content: string,
 ): LinkyBankPaymentOfferInfo | null => {
@@ -639,7 +629,7 @@ interface BankPaymentOfferContactEntry {
   message: LocalNostrMessage;
 }
 
-export interface ActiveBankPaymentOfferContacts {
+interface ActiveBankPaymentOfferContacts {
   contactIds: ReadonlySet<string>;
   nextExpiryAtSec: number | null;
 }

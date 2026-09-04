@@ -20,13 +20,13 @@ const readText = (value: unknown): string | null => {
   return trimmed ? trimmed : null;
 };
 
-export interface Nip05Identifier {
+interface Nip05Identifier {
   domain: string;
   identifier: string;
   localPart: string;
 }
 
-export type Nip05ResolutionResult =
+type Nip05ResolutionResult =
   | {
       identifier: Nip05Identifier;
       kind: "resolved";
@@ -140,7 +140,7 @@ const readRelays = (value: unknown, pubkeyHex: string): string[] => {
   return out;
 };
 
-export const resolveNip05Identifier = async (
+const resolveNip05Identifier = async (
   identifier: Nip05Identifier,
   options?: { signal?: AbortSignal },
 ): Promise<Nip05ResolutionResult> => {

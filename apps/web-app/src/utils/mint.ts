@@ -19,7 +19,7 @@ export const PRESET_MINTS = envMainMintUrl
       ...PRODUCTION_MINTS.slice(1),
     ];
 
-export const TEST_MINTS = ["https://testnut.cashu.space"];
+const TEST_MINTS = ["https://testnut.cashu.space"];
 
 export const CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY =
   "linky.cashu.defaultMintOverride.v1";

@@ -1,6 +1,6 @@
 import type { Route } from "../../types/route";
 
-export type DesktopRouteSection = "contacts" | "wallet" | "settings";
+type DesktopRouteSection = "contacts" | "wallet" | "settings";
 
 export const getDesktopRouteSection = (route: Route): DesktopRouteSection => {
   switch (route.kind) {

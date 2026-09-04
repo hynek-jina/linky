@@ -1,4 +1,4 @@
-export interface MessageLinkMatch {
+interface MessageLinkMatch {
   displayText: string;
   end: number;
   start: number;

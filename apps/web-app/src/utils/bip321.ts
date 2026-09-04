@@ -16,7 +16,7 @@
 
 import { isLightningAddress } from "../lnurlPay";
 
-export interface Bip321Parsed {
+interface Bip321Parsed {
   address: string | null;
   amountBtc: number | null;
   amountSat: number | null;
@@ -148,7 +148,7 @@ export const buildBip321PaymentUri = (args: {
   return query ? `bitcoin:?${query}` : null;
 };
 
-export interface Bip321PayableLeg {
+interface Bip321PayableLeg {
   kind: "cashu-request" | "lightning" | "lnurl" | "ln-address";
   value: string;
 }

@@ -16,7 +16,7 @@ const isJsonRecord = (value: ValidationValue): value is JsonRecord => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
-export const trimString = (value: StringConvertible): string => {
+const trimString = (value: StringConvertible): string => {
   return String(value ?? "").trim();
 };
 

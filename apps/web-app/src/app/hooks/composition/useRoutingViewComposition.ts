@@ -16,7 +16,7 @@ interface UseRoutingViewCompositionParams {
   ungroupedCount: number;
 }
 
-export interface RoutingViewCompositionResult {
+interface RoutingViewCompositionResult {
   mainSwipeRouteProps: MainSwipeRoutesProps;
   pageClassNameWithSwipe: string;
 }

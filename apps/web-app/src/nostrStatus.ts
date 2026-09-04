@@ -6,11 +6,11 @@
 
 export const PROFILE_STATUS_CURRENCIES = ["BTC", "CZK", "EUR"] as const;
 const LEGACY_PROFILE_STATUS_CURRENCIES = ["USD"] as const;
-export const STATUS_FILTER_PREFIX = "status:";
+const STATUS_FILTER_PREFIX = "status:";
 
 export type ProfileStatusCurrency = (typeof PROFILE_STATUS_CURRENCIES)[number];
 
-export interface ParsedProfileGeneralStatus {
+interface ParsedProfileGeneralStatus {
   currencies: ProfileStatusCurrency[];
   text: string | null;
 }
@@ -63,7 +63,7 @@ const parseLinkyProfileExchangeStatus = (
   );
 };
 
-export const parseProfileGeneralStatus = (
+const parseProfileGeneralStatus = (
   status: string | null | undefined,
 ): ParsedProfileGeneralStatus => {
   const normalizedStatus = normalizeStatusText(status);
@@ -164,10 +164,4 @@ export const buildProfileGeneralStatus = (params: {
   if (text) return text;
 
   return selected.length > 0 ? selected.join(", ") : null;
-};
-
-export const buildProfileExchangeStatus = (
-  currencies: readonly ProfileStatusCurrency[],
-): string | null => {
-  return buildProfileGeneralStatus({ currencies, text: null });
 };

@@ -28,7 +28,7 @@ interface UseGuideScannerDomainParams {
   t: (key: string) => string;
 }
 
-export type ScanEntryPoint = "contacts" | "receive" | "send";
+type ScanEntryPoint = "contacts" | "receive" | "send";
 
 type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
   closeScan: () => void;

@@ -20,7 +20,7 @@ export const buildUnknownContactId = (pubkeyHex: unknown): string | null => {
   return `${UNKNOWN_CONTACT_ID_PREFIX}${normalizedPubkey}`;
 };
 
-export const readUnknownPubkeyHex = (
+const readUnknownPubkeyHex = (
   contact: ContactIdentityRowLike | null,
 ): string | null => {
   if (!contact || typeof contact !== "object") return null;
@@ -46,7 +46,7 @@ export const readUnknownContactIdPubkey = (id: unknown): string | null => {
   );
 };
 
-export interface ResolvedNostrChatIdentity {
+interface ResolvedNostrChatIdentity {
   contactPubHex: string;
   myPubHex: string;
   privBytes: NostrSecretKey;

@@ -5,7 +5,7 @@ export const SLIP39_WORD_COUNT = 20;
 const SUGGESTION_LIMIT = 6;
 const SLIP39_WORD_SET = new Set(SLIP39_WORD_LIST);
 
-export interface Slip39InputAnalysis {
+interface Slip39InputAnalysis {
   activeFragment: string;
   hasSeparatorFixups: boolean;
   invalidWords: readonly string[];

@@ -1,4 +1,4 @@
-export interface QrCameraConstraintCandidate {
+interface QrCameraConstraintCandidate {
   constraints: MediaStreamConstraints;
   strategy: "device-exact" | "rear-exact" | "rear-ideal" | "any-camera";
 }

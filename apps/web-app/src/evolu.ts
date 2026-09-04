@@ -24,19 +24,18 @@ const isEvoluLoggingEnabled = (): boolean => {
   }
 };
 
-export const EVOLU_SERVERS_STORAGE_KEY = "linky.evoluServers.v1";
+const EVOLU_SERVERS_STORAGE_KEY = "linky.evoluServers.v1";
 
 // Backwards-compatible flag that allows removing the built-in default servers.
 // Without this, we can only store "extras" and the defaults would always be re-added.
-export const EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY =
+const EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY =
   "linky.evoluServers.defaultRemoved.v1";
 
-export const EVOLU_SERVERS_DISABLED_STORAGE_KEY =
-  "linky.evoluServers.disabled.v1";
+const EVOLU_SERVERS_DISABLED_STORAGE_KEY = "linky.evoluServers.disabled.v1";
 
 export type EvoluServerStatus = "checking" | "connected" | "disconnected";
 
-export type EvoluDatabaseInfo = {
+type EvoluDatabaseInfo = {
   bytes: number | null;
   tableCounts: Record<string, number | null>;
   historyCount: number | null;
@@ -48,7 +47,7 @@ const envEvoluServerUrls = (import.meta.env.VITE_EVOLU_SERVER_URLS ?? "")
   .map((url) => url.trim())
   .filter((url) => url.startsWith("ws://") || url.startsWith("wss://"));
 
-export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> =
+const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> =
   envEvoluServerUrls.length > 0
     ? envEvoluServerUrls
     : ["wss://evolu.linky.fit", "wss://free.evoluhq.com"];
@@ -236,19 +235,12 @@ const normalizeUrlList = (
   return unique;
 };
 
-export const getEvoluDisabledServerUrls = (): ReadonlyArray<string> => {
+const getEvoluDisabledServerUrls = (): ReadonlyArray<string> => {
   const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
     EVOLU_SERVERS_DISABLED_STORAGE_KEY,
     [],
   );
   return normalizeUrlList(stored);
-};
-
-export const isEvoluServerDisabled = (url: string): boolean => {
-  const normalized = normalizeEvoluServerUrl(url);
-  if (!normalized) return false;
-  const disabled = getEvoluDisabledServerUrls();
-  return disabled.some((u) => u.toLowerCase() === normalized.toLowerCase());
 };
 
 export const setEvoluServerDisabled = (
@@ -265,13 +257,7 @@ export const setEvoluServerDisabled = (
   safeLocalStorageSetJson(EVOLU_SERVERS_DISABLED_STORAGE_KEY, next);
 };
 
-export const toggleEvoluServerDisabled = (url: string): boolean => {
-  const next = !isEvoluServerDisabled(url);
-  setEvoluServerDisabled(url, next);
-  return next;
-};
-
-export const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
+const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
   const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
     EVOLU_SERVERS_STORAGE_KEY,
     [],
@@ -295,20 +281,14 @@ export const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
   return unique;
 };
 
-export const getEvoluServerUrls = (): ReadonlyArray<string> => {
-  // Back-compat alias: historically used as "the server list".
-  // Now returns configured (including disabled) so UIs can display everything.
-  return getEvoluConfiguredServerUrls();
-};
-
-export const getEvoluActiveServerUrls = (): ReadonlyArray<string> => {
+const getEvoluActiveServerUrls = (): ReadonlyArray<string> => {
   const configured = getEvoluConfiguredServerUrls();
   const disabled = getEvoluDisabledServerUrls();
   const disabledLower = new Set(disabled.map((u) => u.toLowerCase()));
   return configured.filter((u) => !disabledLower.has(u.toLowerCase()));
 };
 
-export const setEvoluServerUrls = (urls: ReadonlyArray<string>): void => {
+const setEvoluServerUrls = (urls: ReadonlyArray<string>): void => {
   const normalized = urls
     .map(normalizeEvoluServerUrl)
     .filter((v): v is string => Boolean(v));
@@ -336,20 +316,19 @@ export const setEvoluServerUrls = (urls: ReadonlyArray<string>): void => {
   safeLocalStorageSetJson(EVOLU_SERVERS_STORAGE_KEY, extras);
 };
 
-export const EVOLU_SERVER_URLS: ReadonlyArray<string> =
-  getEvoluActiveServerUrls();
+const EVOLU_SERVER_URLS: ReadonlyArray<string> = getEvoluActiveServerUrls();
 
-export const buildEvoluTransports = (
+const buildEvoluTransports = (
   urls: ReadonlyArray<string>,
 ): ReadonlyArray<{ type: "WebSocket"; url: string }> =>
   urls.map((url) => ({ type: "WebSocket", url }));
 
-export const EVOLU_TRANSPORTS: ReadonlyArray<{
+const EVOLU_TRANSPORTS: ReadonlyArray<{
   type: "WebSocket";
   url: string;
 }> = buildEvoluTransports(EVOLU_SERVER_URLS);
 
-export const probeWebSocketConnection = (
+const probeWebSocketConnection = (
   url: string,
   timeoutMs = 2500,
 ): Promise<boolean> => {
@@ -404,19 +383,19 @@ export type CashuTokenId = typeof CashuTokenId.Type;
 
 // Primary key pro NostrIdentity tabulku
 const NostrIdentityId = Evolu.id("NostrIdentity");
-export type NostrIdentityId = typeof NostrIdentityId.Type;
+type NostrIdentityId = typeof NostrIdentityId.Type;
 
 // Primary key pro NostrMessage tabulku
 const NostrMessageId = Evolu.id("NostrMessage");
-export type NostrMessageId = typeof NostrMessageId.Type;
+type NostrMessageId = typeof NostrMessageId.Type;
 
 // Primary key pro NostrReaction tabulku
 const NostrReactionId = Evolu.id("NostrReaction");
-export type NostrReactionId = typeof NostrReactionId.Type;
+type NostrReactionId = typeof NostrReactionId.Type;
 
 // Primary key pro OwnerMeta tabulku (metadata pro owner lane routing)
 const OwnerMetaId = Evolu.id("OwnerMeta");
-export type OwnerMetaId = typeof OwnerMetaId.Type;
+type OwnerMetaId = typeof OwnerMetaId.Type;
 
 // Primary key pro Transaction tabulku
 const TransactionId = Evolu.id("Transaction");
@@ -555,7 +534,7 @@ export const Schema = {
 
 // Create Evolu instance for a specific user (mnemonic)
 // Each user gets their own SQLite database file based on their mnemonic
-export const createEvoluForUser = (mnemonic: string | null) => {
+const createEvoluForUser = (mnemonic: string | null) => {
   const dbName = mnemonic ? generateDbNameFromMnemonic(mnemonic) : "linky-anon";
 
   const validatedName = SimpleName.from(dbName);
@@ -588,7 +567,7 @@ type EvoluInstance = ReturnType<typeof createEvoluForUser>;
 let globalEvoluInstance: EvoluInstance | null = null;
 
 // Initialize or get the Evolu instance for current user
-export const getEvolu = (mnemonic?: string | null): EvoluInstance => {
+const getEvolu = (mnemonic?: string | null): EvoluInstance => {
   if (mnemonic !== undefined) {
     // Create new instance for this specific mnemonic
     globalEvoluInstance = createEvoluForUser(mnemonic);
@@ -682,7 +661,7 @@ export const useEvoluLastError = (opts?: {
   return lastError;
 };
 
-export const getEvoluDatabaseInfo = async (): Promise<{
+const getEvoluDatabaseInfo = async (): Promise<{
   bytes: number;
   tableCounts: Record<string, number | null>;
   historyCount: number | null;
@@ -714,15 +693,8 @@ export const getEvoluDatabaseInfo = async (): Promise<{
         }
       })();
 
-      // Generate expected directory name
       const expectedDir = mnemonic
-        ? (() => {
-            let hash = 0;
-            for (let i = 0; i < mnemonic.length; i++) {
-              hash = ((hash << 5) - hash + mnemonic.charCodeAt(i)) | 0;
-            }
-            return `.linky-${Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8)}`;
-          })()
+        ? `.${generateDbNameFromMnemonic(mnemonic)}`
         : ".linky-anon";
 
       let totalSize = 0;
@@ -846,7 +818,7 @@ export interface EvoluHistoryRow {
   [key: string]: JsonValue;
 }
 
-export interface EvoluHistoryMutationCountRequest {
+interface EvoluHistoryMutationCountRequest {
   key: string;
   ownerId: string;
   rotatedAtMs: number;
@@ -1012,13 +984,6 @@ export const wipeEvoluStorage = (): void => {
   const mnemonicResult = Evolu.Mnemonic.fromUnknown(storedMnemonic);
   if (!mnemonicResult.ok) {
     throw new Error("Missing stored mnemonic");
-  }
-
-  // Clear any leftover internal snapshot from older builds.
-  try {
-    localStorage.removeItem("linky.evolu.compactionSnapshot.v1");
-  } catch {
-    // ignore
   }
 
   // Hard wipe Evolu local storage (journal + state) and reload.

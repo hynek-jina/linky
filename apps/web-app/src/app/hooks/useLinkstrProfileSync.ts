@@ -33,7 +33,7 @@ import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 import { getContactPublicProfile } from "../lib/contactProfile";
 import type { ContactRowLike } from "../types/appTypes";
 
-export const decodeNpubToPubkey = (npub: string): Pubkey | null => {
+const decodeNpubToPubkey = (npub: string): Pubkey | null => {
   return decodeNpub(npub);
 };
 

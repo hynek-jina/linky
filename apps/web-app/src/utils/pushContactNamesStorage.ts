@@ -2,7 +2,7 @@ const PUSH_CONTACT_NAMES_DB_NAME = "linky-push-contact-names-v1";
 const PUSH_CONTACT_NAMES_DB_VERSION = 1;
 const PUSH_CONTACT_NAMES_STORE_NAME = "contacts";
 
-export interface PushContactNameRecordInput {
+interface PushContactNameRecordInput {
   name: string;
   npub: string;
   pubkey: string;

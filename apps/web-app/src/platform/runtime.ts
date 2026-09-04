@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
-export type PlatformTarget = "android" | "ios" | "web";
+type PlatformTarget = "android" | "ios" | "web";
 export type TelemetryAppRuntime = "native" | "pwa" | "web";
 export type TelemetryDevicePlatform =
   | "android"

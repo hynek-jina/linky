@@ -6,7 +6,7 @@ interface UsePaymentMoneyCompositionParams {
   moneyRouteBuilderInput: Parameters<typeof buildMoneyRouteProps>[0];
 }
 
-export interface PaymentMoneyCompositionResult {
+interface PaymentMoneyCompositionResult {
   moneyRouteProps: MoneyRoutesProps;
 }
 

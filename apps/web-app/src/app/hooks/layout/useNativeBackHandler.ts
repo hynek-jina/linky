@@ -1,7 +1,7 @@
 import React from "react";
 import { NATIVE_BACK_BUTTON_EVENT } from "../../../hooks/useRouting";
 
-export interface NativeBackTargets {
+interface NativeBackTargets {
   closeMenu: () => void;
   closeScan: () => void;
   dismissTopModal: (() => void) | null;

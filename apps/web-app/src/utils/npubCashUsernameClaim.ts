@@ -4,8 +4,8 @@ import { getLightningInvoicePreview } from "./lightningInvoice";
 import { getUnknownErrorMessage } from "./unknown";
 import { asNonEmptyString, asRecord } from "./validation";
 
-export const OWN_LIGHTNING_ADDRESS_DOMAIN = "linky.fit";
-export const OWN_LIGHTNING_USERNAME_MIN_LENGTH = 3;
+const OWN_LIGHTNING_ADDRESS_DOMAIN = "linky.fit";
+const OWN_LIGHTNING_USERNAME_MIN_LENGTH = 3;
 
 const OWN_LIGHTNING_USERNAME_RE = /^(?!npub1)[a-z0-9]+$/i;
 const USERNAME_TAKEN_MESSAGE = "This username is already taken";
@@ -14,7 +14,7 @@ const USERNAME_INVALID_MESSAGE = "Invalid username";
 const PAYMENT_REQUIRED_MESSAGE = "Payment required";
 const INVOICE_UNPAID_MESSAGE = "Invoice unpaid...";
 
-export type OwnLightningUsernameValidationIssue =
+type OwnLightningUsernameValidationIssue =
   | "empty"
   | "invalid_format"
   | "too_short";
@@ -33,14 +33,14 @@ export interface OwnLightningAddressInputCandidate {
   username: string;
 }
 
-export type OwnLightningClaimPreviewResult =
+type OwnLightningClaimPreviewResult =
   | OwnLightningClaimAvailableResult
   | { kind: "already_set"; message: string }
   | { kind: "error"; message: string }
   | { kind: "invalid"; issue: OwnLightningUsernameValidationIssue }
   | { kind: "taken"; message: string };
 
-export type OwnLightningClaimFinalizeResult =
+type OwnLightningClaimFinalizeResult =
   | { kind: "already_set" }
   | { kind: "error"; message: string }
   | { kind: "success" }

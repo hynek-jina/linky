@@ -88,7 +88,7 @@ interface BlossomUploadAuth {
   privateKey: Uint8Array;
 }
 
-export interface PrivateImageSendResult {
+interface PrivateImageSendResult {
   content: string;
 }
 
@@ -224,8 +224,7 @@ const canvasToBlob = async (
     );
   });
 
-export const isPdfFileType = (fileType: string): boolean =>
-  fileType === PDF_FILE_TYPE;
+const isPdfFileType = (fileType: string): boolean => fileType === PDF_FILE_TYPE;
 
 export const isPrivatePdfPayload = (
   payload: PrivateImageMessagePayload,
@@ -649,13 +648,3 @@ export const privateImagePreviewText = (
   payload: PrivateImageMessagePayload,
 ): string =>
   isPrivatePdfPayload(payload) ? t("chatPdfMessage") : t("chatImageMessage");
-
-export const privateImageUploadDebugPayload = (payload: {
-  encryptedSha256: string;
-  encryptedSize: number;
-  url: string;
-}) => ({
-  encryptedSha256: payload.encryptedSha256,
-  encryptedSize: payload.encryptedSize,
-  urlHash: sha256Hex(textEncoder.encode(payload.url)),
-});

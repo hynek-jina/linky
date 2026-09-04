@@ -34,12 +34,12 @@ type LnurlInvoiceResponse = {
   successAction?: JsonValue;
 };
 
-export interface LnurlPaySuccessActionMessage {
+interface LnurlPaySuccessActionMessage {
   message: string;
   tag: "message";
 }
 
-export interface LnurlPaySuccessActionUrl {
+interface LnurlPaySuccessActionUrl {
   description: string | null;
   tag: "url";
   url: string;

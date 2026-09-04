@@ -1,9 +1,9 @@
-export interface PaymentMintBalance {
+interface PaymentMintBalance {
   mint: string;
   sum: number;
 }
 
-export interface PaymentMintMeltPlan {
+interface PaymentMintMeltPlan {
   fromMint: string;
   maxBalanceAfterMelt: number;
   sourceBalance: number;
