@@ -194,25 +194,18 @@ export const useProfileComposition = ({
     }
   }, [isProfileEditing, route.kind, toggleProfileEditing]);
 
-  // Intentionally no automatic publishing of kind-0 profile metadata.
-  // We only publish profile changes when the user does so explicitly.
-
   const openProfileQr = React.useCallback(() => {
     navigateTo({ route: "profile" });
   }, []);
 
   return {
     cycleProfileAvatarControl,
-    defaultLightningAddress,
     derivedProfile,
     effectiveMyLightningAddress,
     effectiveProfileName,
     effectiveProfilePicture,
     isProfileEditing,
-    myProfileLnAddress,
     myProfileMetadata,
-    myProfileName,
-    myProfilePicture,
     myProfileQr,
     myProfileStatus,
     npubCashInfoInFlightRef,
@@ -239,12 +232,7 @@ export const useProfileComposition = ({
     saveProfileEdits,
     selectedProfileStatusCurrencies,
     setIsProfileEditing,
-    setMyProfileLnAddress,
-    setMyProfileMetadata,
-    setMyProfileName,
-    setMyProfilePicture,
     setMyProfileQr,
-    setMyProfileStatus,
     setOwnedProfileLightningAddresses,
     setOwnedProfileLightningAddressesLoading,
     setProfileEditLnAddress,

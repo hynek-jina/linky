@@ -8,7 +8,6 @@ import { useNavigation } from "../hooks/useRouting";
 
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
-  cashuBalance: number;
   cashuTotalBalance: number;
   dismissWalletWarning: () => void;
   openScan: () => void;

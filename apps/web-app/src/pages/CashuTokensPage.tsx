@@ -12,7 +12,6 @@ const CashuTokenIdType = Evolu.id("CashuToken");
 
 interface CashuTokensPageProps {
   canRestoreTokens: boolean;
-  cashuBalance: number;
   cashuTotalBalance: number;
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;

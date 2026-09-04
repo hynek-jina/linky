@@ -350,7 +350,6 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
   return {
     exportAppData,
     handleImportAppDataFilePicked,
-    importAppDataFromText,
     requestImportAppData,
   };
 };

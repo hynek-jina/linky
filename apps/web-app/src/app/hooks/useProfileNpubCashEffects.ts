@@ -225,8 +225,4 @@ export const useProfileNpubCashEffects = ({
       window.clearInterval(intervalId);
     };
   }, [claimNpubCashOnce, networkEnabled, routeKind]);
-
-  return {
-    showProfileQr,
-  };
 };

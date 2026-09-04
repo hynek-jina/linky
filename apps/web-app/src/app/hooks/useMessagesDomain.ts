@@ -26,7 +26,6 @@ import type {
 } from "../types/appTypes";
 import { isUnknownContactId } from "./messages/contactIdentity";
 import {
-  buildKnownNostrMessageIdentityIndex,
   dedupeChatMessages,
   dedupeNostrMessagesByPriority,
   getLocalNostrMessageRumorKey,
@@ -511,10 +510,6 @@ export const useMessagesDomain = ({
   const evoluNostrMessagesLocal = React.useMemo(() => {
     const deduped = dedupeNostrMessagesByPriority(normalizedMessageRows);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
-  }, [normalizedMessageRows]);
-
-  const knownNostrMessageIdentityIndex = React.useMemo(() => {
-    return buildKnownNostrMessageIdentityIndex(normalizedMessageRows);
   }, [normalizedMessageRows]);
 
   const persistOverlayMessages = React.useCallback(
@@ -1392,21 +1387,6 @@ export const useMessagesDomain = ({
     [updateNostrReaction],
   );
 
-  const refreshLocalNostrMessages = React.useCallback(() => {
-    const ownerId = appOwnerIdRef.current;
-    if (!ownerId) return;
-    const raw = safeLocalStorageGetJson(
-      overlayMessagesKeyForOwner(String(ownerId)),
-      [] as LocalNostrMessage[],
-    );
-    const normalized = Array.isArray(raw)
-      ? raw
-          .map((message) => normalizeLegacyLocalMessage(message))
-          .filter((message): message is LocalNostrMessage => Boolean(message))
-      : [];
-    setOverlayMessages(dedupeNostrMessagesByPriority(normalized));
-  }, [appOwnerIdRef]);
-
   const reassignLocalNostrMessagesContactId = React.useCallback(
     (fromContactId: string, toContactId: string) => {
       const normalizedFrom = toTrimmedText(fromContactId);
@@ -1815,29 +1795,19 @@ export const useMessagesDomain = ({
     return dedupeChatMessages(list);
   }, [chatContactId, messagesByContactId]);
 
-  const chatMessagesLatestRef = React.useRef<LocalNostrMessage[]>([]);
-  React.useEffect(() => {
-    chatMessagesLatestRef.current = chatMessages;
-  }, [chatMessages]);
-
   return {
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     chatMessages,
-    chatMessagesLatestRef,
     enqueuePendingPayment,
     lastMessageByContactId,
-    knownNostrMessageIdentityIndex,
-    nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesLocal,
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     nostrReactionsLocal,
     pendingPayments,
     reactionsByMessageId,
-    refreshLocalNostrMessages,
     reassignLocalNostrMessagesContactId,
     removeLocalNostrMessagesByContactId,
     removePendingPayment,

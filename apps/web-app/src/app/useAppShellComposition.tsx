@@ -357,8 +357,6 @@ export const useAppShellComposition = ({
     return "disconnected" as const;
   }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl, syncOwner]);
 
-  // Evolu error subscription handled by useEvoluLastError.
-
   const [evoluWipeStorageIsBusy, setEvoluWipeStorageIsBusy] =
     useState<boolean>(false);
 
@@ -1325,8 +1323,6 @@ export const useAppShellComposition = ({
       copyText,
       currentNpub,
       displayUnit,
-      effectiveProfileName,
-      effectiveProfilePicture,
       emitCashuToken,
       getMintIconUrl,
       knownLnAddressPayContact,
@@ -1471,7 +1467,6 @@ export const useAppShellComposition = ({
       groupNames,
       handleSaveContact,
       isProfileEditing,
-      isBankPaymentOfferCanceled,
       isSavingContact,
       lang,
       mentionContacts,
@@ -1558,7 +1553,6 @@ export const useAppShellComposition = ({
       mainSwipeRouteBuilderInput: {
         activeGroup,
         bankPaymentOfferMessages,
-        cashuBalance,
         cashuTotalBalance,
         contactsOnboardingCelebrating,
         contactsOnboardingTasks,

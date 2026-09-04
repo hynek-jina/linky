@@ -710,43 +710,6 @@ export const useCashuWalletComposition = ({
     rememberSeenMint,
   });
 
-  // Tutorial progress remains local-only.
-
-  React.useEffect(() => {
-    if (!import.meta.env.DEV) return;
-
-    try {
-      if (localStorage.getItem("linky_debug_evolu_snapshot") !== "1") return;
-    } catch {
-      return;
-    }
-
-    // Debug: log Evolu state without secrets.
-    // NOTE: Relays and derived npub are Nostr/runtime state, not stored in Evolu.
-    console.log("[linky][evolu] snapshot", {
-      nostrIdentity: {
-        hasNsec: Boolean(currentNsec),
-        hasNpub: Boolean(currentNpub),
-      },
-      cashuTokens: cashuTokensFiltered.map((t) => ({
-        id: String(t.id ?? ""),
-        mint: String(t.mint ?? ""),
-        amount: Number(t.amount ?? 0) || 0,
-        state: String(t.state ?? ""),
-      })),
-      cashuTokensAll: {
-        count: cashuTokensAllFiltered.length,
-        newest10: cashuTokensAllFiltered.slice(0, 10).map((t) => ({
-          id: String(t.id ?? ""),
-          mint: String(t.mint ?? ""),
-          amount: Number(t.amount ?? 0) || 0,
-          state: String(t.state ?? ""),
-          isDeleted: Boolean(t.isDeleted),
-        })),
-      },
-    });
-  }, [cashuTokensAllFiltered, cashuTokensFiltered, currentNpub, currentNsec]);
-
   React.useEffect(() => {
     if (cashuTokenLifecycle === null) return;
     const pendingTokens = cashuTokensAllFiltered.filter((row) => {
@@ -771,8 +734,6 @@ export const useCashuWalletComposition = ({
       void cashuTokenLifecycle.forget(String(row.id));
     }
   }, [cashuTokenLifecycle, cashuTokensAllFiltered, nostrMessagesLocal]);
-
-  // lastMessageByContactId provided by the derived Nostr index above.
 
   const cashuTotalBalance: number = walletBalances.total;
   const cashuBalance: number = walletBalances.spendable;

@@ -1150,7 +1150,6 @@ export const useContactEditor = ({
     selectedContactPublicProfile,
     resetEditedContactFieldFromNostr,
     searchNewContact,
-    setEditingId,
     setForm,
   };
 };

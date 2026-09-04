@@ -11,7 +11,7 @@ interface BuildMoneyRoutePropsParams {
   bankPaymentOfferContacts: MoneyRoutesProps["spdPaymentProps"]["offerContacts"];
   bankPaymentOfferRecipientCount: MoneyRoutesProps["spdPaymentProps"]["initialOfferContactCount"];
   bankPaymentOfferStaggerDelaySec: MoneyRoutesProps["spdPaymentProps"]["initialOfferDelaySec"];
-  cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
+  cashuBalance: MoneyRoutesProps["lnAddressPayProps"]["cashuBalance"];
   cashuBalanceAfterMelt: MoneyRoutesProps["lnAddressPayProps"]["cashuBalanceAfterMelt"];
   cashuTotalBalance: MoneyRoutesProps["cashuTokensProps"]["cashuTotalBalance"];
   cashuBulkCheckIsBusy: MoneyRoutesProps["cashuTokensProps"]["cashuBulkCheckIsBusy"];
@@ -43,8 +43,6 @@ interface BuildMoneyRoutePropsParams {
   copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
   currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
   displayUnit: MoneyRoutesProps["lnAddressPayProps"]["displayUnit"];
-  effectiveProfileName: MoneyRoutesProps["topupProps"]["effectiveProfileName"];
-  effectiveProfilePicture: MoneyRoutesProps["topupProps"]["effectiveProfilePicture"];
   emitCashuToken: MoneyRoutesProps["cashuTokenEmitProps"]["emitCashuToken"];
   getMintIconUrl: MoneyRoutesProps["cashuTokensProps"]["getMintIconUrl"];
   knownLnAddressPayContact: MoneyRoutesProps["lnAddressPayProps"]["knownContact"];
@@ -133,8 +131,6 @@ export const buildMoneyRouteProps = ({
   copyText,
   currentNpub,
   displayUnit,
-  effectiveProfileName,
-  effectiveProfilePicture,
   emitCashuToken,
   getMintIconUrl,
   knownLnAddressPayContact,
@@ -196,7 +192,6 @@ export const buildMoneyRouteProps = ({
     },
     cashuTokensProps: {
       canRestoreTokens,
-      cashuBalance,
       cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuIsBusy,
@@ -282,8 +277,6 @@ export const buildMoneyRouteProps = ({
       t,
     },
     topupProps: {
-      effectiveProfilePicture,
-      effectiveProfileName,
       currentNpub,
       topupAmount,
       setTopupAmount,

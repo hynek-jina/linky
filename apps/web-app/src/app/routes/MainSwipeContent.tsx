@@ -20,7 +20,6 @@ export interface MainSwipeRouteProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
   canAddContact: boolean;
-  cashuBalance: number;
   cashuTotalBalance: number;
   bankPaymentOfferMessages: readonly LocalNostrMessage[];
   contactsOnboardingCelebrating: boolean;
@@ -189,7 +188,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     activeGroup,
     bottomTabActive,
     canAddContact,
-    cashuBalance,
     cashuTotalBalance,
     bankPaymentOfferMessages,
     contactsOnboardingCelebrating,
@@ -287,7 +285,6 @@ export const MainSwipeContent = (): React.ReactElement => {
         >
           <h2 className="desktop-main-pane-title">{t("wallet")}</h2>
           <WalletPage
-            cashuBalance={cashuBalance}
             cashuTotalBalance={cashuTotalBalance}
             openScan={openWalletScan}
             scanIsOpen={scanIsOpen}
@@ -398,7 +395,6 @@ export const DesktopContactsPane = (): React.ReactElement => {
 export const DesktopWalletPane = (): React.ReactElement => {
   const { mainSwipeProps } = useMainSwipeRoutes();
   const {
-    cashuBalance,
     cashuTotalBalance,
     dismissWalletWarning,
     openWalletScan,
@@ -410,7 +406,6 @@ export const DesktopWalletPane = (): React.ReactElement => {
   return (
     <div className="desktop-primary-content desktop-wallet-pane">
       <WalletPage
-        cashuBalance={cashuBalance}
         cashuTotalBalance={cashuTotalBalance}
         openScan={openWalletScan}
         scanIsOpen={scanIsOpen}

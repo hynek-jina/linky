@@ -253,7 +253,6 @@ export const useIdentityOwnersComposition = ({
     messagesOwnerIdRef,
     myProfileMetadataRef,
     nostrIdentityRows,
-    setCurrentNsec,
     syncedNostrIdentityMatchesLocal,
     syncedNostrIdentityResolution,
     syncOwner,
