@@ -93,11 +93,15 @@ const countSwClients = (): Promise<number | null> => {
   });
 };
 
-// Hybrid update flow: a fresh, untouched, single-tab load applies a pending
+// Production: a fresh, untouched, single-tab load applies a pending
 // service worker update silently (one reload before the user does anything);
 // every other case falls back to the update banner. Auto-applying is skipped
 // whenever other tabs are open because SKIP_WAITING reloads all of them.
 export const handlePwaUpdateAvailable = async () => {
+  if (import.meta.env.DEV) {
+    await applyPwaUpdate();
+    return;
+  }
   const withinStartupWindow =
     Date.now() - appStartTime < STARTUP_AUTO_UPDATE_WINDOW_MS;
   if (!withinStartupWindow || userHasInteracted) {
