@@ -1,8 +1,9 @@
 import {
-  applyProxyHeaders,
   getFirstQueryValue,
   getNpubcashBaseUrl,
   proxyFixedUrl,
+  sendProxyFailure,
+  sendPublicProxyResult,
   type ApiRequest,
   type ApiResponse,
 } from "./_npubcash.js";
@@ -15,13 +16,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       targetUrl.searchParams.set("name", name);
     }
 
-    const proxyResult = await proxyFixedUrl(targetUrl);
-    applyProxyHeaders(res, proxyResult.contentType);
-    res.status(proxyResult.status).send(proxyResult.text);
+    sendPublicProxyResult(res, await proxyFixedUrl(targetUrl));
   } catch (error) {
-    res.status(502).json({
-      error: "Proxy fetch failed",
-      detail: String(error ?? "unknown"),
-    });
+    sendProxyFailure(res, error);
   }
 }

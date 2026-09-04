@@ -18,30 +18,34 @@ interface ProxyResult {
 }
 
 const defaultNpubcashBaseUrl = "https://npub.linky.fit";
+const proxyFetchTimeoutMs = 12_000;
 
 export const getFirstQueryValue = (
   value: string | string[] | undefined,
 ): string | null => {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-  }
+  const first = Array.isArray(value) ? value[0] : value;
+  const trimmed = first?.trim();
+  return trimmed ? trimmed : null;
+};
 
-  if (Array.isArray(value)) {
-    const first = value[0];
-    if (typeof first !== "string") {
-      return null;
-    }
-    const trimmed = first.trim();
-    return trimmed ? trimmed : null;
-  }
+const isJsonObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
 
-  return null;
+export const parseJsonObject = (
+  value: string,
+): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isJsonObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 export const getNpubcashBaseUrl = (): URL => {
-  const rawValue = String(
-    process.env.NPUBCASH_BASE_URL ?? defaultNpubcashBaseUrl,
+  const rawValue = (
+    process.env.NPUBCASH_BASE_URL ?? defaultNpubcashBaseUrl
   ).trim();
 
   try {
@@ -65,6 +69,7 @@ export const proxyFixedUrl = async (targetUrl: URL): Promise<ProxyResult> => {
     headers: {
       Accept: "application/json",
     },
+    signal: AbortSignal.timeout(proxyFetchTimeoutMs),
   });
 
   return {
@@ -74,15 +79,30 @@ export const proxyFixedUrl = async (targetUrl: URL): Promise<ProxyResult> => {
   };
 };
 
-export const applyProxyHeaders = (
+export const sendProxyResult = (
   res: ApiResponse,
-  contentType: string | null,
+  result: ProxyResult,
 ): void => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  if (contentType) {
-    res.setHeader("Content-Type", contentType);
+  if (result.contentType) {
+    res.setHeader("Content-Type", result.contentType);
   }
+  res.status(result.status).send(result.text);
 };
 
-export type { ApiRequest, ApiResponse };
+export const sendPublicProxyResult = (
+  res: ApiResponse,
+  result: ProxyResult,
+): void => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  sendProxyResult(res, result);
+};
+
+export const sendProxyFailure = (res: ApiResponse, error: unknown): void => {
+  res.status(502).json({
+    error: "Proxy fetch failed",
+    detail: String(error ?? "unknown"),
+  });
+};
+
+export type { ApiRequest, ApiResponse, ProxyResult };

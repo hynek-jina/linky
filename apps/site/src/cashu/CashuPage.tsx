@@ -1,21 +1,24 @@
 import type { MintKeyset, Proof } from "@cashu/cashu-ts";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isRecord } from "../isRecord";
+import { SiteFooter } from "../SiteFooter";
+import { SiteHeaderMenu } from "../SiteHeaderMenu";
 import {
   getInitialSiteDisplayCurrency,
+  getInitialSiteLocale,
   siteDisplayCurrencies,
   siteDisplayCurrencyStorageKey,
+  siteLocaleStorageKey,
   type SiteDisplayCurrency,
-} from "../siteDisplayCurrency";
-import { SiteHeaderMenu } from "../SiteHeaderMenu";
-import { getDefaultSiteLocale, type SiteLocale } from "../sitePreferences";
+  type SiteLocale,
+} from "../sitePreferences";
 import { forwardCashuTokenPrivately } from "./nostrGiftWrap";
 import {
   flushPaymentTelemetryQueue,
+  PAYMENT_ANALYTICS_RECIPIENT_NPUB,
   queuePaymentTelemetry,
 } from "./paymentTelemetry";
-
-type Locale = SiteLocale;
 
 interface LocaleCopy {
   cashuLabel: string;
@@ -56,7 +59,6 @@ interface LocaleCopy {
 
 interface TokenSnapshot {
   amount: number;
-  hasMpp: boolean | null;
   iconUrl: string;
   isValid: boolean;
   mint: string;
@@ -94,35 +96,34 @@ interface SiteFiatRates {
   usdPerBtc: number;
 }
 
-type MintInfoSearchPrimitive = boolean | number | string | null | undefined;
-
-interface MintInfoSearchObject {
-  [key: string]: MintInfoSearchValue;
-}
-
-type MintInfoSearchValue =
-  | MintInfoSearchObject
-  | MintInfoSearchPrimitive
-  | MintInfoSearchValue[];
-
 interface LnurlPayParameters {
   callback: string;
   commentAllowed: number;
+  lightningAddress: string;
   maxSendable: number;
   minSendable: number;
 }
 
-const localeStorageKey = "linky.lang";
+type FiatDisplayCurrency = Exclude<SiteDisplayCurrency, "btc" | "sat">;
+
 const fiatRatesStorageKey = "linky.fiat_rates.v1";
 const fiatRatesTtlMs = 10 * 60 * 1000;
 const satsPerBtc = 100_000_000;
 const linkyWebAppUrl = "https://app.linky.fit";
 const nativeLaunchFallbackDelayMs = 700;
 const pwaLaunchFallbackDelayMs = 1600;
-const REMAINING_TOKEN_FORWARD_RECIPIENT_NPUB =
-  "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 
-const copy: Record<Locale, LocaleCopy> = {
+const fiatDisplay: Record<
+  FiatDisplayCurrency,
+  { label: string; rate: Exclude<keyof SiteFiatRates, "fetchedAtMs"> }
+> = {
+  chf: { label: "CHF", rate: "chfPerBtc" },
+  czk: { label: "Kč", rate: "czkPerBtc" },
+  eur: { label: "EUR", rate: "eurPerBtc" },
+  usd: { label: "USD", rate: "usdPerBtc" },
+};
+
+const copy: Record<SiteLocale, LocaleCopy> = {
   cs: {
     cashuLabel: "Cashu",
     cashuOptionDescription: "Nascanujte kód vaší cashu peněženkou",
@@ -249,29 +250,14 @@ const GENERIC_MINT_ICON_SVG =
 
 const GENERIC_MINT_ICON_DATA_URL = `data:image/svg+xml,${GENERIC_MINT_ICON_SVG}`;
 
-const getCashuLib = async () => await import("@cashu/cashu-ts");
+const cashuLibPromise = import("@cashu/cashu-ts");
 
-type CashuLib = Awaited<ReturnType<typeof getCashuLib>>;
+type CashuLib = Awaited<typeof cashuLibPromise>;
 type CashuWalletLike = InstanceType<CashuLib["Wallet"]>;
-type CashuMintKeysetLike = MintKeyset;
 type ProofStatesResponse = Awaited<
   ReturnType<CashuWalletLike["checkProofsStates"]>
 >;
 type CashuProofStateLike = ProofStatesResponse[number];
-type CashuProofLike = Proof;
-
-const cashuLibPromise = getCashuLib();
-
-const getInitialLocale = (): Locale => {
-  if (typeof window !== "undefined") {
-    const savedLocale = window.localStorage.getItem(localeStorageKey);
-    if (savedLocale === "cs" || savedLocale === "de" || savedLocale === "en") {
-      return savedLocale;
-    }
-  }
-
-  return getDefaultSiteLocale();
-};
 
 const getErrorMessage = (value: unknown, fallback: string): string => {
   if (typeof value === "string" && value) return value;
@@ -291,33 +277,33 @@ const getErrorMessage = (value: unknown, fallback: string): string => {
 };
 
 const readObjectField = (value: unknown, field: string): unknown => {
-  if (!isRecord(value)) return undefined;
-  return Reflect.get(value, field);
+  return isRecord(value) ? value[field] : undefined;
 };
 
-const isSiteFiatRates = (value: unknown): value is SiteFiatRates => {
-  const chfPerBtc = readObjectField(value, "chfPerBtc");
-  const czkPerBtc = readObjectField(value, "czkPerBtc");
-  const eurPerBtc = readObjectField(value, "eurPerBtc");
-  const fetchedAtMs = readObjectField(value, "fetchedAtMs");
-  const usdPerBtc = readObjectField(value, "usdPerBtc");
+const readStringField = (
+  record: Record<string, unknown>,
+  field: string,
+): string => {
+  const value = record[field];
+  return typeof value === "string" ? value.trim() : "";
+};
 
+const isPositiveNumber = (value: unknown): value is number => {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+};
+
+const siteFiatRateKeys: readonly (keyof SiteFiatRates)[] = [
+  "chfPerBtc",
+  "czkPerBtc",
+  "eurPerBtc",
+  "fetchedAtMs",
+  "usdPerBtc",
+];
+
+const isSiteFiatRates = (value: unknown): value is SiteFiatRates => {
   return (
-    typeof chfPerBtc === "number" &&
-    Number.isFinite(chfPerBtc) &&
-    chfPerBtc > 0 &&
-    typeof czkPerBtc === "number" &&
-    Number.isFinite(czkPerBtc) &&
-    czkPerBtc > 0 &&
-    typeof eurPerBtc === "number" &&
-    Number.isFinite(eurPerBtc) &&
-    eurPerBtc > 0 &&
-    typeof fetchedAtMs === "number" &&
-    Number.isFinite(fetchedAtMs) &&
-    fetchedAtMs > 0 &&
-    typeof usdPerBtc === "number" &&
-    Number.isFinite(usdPerBtc) &&
-    usdPerBtc > 0
+    isRecord(value) &&
+    siteFiatRateKeys.every((key) => isPositiveNumber(value[key]))
   );
 };
 
@@ -349,29 +335,20 @@ const areSiteFiatRatesStale = (value: SiteFiatRates | null): boolean => {
   return Date.now() - value.fetchedAtMs >= fiatRatesTtlMs;
 };
 
+const readCoinbaseRate = (rates: unknown, currency: string): number | null => {
+  const raw = readObjectField(rates, currency);
+  const parsed = typeof raw === "string" ? Number.parseFloat(raw) : raw;
+  return isPositiveNumber(parsed) ? parsed : null;
+};
+
 const parseFetchedSiteFiatRates = (value: unknown): SiteFiatRates | null => {
-  const data = readObjectField(value, "data");
-  const rates = readObjectField(data, "rates");
-  const chfRaw = readObjectField(rates, "CHF");
-  const czkRaw = readObjectField(rates, "CZK");
-  const eurRaw = readObjectField(rates, "EUR");
-  const usdRaw = readObjectField(rates, "USD");
+  const rates = readObjectField(readObjectField(value, "data"), "rates");
+  const chfPerBtc = readCoinbaseRate(rates, "CHF");
+  const czkPerBtc = readCoinbaseRate(rates, "CZK");
+  const eurPerBtc = readCoinbaseRate(rates, "EUR");
+  const usdPerBtc = readCoinbaseRate(rates, "USD");
 
-  const chfPerBtc = Number.parseFloat(String(chfRaw ?? ""));
-  const czkPerBtc = Number.parseFloat(String(czkRaw ?? ""));
-  const eurPerBtc = Number.parseFloat(String(eurRaw ?? ""));
-  const usdPerBtc = Number.parseFloat(String(usdRaw ?? ""));
-
-  if (
-    !Number.isFinite(chfPerBtc) ||
-    chfPerBtc <= 0 ||
-    !Number.isFinite(czkPerBtc) ||
-    czkPerBtc <= 0 ||
-    !Number.isFinite(eurPerBtc) ||
-    eurPerBtc <= 0 ||
-    !Number.isFinite(usdPerBtc) ||
-    usdPerBtc <= 0
-  ) {
+  if (!chfPerBtc || !czkPerBtc || !eurPerBtc || !usdPerBtc) {
     return null;
   }
 
@@ -402,13 +379,13 @@ const fetchSiteFiatRates = async (
   return parseFetchedSiteFiatRates(payload);
 };
 
-const normalizeLocale = (lang: Locale): string => {
+const normalizeLocale = (lang: SiteLocale): string => {
   if (lang === "cs") return "cs-CZ";
   if (lang === "de") return "de-DE";
   return "en-US";
 };
 
-const formatInteger = (value: number, lang: Locale): string => {
+const formatInteger = (value: number, lang: SiteLocale): string => {
   return new Intl.NumberFormat(normalizeLocale(lang)).format(
     Number.isFinite(value) ? Math.trunc(value) : 0,
   );
@@ -418,7 +395,7 @@ const formatCashuDisplayAmount = (
   amountSat: number,
   displayCurrency: SiteDisplayCurrency,
   fiatRates: SiteFiatRates | null,
-  lang: Locale,
+  lang: SiteLocale,
 ): string => {
   const normalizedAmount = Number.isFinite(amountSat)
     ? Math.max(0, Math.trunc(amountSat))
@@ -428,35 +405,20 @@ const formatCashuDisplayAmount = (
     return `${formatInteger(normalizedAmount, lang)} ₿`;
   }
 
-  if (displayCurrency === "czk" && fiatRates) {
-    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.czkPerBtc;
+  if (displayCurrency !== "sat" && fiatRates) {
+    const { label, rate } = fiatDisplay[displayCurrency];
+    const fiatValue = Math.round(
+      (normalizedAmount / satsPerBtc) * fiatRates[rate],
+    );
     const approxPrefix = normalizedAmount > 0 ? "~" : "";
-    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} Kč`;
-  }
-
-  if (displayCurrency === "eur" && fiatRates) {
-    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.eurPerBtc;
-    const approxPrefix = normalizedAmount > 0 ? "~" : "";
-    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} EUR`;
-  }
-
-  if (displayCurrency === "chf" && fiatRates) {
-    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.chfPerBtc;
-    const approxPrefix = normalizedAmount > 0 ? "~" : "";
-    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} CHF`;
-  }
-
-  if (displayCurrency === "usd" && fiatRates) {
-    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.usdPerBtc;
-    const approxPrefix = normalizedAmount > 0 ? "~" : "";
-    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} USD`;
+    return `${approxPrefix}${formatInteger(fiatValue, lang)} ${label}`;
   }
 
   return `${formatInteger(normalizedAmount, lang)} sat`;
 };
 
 const copyTextToClipboard = async (value: string): Promise<boolean> => {
-  const trimmed = String(value ?? "").trim();
+  const trimmed = value.trim();
   if (!trimmed) return false;
 
   if (navigator.clipboard?.writeText) {
@@ -499,7 +461,7 @@ interface LinkyWalletImportTargets {
 const buildLinkyWalletImportTargets = (
   token: string,
 ): LinkyWalletImportTargets | null => {
-  const trimmed = String(token ?? "").trim();
+  const trimmed = token.trim();
   if (!trimmed) return null;
   const encodedToken = encodeURIComponent(trimmed);
   return {
@@ -587,14 +549,8 @@ const openLinkyWalletImport = (token: string): void => {
   tryNavigate(targets.nativeUrl);
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
 const normalizeMintUrl = (value: string): string => {
-  return String(value ?? "")
-    .trim()
-    .replace(/\/+$/, "");
+  return value.trim().replace(/\/+$/, "");
 };
 
 const isHexString = (value: string): boolean => {
@@ -604,7 +560,7 @@ const isHexString = (value: string): boolean => {
 const getMintOriginAndHost = (
   mintUrl: string,
 ): { host: string | null; origin: string | null } => {
-  const raw = String(mintUrl ?? "").trim();
+  const raw = mintUrl.trim();
   if (!raw) return { origin: null, host: null };
 
   try {
@@ -634,23 +590,21 @@ const getMintIconOverride = (host: string | null): string | null => {
   return null;
 };
 
-const isMintInfoSearchArray = (
-  value: unknown,
-): value is MintInfoSearchValue[] => {
-  return Array.isArray(value);
-};
-
-const isMintInfoSearchObject = (
-  value: unknown,
-): value is MintInfoSearchObject => {
-  return isRecord(value);
-};
+const mintInfoIconKeys = [
+  "icon_url",
+  "iconUrl",
+  "icon",
+  "logo",
+  "image",
+  "image_url",
+  "imageUrl",
+];
 
 const findMintInfoIconValue = (
   value: unknown,
-  seen: Set<MintInfoSearchObject | MintInfoSearchValue[]>,
+  seen: Set<object>,
 ): string | null => {
-  if (isMintInfoSearchArray(value)) {
+  if (Array.isArray(value)) {
     if (seen.has(value)) return null;
     seen.add(value);
     for (const inner of value) {
@@ -660,19 +614,11 @@ const findMintInfoIconValue = (
     return null;
   }
 
-  if (!isMintInfoSearchObject(value)) return null;
+  if (!isRecord(value)) return null;
   if (seen.has(value)) return null;
   seen.add(value);
 
-  for (const key of [
-    "icon_url",
-    "iconUrl",
-    "icon",
-    "logo",
-    "image",
-    "image_url",
-    "imageUrl",
-  ]) {
+  for (const key of mintInfoIconKeys) {
     const raw = value[key];
     if (typeof raw !== "string") continue;
     const trimmed = raw.trim();
@@ -742,7 +688,7 @@ const cashuAmountToNumber = (amount: unknown): number => {
   return 0;
 };
 
-const sumProofAmounts = (proofs: readonly CashuProofLike[]): number => {
+const sumProofAmounts = (proofs: readonly Proof[]): number => {
   let sum = 0;
 
   for (const proof of proofs) {
@@ -1028,18 +974,18 @@ const findBestRedeemQuote = async (
   };
 };
 
-const buildProofKey = (proof: CashuProofLike): string => {
+const buildProofKey = (proof: Proof): string => {
   return [
-    String(proof.id ?? "").trim(),
-    String(proof.secret ?? "").trim(),
-    String(proof.C ?? "").trim(),
+    proof.id.trim(),
+    proof.secret.trim(),
+    proof.C.trim(),
     String(cashuAmountToNumber(proof.amount)),
   ].join("|");
 };
 
-const dedupeProofs = (proofs: readonly CashuProofLike[]): CashuProofLike[] => {
+const dedupeProofs = (proofs: readonly Proof[]): Proof[] => {
   const seen = new Set<string>();
-  const unique: CashuProofLike[] = [];
+  const unique: Proof[] = [];
 
   for (const proof of proofs) {
     const key = buildProofKey(proof);
@@ -1052,18 +998,12 @@ const dedupeProofs = (proofs: readonly CashuProofLike[]): CashuProofLike[] => {
 };
 
 const filterUnspentProofs = (
-  proofs: readonly CashuProofLike[],
+  proofs: readonly Proof[],
   states: readonly CashuProofStateLike[],
-): CashuProofLike[] => {
+): Proof[] => {
   if (states.length !== proofs.length) return [...proofs];
 
-  return proofs.filter((_, index) => {
-    return (
-      String(states[index]?.state ?? "")
-        .trim()
-        .toUpperCase() === "UNSPENT"
-    );
-  });
+  return proofs.filter((_, index) => states[index]?.state === "UNSPENT");
 };
 
 const sleep = async (delayMs: number): Promise<void> => {
@@ -1088,9 +1028,7 @@ const waitForConfirmedMeltQuote = async (
     await sleep(500);
 
     const checkedQuote = await wallet.checkMeltQuoteBolt11(quote);
-    state = String(checkedQuote.state ?? "")
-      .trim()
-      .toUpperCase();
+    state = checkedQuote.state;
 
     if (state === "PAID" || state === "UNPAID") {
       return state;
@@ -1111,7 +1049,7 @@ const parseTokenFromSearch = (search: string): string | null => {
     searchParams.get("token") ??
     searchParams.get("cashu") ??
     searchParams.get("cashutoken");
-  const namedValue = String(namedToken ?? "").trim();
+  const namedValue = (namedToken ?? "").trim();
   if (namedValue.startsWith("cashu")) {
     return namedValue;
   }
@@ -1137,7 +1075,7 @@ const parseTokenFromHash = (hash: string): string | null => {
   const params = new URLSearchParams(raw);
   const namedToken =
     params.get("token") ?? params.get("cashu") ?? params.get("cashutoken");
-  const namedValue = String(namedToken ?? "").trim();
+  const namedValue = (namedToken ?? "").trim();
   return namedValue.startsWith("cashu") ? namedValue : null;
 };
 
@@ -1180,6 +1118,17 @@ const fetchJson = async (url: string): Promise<Record<string, unknown>> => {
   return data;
 };
 
+const fetchLnurlJson = async (
+  url: string,
+  proxyQuery: Record<string, string>,
+): Promise<Record<string, unknown>> => {
+  try {
+    return await fetchJson(url);
+  } catch {
+    return await fetchJson(`/api/lnurlp?${new URLSearchParams(proxyQuery)}`);
+  }
+};
+
 const stripLightningPrefix = (value: string): string => {
   return value.replace(/^lightning:/i, "").trim();
 };
@@ -1207,26 +1156,15 @@ const fetchLnurlPayParameters = async (
     throw new Error("Invalid lightning address");
   }
 
-  const requestUrl = getLnurlEndpoint(lightningAddress);
-  const payRequest = await (async () => {
-    try {
-      return await fetchJson(requestUrl);
-    } catch {
-      return await fetchJson(
-        `/api/lnurlp?url=${encodeURIComponent(requestUrl)}`,
-      );
-    }
-  })();
+  const payRequest = await fetchLnurlJson(getLnurlEndpoint(lightningAddress), {
+    address: lightningAddress,
+  });
 
-  const status = String(payRequest.status ?? "")
-    .trim()
-    .toUpperCase();
-  const reason = String(payRequest.reason ?? "").trim();
-  if (status === "ERROR") {
-    throw new Error(reason || "LNURL error");
+  if (readStringField(payRequest, "status").toUpperCase() === "ERROR") {
+    throw new Error(readStringField(payRequest, "reason") || "LNURL error");
   }
 
-  const callback = String(payRequest.callback ?? "").trim();
+  const callback = readStringField(payRequest, "callback");
   const commentAllowed = Number(payRequest.commentAllowed ?? NaN);
   const minSendable = Number(payRequest.minSendable ?? NaN);
   const maxSendable = Number(payRequest.maxSendable ?? NaN);
@@ -1242,6 +1180,7 @@ const fetchLnurlPayParameters = async (
   return {
     callback,
     commentAllowed,
+    lightningAddress,
     maxSendable,
     minSendable,
   };
@@ -1260,61 +1199,40 @@ const fetchLnurlInvoice = async (
     throw new Error("Amount out of LNURL range");
   }
 
-  const invoiceUrl = new URL(payParameters.callback);
-  invoiceUrl.searchParams.set("amount", String(amountMsat));
-  const trimmedComment = String(comment ?? "").trim();
-  const canUseComment = trimmedComment.length > 0;
-  const providerAdvertisesComment =
-    Number.isFinite(payParameters.commentAllowed) &&
-    payParameters.commentAllowed > 0;
-  const maybeWithCommentUrl = (() => {
-    if (!canUseComment) return null;
-    const url = new URL(invoiceUrl.toString());
-    const maxLen = providerAdvertisesComment
-      ? Math.max(0, Math.trunc(payParameters.commentAllowed))
-      : 140;
-    if (maxLen <= 0) return null;
-    url.searchParams.set("comment", trimmedComment.slice(0, maxLen));
-    return url.toString();
-  })();
+  const fetchInvoiceResponse = (comment: string | null) => {
+    const url = new URL(payParameters.callback);
+    url.searchParams.set("amount", String(amountMsat));
+    if (comment) url.searchParams.set("comment", comment);
+    return fetchLnurlJson(url.toString(), {
+      address: payParameters.lightningAddress,
+      amount: String(amountMsat),
+      ...(comment ? { comment } : {}),
+    });
+  };
 
-  const invoiceResponse = await (async () => {
-    if (maybeWithCommentUrl && !providerAdvertisesComment) {
-      try {
-        return await (async () => {
-          try {
-            return await fetchJson(maybeWithCommentUrl);
-          } catch {
-            return await fetchJson(
-              `/api/lnurlp?url=${encodeURIComponent(maybeWithCommentUrl)}`,
-            );
-          }
-        })();
-      } catch {
-        // Retry without comment when the provider rejects a best-effort comment.
-      }
-    }
+  const advertisedCommentLimit =
+    payParameters.commentAllowed > 0
+      ? Math.trunc(payParameters.commentAllowed)
+      : null;
+  const trimmedComment =
+    (comment ?? "").trim().slice(0, advertisedCommentLimit ?? 140) || null;
+  const isBestEffortComment =
+    trimmedComment !== null && advertisedCommentLimit === null;
+  const invoiceResponse = isBestEffortComment
+    ? await fetchInvoiceResponse(trimmedComment).catch(() =>
+        fetchInvoiceResponse(null),
+      )
+    : await fetchInvoiceResponse(trimmedComment);
 
-    try {
-      return await fetchJson(invoiceUrl.toString());
-    } catch {
-      return await fetchJson(
-        `/api/lnurlp?url=${encodeURIComponent(invoiceUrl.toString())}`,
-      );
-    }
-  })();
-
-  const invoiceStatus = String(invoiceResponse.status ?? "")
-    .trim()
-    .toUpperCase();
-  const invoiceReason = String(invoiceResponse.reason ?? "").trim();
-  if (invoiceStatus === "ERROR") {
-    throw new Error(invoiceReason || "LNURL invoice error");
+  if (readStringField(invoiceResponse, "status").toUpperCase() === "ERROR") {
+    throw new Error(
+      readStringField(invoiceResponse, "reason") || "LNURL invoice error",
+    );
   }
 
   const invoice =
-    String(invoiceResponse.pr ?? "").trim() ||
-    String(invoiceResponse.paymentRequest ?? "").trim();
+    readStringField(invoiceResponse, "pr") ||
+    readStringField(invoiceResponse, "paymentRequest");
   if (!invoice) {
     throw new Error("Invoice missing");
   }
@@ -1323,19 +1241,17 @@ const fetchLnurlInvoice = async (
 };
 
 const pickPreferredMintKeyset = (
-  keysets: readonly CashuMintKeysetLike[],
+  keysets: readonly MintKeyset[],
   unit: string,
-): CashuMintKeysetLike | null => {
+): MintKeyset | null => {
   const matches = keysets
     .filter((keyset) => {
       return (
-        keyset.active === true &&
-        String(keyset.unit ?? "").trim() === unit &&
-        isHexString(String(keyset.id ?? ""))
+        keyset.active && keyset.unit.trim() === unit && isHexString(keyset.id)
       );
     })
     .sort((left, right) => {
-      return Number(left.input_fee_ppk ?? 0) - Number(right.input_fee_ppk ?? 0);
+      return (left.input_fee_ppk ?? 0) - (right.input_fee_ppk ?? 0);
     });
 
   return matches[0] ?? null;
@@ -1376,10 +1292,7 @@ const createLoadedWallet = async (
     const keysResponse = await mint.getKeys(keyset.id);
     const keys =
       keysResponse.keysets.find((candidate) => {
-        return (
-          String(candidate.id ?? "") === String(keyset.id ?? "") &&
-          String(candidate.unit ?? "") === String(keyset.unit ?? "")
-        );
+        return candidate.id === keyset.id && candidate.unit === keyset.unit;
       }) ?? null;
 
     if (!keys) {
@@ -1403,7 +1316,7 @@ const createLoadedWallet = async (
 const inspectToken = async (token: string): Promise<TokenSnapshot> => {
   const lib = await cashuLibPromise;
   const metadata = lib.getTokenMetadata(token);
-  const mint = normalizeMintUrl(String(metadata.mint ?? ""));
+  const mint = normalizeMintUrl(metadata.mint);
   if (!mint) {
     throw new Error("Token mint missing");
   }
@@ -1424,23 +1337,15 @@ const inspectToken = async (token: string): Promise<TokenSnapshot> => {
     : [statesResponse];
   const unspentProofs = filterUnspentProofs(proofs, states);
   const mintInfo = wallet.getMintInfo ? await wallet.getMintInfo() : null;
-  const methods = Array.isArray(mintInfo?.nuts?.["15"]?.methods)
-    ? mintInfo.nuts["15"].methods
-    : [];
-  const totalAmount = sumProofAmounts(proofs);
 
   return {
     amount: sumProofAmounts(unspentProofs),
-    hasMpp:
-      methods.length > 0
-        ? methods.some((method) => String(method.method ?? "").trim() !== "")
-        : null,
     iconUrl: resolveMintIconUrl(mint, mintInfo),
     isValid: unspentProofs.length > 0,
     mint,
     mintHost: getMintOriginAndHost(mint).host ?? mint,
-    totalAmount,
-    unit: String(decoded.unit ?? "sat").trim() || "sat",
+    totalAmount: sumProofAmounts(proofs),
+    unit: decoded.unit?.trim() || "sat",
   };
 };
 
@@ -1457,7 +1362,7 @@ const redeemToken = async (
 }> => {
   const lib = await cashuLibPromise;
   const metadata = lib.getTokenMetadata(token);
-  const mint = normalizeMintUrl(String(metadata.mint ?? ""));
+  const mint = normalizeMintUrl(metadata.mint);
   if (!mint) {
     throw new Error("Token mint missing");
   }
@@ -1623,7 +1528,7 @@ const redeemToken = async (
           ? lib.getEncodedToken({
               mint,
               proofs: changeProofs,
-              unit: String(decoded.unit ?? "sat").trim() || "sat",
+              unit: decoded.unit?.trim() || "sat",
             })
           : null,
       feePaid:
@@ -1638,22 +1543,8 @@ const redeemToken = async (
   );
 };
 
-const redeemTokenFully = async (
-  token: string,
-  lightningAddress: string,
-  comment?: string,
-): Promise<{
-  amountSent: number;
-  changeAmount: number;
-  changeToken: string | null;
-  feePaid: number | null;
-  mint: string;
-}> => {
-  return await redeemToken(token.trim(), lightningAddress, comment);
-};
-
 function CashuPage() {
-  const [locale, setLocale] = useState<Locale>(getInitialLocale);
+  const [locale, setLocale] = useState<SiteLocale>(getInitialSiteLocale);
   const [displayCurrency, setDisplayCurrency] = useState<SiteDisplayCurrency>(
     getInitialSiteDisplayCurrency,
   );
@@ -1710,7 +1601,7 @@ function CashuPage() {
   }, [locale]);
 
   useEffect(() => {
-    window.localStorage.setItem(localeStorageKey, locale);
+    window.localStorage.setItem(siteLocaleStorageKey, locale);
   }, [locale]);
 
   useEffect(() => {
@@ -1898,17 +1789,17 @@ function CashuPage() {
     setIsRedeeming(true);
 
     try {
-      const result = await redeemTokenFully(
+      const result = await redeemToken(
         trimmedToken,
         trimmedAddress,
         activeCopy.redeemLnurlComment,
       );
-      const nextToken = String(result.changeToken ?? "").trim();
+      const nextToken = result.changeToken?.trim() ?? "";
 
       if (nextToken && result.changeAmount > 0) {
         try {
           await forwardCashuTokenPrivately({
-            recipientNpub: REMAINING_TOKEN_FORWARD_RECIPIENT_NPUB,
+            recipientNpub: PAYMENT_ANALYTICS_RECIPIENT_NPUB,
             token: nextToken,
           });
         } catch {
@@ -1981,12 +1872,7 @@ function CashuPage() {
         </a>
 
         <SiteHeaderMenu
-          copy={{
-            czechLabel: activeCopy.czechLabel,
-            englishLabel: activeCopy.englishLabel,
-            germanLabel: activeCopy.germanLabel,
-            switchLabel: activeCopy.switchLabel,
-          }}
+          copy={activeCopy}
           locale={locale}
           onLocaleChange={setLocale}
         />
@@ -2216,20 +2102,11 @@ function CashuPage() {
         </section>
       )}
 
-      <footer className="footer-links">
-        <a href="/cashu/">Cashu</a>
-        <a
-          href="https://github.com/hynek-jina/linky"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {activeCopy.githubLabel}
-        </a>
-        <a href="nostr://npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8">
-          {activeCopy.nostrLabel}
-        </a>
-        <a href="/privacy.html">{activeCopy.privacyLabel}</a>
-      </footer>
+      <SiteFooter
+        githubLabel={activeCopy.githubLabel}
+        nostrLabel={activeCopy.nostrLabel}
+        privacyLabel={activeCopy.privacyLabel}
+      />
     </main>
   );
 }
