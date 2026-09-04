@@ -1,7 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { isNativePlatform } from "./platform/runtime";
-import type { JsonValue } from "./types/json";
-import { fetchJson } from "./utils/http";
 import {
   getLightningInvoiceDescriptionHashHex,
   parseBolt11AmountMsat,
@@ -345,12 +343,21 @@ const getLnurlProxyUrl = (url: string): string => {
   return proxyPath;
 };
 
-const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
+const fetchJson = async (url: string) => {
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const body: unknown = await response.json();
+  return body;
+};
+
+const fetchLnurlJson = async (url: string) => {
   try {
-    return await fetchJson<JsonValue>(url);
+    return await fetchJson(url);
   } catch (error) {
     if (typeof window === "undefined") throw error;
-    return await fetchJson<JsonValue>(getLnurlProxyUrl(url));
+    return await fetchJson(getLnurlProxyUrl(url));
   }
 };
 
@@ -394,7 +401,7 @@ const parseLnurlPayMetadata = (
 const sha256HexFromString = (input: string): string =>
   bytesToHex(sha256(new TextEncoder().encode(input)));
 
-const fetchValidatedLnurlPayRequest = async (
+export const fetchLnurlPayPreview = async (
   paymentTarget: string,
 ): Promise<LnurlPayPreview> => {
   const requestUrl = resolveLnurlPayRequestUrl(paymentTarget);
@@ -467,12 +474,6 @@ const fetchValidatedLnurlPayRequest = async (
   };
 };
 
-export const fetchLnurlPayPreview = async (
-  paymentTarget: string,
-): Promise<LnurlPayPreview> => {
-  return await fetchValidatedLnurlPayRequest(paymentTarget);
-};
-
 export const fetchLnurlInvoiceForTarget = async (
   paymentTarget: string,
   amountSat: number,
@@ -482,7 +483,7 @@ export const fetchLnurlInvoiceForTarget = async (
     throw new Error("Invalid amount");
   }
 
-  const payRequest = await fetchValidatedLnurlPayRequest(paymentTarget);
+  const payRequest = await fetchLnurlPayPreview(paymentTarget);
 
   let amountMsat = Math.round(amountSat * 1000);
   // Fiat-denominated fixed-amount LNURLs re-quote min/max msat from the

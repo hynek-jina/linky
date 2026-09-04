@@ -58,7 +58,7 @@ const parseLinkyProfileExchangeStatus = (
   );
 };
 
-const parseProfileGeneralStatus = (
+export const parseProfileGeneralStatus = (
   status: string | null | undefined,
 ): ParsedProfileGeneralStatus => {
   const normalizedStatus = asNonEmptyString(status);
@@ -87,18 +87,6 @@ const parseProfileGeneralStatus = (
   };
 };
 
-export const parseProfileExchangeStatusCurrencies = (
-  status: string | null | undefined,
-): ProfileStatusCurrency[] => {
-  return parseProfileGeneralStatus(status).currencies;
-};
-
-export const parseProfileGeneralStatusText = (
-  status: string | null | undefined,
-): string | null => {
-  return parseProfileGeneralStatus(status).text;
-};
-
 export const formatDisplayGeneralStatus = (params: {
   status: string | null | undefined;
   providesLabel: string;
@@ -113,12 +101,6 @@ export const formatDisplayGeneralStatus = (params: {
   if (parsed.text) return parsed.text;
   if (parsed.currencies.length === 0) return null;
   return `${params.providesLabel} ${parsed.currencies.join(", ")}`;
-};
-
-export const extractStatusFilterCurrencies = (
-  status: string | null | undefined,
-): string[] => {
-  return parseProfileGeneralStatus(status).currencies;
 };
 
 export const buildStatusFilterValue = (currency: string): string => {

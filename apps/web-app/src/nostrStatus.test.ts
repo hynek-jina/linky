@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseProfileExchangeStatusCurrencies } from "./nostrStatus";
+import { parseProfileGeneralStatus } from "./nostrStatus";
 
 describe("profile exchange status currencies", () => {
   it("silently removes legacy USD while preserving supported currencies", () => {
-    expect(parseProfileExchangeStatusCurrencies("BTC, CZK, USD")).toEqual([
+    expect(parseProfileGeneralStatus("BTC, CZK, USD").currencies).toEqual([
       "BTC",
       "CZK",
     ]);
-    expect(parseProfileExchangeStatusCurrencies("USD")).toEqual([]);
+    expect(parseProfileGeneralStatus("USD").currencies).toEqual([]);
   });
 });

@@ -89,7 +89,6 @@ import { usePaidOverlayState } from "../usePaidOverlayState";
 import { usePaymentsDomain } from "../usePaymentsDomain";
 import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
-import { readCashuRowOwnerId } from "../../lib/cashuOwnerLane";
 import { isCashuRowCandidateBetter } from "../../lib/cashuRowPreference";
 import { readCashuTokenAliases as readCashuRowAliases } from "../../lib/cashuTokenIdentity";
 import { reportCashuSendRowForgotten } from "../../lib/cashuSendInspector";
@@ -606,7 +605,7 @@ export const useCashuWalletComposition = ({
       };
 
       for (const row of rows) {
-        const ownerId = readCashuRowOwnerId(row);
+        const ownerId = String(row.ownerId);
         if (!visibleCashuOwnerIds.has(ownerId)) continue;
 
         const rowCandidates = readRowCandidates(row);

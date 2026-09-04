@@ -27,7 +27,7 @@ vi.mock("@capacitor/push-notifications", () => ({
 }));
 
 vi.mock("./pushDebugLog", () => ({
-  appendPushDebugLog: vi.fn().mockResolvedValue(undefined),
+  appendPushDebugLog: vi.fn(),
 }));
 
 const SECRET_KEY = createSecretKey(7);

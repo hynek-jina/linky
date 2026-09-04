@@ -28,7 +28,7 @@ import {
   deriveDefaultProfile,
   omitSyntheticContactLightningAddress,
 } from "../../../derivedProfile";
-import { reportInspectorRows } from "../../../devtools/inspector";
+import { reportInspectorRows } from "../../../devtools/inspector/reportInspectorRows";
 import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
 import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useEvolu, type ContactId } from "../../../evolu";
@@ -39,7 +39,7 @@ import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { type Lang } from "../../../i18n";
 import {
   buildStatusFilterValue,
-  extractStatusFilterCurrencies,
+  parseProfileGeneralStatus,
   isStatusFilterValue,
   parseStatusFilterValue,
 } from "../../../nostrStatus";
@@ -1381,7 +1381,8 @@ export const useContactsMessagingComposition = ({
       const groupNames = getContactGroups(contact);
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
       const statusFilterValues = normalizedNpub
-        ? extractStatusFilterCurrencies(nostrStatusByNpub[normalizedNpub])
+        ? parseProfileGeneralStatus(nostrStatusByNpub[normalizedNpub])
+            .currencies
         : [];
       const haystack = [
         contact.name,
@@ -1417,9 +1418,9 @@ export const useContactsMessagingComposition = ({
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
       if (!normalizedNpub) continue;
 
-      for (const currency of extractStatusFilterCurrencies(
+      for (const currency of parseProfileGeneralStatus(
         nostrStatusByNpub[normalizedNpub],
-      )) {
+      ).currencies) {
         currencyCounts.set(currency, (currencyCounts.get(currency) ?? 0) + 1);
       }
     }
@@ -1573,9 +1574,9 @@ export const useContactsMessagingComposition = ({
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
       if (!normalizedNpub) return [];
       if (
-        !extractStatusFilterCurrencies(
+        !parseProfileGeneralStatus(
           nostrStatusByNpub[normalizedNpub],
-        ).includes(bankPaymentOfferCurrency)
+        ).currencies.includes(bankPaymentOfferCurrency)
       ) {
         return [];
       }
@@ -2678,7 +2679,7 @@ export const useContactsMessagingComposition = ({
     if (!parsedRef) return;
 
     if (result instanceof OutboxJobFailed) {
-      void appendPushDebugLog("client", "outbox job failed", {
+      appendPushDebugLog("client", "outbox job failed", {
         detail: result.detail,
         reason: result.reason,
         ref,
@@ -3140,7 +3141,8 @@ export const useContactsMessagingComposition = ({
             npub,
             groupName: groupName || null,
             groupNames,
-            statusNames: extractStatusFilterCurrencies(nostrStatusByNpub[npub]),
+            statusNames: parseProfileGeneralStatus(nostrStatusByNpub[npub])
+              .currencies,
           },
         ];
       }),

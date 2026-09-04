@@ -62,8 +62,8 @@ import {
   deriveCashuBip85MnemonicFromSlip39,
   deriveEvoluOwnerMnemonicFromSlip39,
   deriveNostrKeysFromSlip39,
-  looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
+import { looksLikeSlip39Share } from "@linky/identity";
 import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
 import { buildLinkstrConfig } from "./useLinkstrConfigSync";
 import {
@@ -928,7 +928,7 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      if (!looksLikeSlip39Seed(normalizedSlip39)) {
+      if (!looksLikeSlip39Share(normalizedSlip39)) {
         const message = t("onboardingInvalidSeed");
         updateReturningOnboardingStep((current) => ({
           ...current,

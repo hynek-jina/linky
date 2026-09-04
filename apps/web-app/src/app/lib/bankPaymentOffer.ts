@@ -463,12 +463,6 @@ export const getLinkyBankPaymentOfferInfo = (
   };
 };
 
-export const getLinkyBankPaymentOfferText = (
-  content: string,
-): string | null => {
-  return getLinkyBankPaymentOfferInfo(content)?.text ?? null;
-};
-
 interface BankPaymentOfferContactEntry {
   info: LinkyBankPaymentOfferInfo;
   message: LocalNostrMessage;

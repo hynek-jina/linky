@@ -8,7 +8,6 @@ import {
 } from "@linky/linkshu";
 import type { TokenRowPatch, TokenStoreService } from "@linky/linkshu";
 import { Effect, Layer, Schema } from "effect";
-import { resolveCashuRowStoredOwnerLane } from "../../app/lib/cashuOwnerLane";
 import {
   createCashuTokenId,
   isDeletedCashuRow,
@@ -29,7 +28,7 @@ import { nowSeconds } from "../../utils/time";
  * deterministic id derived from `originalTokenText`, and removal is a soft
  * delete. Mutations target the owner lane the row is stored in — writing
  * through the active lane when the row lives in an older `cashu-n` lane
- * silently no-ops (see `resolveCashuRowStoredOwnerLane`).
+ * silently no-ops, so writes go to the lane recorded on the row itself.
  *
  * `loadTokenRows` serves the React render state, which lags Evolu mutations
  * by at least one render. Linkshu chains writes and reads within one
@@ -194,7 +193,7 @@ export const makeEvoluTokenStore = (
     (await loadLiveRows()).find((row) => String(row.id) === String(id)) ?? null;
 
   const rowLane = (row: CashuTokenRow): Evolu.OwnerId =>
-    resolveCashuRowStoredOwnerLane(row) ?? deps.getWriteOwnerId();
+    row.ownerId ?? deps.getWriteOwnerId();
 
   const runUpdate = (
     payload: EvoluCashuTokenUpdatePayload,

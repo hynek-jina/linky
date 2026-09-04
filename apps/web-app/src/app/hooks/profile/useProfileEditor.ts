@@ -15,8 +15,7 @@ import {
 import { navigateTo } from "../../../hooks/useRouting";
 import {
   buildProfileGeneralStatus,
-  parseProfileExchangeStatusCurrencies,
-  parseProfileGeneralStatusText,
+  parseProfileGeneralStatus,
 } from "../../../nostrStatus";
 import {
   cacheProfileAvatarFromUrl,
@@ -126,7 +125,7 @@ export const useProfileEditor = ({
     const initialPicture = metaPic || generatedAvatar.pictureUrl;
     const customPicture =
       metaPic && metaPic !== generatedAvatar.pictureUrl ? metaPic : "";
-    const initialStatus = parseProfileGeneralStatusText(myProfileStatus) ?? "";
+    const initialStatus = parseProfileGeneralStatus(myProfileStatus).text ?? "";
 
     setProfileAvatarSelection(generatedAvatar.selection);
     setProfileCustomPictureUrl(customPicture);
@@ -271,7 +270,7 @@ export const useProfileEditor = ({
         const trimmedPicture = picture.trim();
         const trimmedStatus = status.trim();
         const nextStatus = buildProfileGeneralStatus({
-          currencies: parseProfileExchangeStatusCurrencies(myProfileStatus),
+          currencies: parseProfileGeneralStatus(myProfileStatus).currencies,
           text: status,
         });
 
@@ -409,7 +408,8 @@ export const useProfileEditor = ({
         const picture = String(
           next.metadata.picture ?? effectiveProfilePicture ?? "",
         ).trim();
-        const statusText = parseProfileGeneralStatusText(myProfileStatus) ?? "";
+        const statusText =
+          parseProfileGeneralStatus(myProfileStatus).text ?? "";
 
         saveCachedProfile(currentNpub, next.metadata, nowSeconds());
         setMyProfileMetadata(next.metadata);

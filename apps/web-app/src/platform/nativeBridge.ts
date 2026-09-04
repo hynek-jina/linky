@@ -153,24 +153,6 @@ interface NativeNfcWriteResult {
   status: NativeNfcWriteStatus;
 }
 
-const isAndroidSecretStorageBridge = (
-  value: unknown,
-): value is AndroidSecretStorageBridge => {
-  return isRecord(value);
-};
-
-const isAndroidScannerBridge = (
-  value: unknown,
-): value is AndroidScannerBridge => {
-  return isRecord(value);
-};
-
-const isAndroidNotificationsBridge = (
-  value: unknown,
-): value is AndroidNotificationsBridge => {
-  return isRecord(value);
-};
-
 const parseNativeScanResultEvent = (event: Event): NativeScanResult | null => {
   if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
     return null;
@@ -252,17 +234,17 @@ const requestNativeBridgeEvent = <Result>({
 
 const getAndroidSecretStorageBridge = (): AndroidSecretStorageBridge | null => {
   const value = Reflect.get(globalThis, "LinkyNativeSecretStorage");
-  return isAndroidSecretStorageBridge(value) ? value : null;
+  return isRecord(value) ? value : null;
 };
 
 const getAndroidScannerBridge = (): AndroidScannerBridge | null => {
   const value = Reflect.get(globalThis, "LinkyNativeScanner");
-  return isAndroidScannerBridge(value) ? value : null;
+  return isRecord(value) ? value : null;
 };
 
 const getAndroidNotificationsBridge = (): AndroidNotificationsBridge | null => {
   const value = Reflect.get(globalThis, "LinkyNativeNotifications");
-  return isAndroidNotificationsBridge(value) ? value : null;
+  return isRecord(value) ? value : null;
 };
 
 const getAndroidWindowInsetsBridge = (): AndroidWindowInsetsBridge | null => {

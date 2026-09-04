@@ -1,9 +1,3 @@
-import { extractCashuTokenFromText } from "./tokenText";
-
-export const isCashuNotificationMessage = (text: string): boolean => {
-  return extractCashuTokenFromText(text) !== null;
-};
-
 export const getReceivedMoneyCopyForLanguage = (
   language: string | null | undefined,
 ): string => {
