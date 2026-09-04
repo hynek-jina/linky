@@ -71,6 +71,7 @@ import {
   safeLocalStorageRemove,
   safeLocalStorageSet,
 } from "../../utils/storage";
+import { nowSeconds } from "../../utils/time";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -420,14 +421,14 @@ export const useProfileAuthDomain = ({
         });
       }
 
-      saveCachedProfile(npub, metadata, Math.floor(Date.now() / 1000));
+      saveCachedProfile(npub, metadata, nowSeconds());
 
       // Contact suggestions discover new users by their kind-30315 status,
       // so publish an empty one right away; failure only costs discovery
       // visibility, not the account, so it does not abort onboarding.
       const statusExit = await publishStatus(new StatusDraft({ content: "" }));
       if (Exit.isSuccess(statusExit)) {
-        saveCachedStatus(npub, "", Math.floor(Date.now() / 1000));
+        saveCachedStatus(npub, "", nowSeconds());
       }
     },
     [currentNsec, publishProfile, publishStatus, setLinkstrConfig, t],
@@ -459,7 +460,7 @@ export const useProfileAuthDomain = ({
 
       const newNpub = await deriveNpubFromNsec(newNsec);
       if (newNpub) {
-        saveCachedProfile(newNpub, metadata, Math.floor(Date.now() / 1000));
+        saveCachedProfile(newNpub, metadata, nowSeconds());
       }
       return true;
     },

@@ -93,6 +93,7 @@ import {
 } from "./lib/topbarConfig";
 import { getDesktopActiveContactId } from "./routes/desktopRouteSection";
 import type { ContactRowLike } from "./types/appTypes";
+import { nowSeconds } from "../utils/time";
 
 const AppContactId = Evolu.id("Contact");
 
@@ -266,7 +267,7 @@ export const useAppShellComposition = ({
   // reported as seen, so pre-enable history stays unreported.
   const toggleSendReadReceipts = React.useCallback(() => {
     setSeenReceiptsEnabledAtSec((current) =>
-      current === null ? Math.floor(Date.now() / 1e3) : null,
+      current === null ? nowSeconds() : null,
     );
   }, []);
 

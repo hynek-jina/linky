@@ -54,6 +54,7 @@ import {
   safeLocalStorageGetJson,
 } from "../../../utils/storage";
 import { trimString } from "../../../utils/validation";
+import { nowSeconds } from "../../../utils/time";
 
 // Fallback backfill window for a first session without a persisted cursor.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
@@ -214,7 +215,7 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
       getPeerSeenWindow: latest.getPeerSeenWindow,
       identitySinceSec: identitySinceSecRef.current,
       isBlockedPubkey,
-      nowSec: Math.floor(Date.now() / 1e3),
+      nowSec: nowSeconds(),
       recordSentSeenReceipt: latest.recordSentSeenReceipt,
     };
 
@@ -324,9 +325,7 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
     // The cursor store (configured in useLinkstrConfigSync) wins over `since`
     // once it holds a checkpoint.
     setWrapInboxHandler({
-      since: UnixSeconds.make(
-        Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC,
-      ),
+      since: UnixSeconds.make(nowSeconds() - INBOX_BACKFILL_SINCE_SEC),
       onEvent: dispatchInboxEvent,
     });
     return () => setWrapInboxHandler(null);

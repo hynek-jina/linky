@@ -8,6 +8,7 @@ import {
   isValidBic,
   normalizeBankAccountInput,
 } from "./bankAccount";
+import { safeDecodeURIComponent } from "./url";
 
 type BankPaymentFormat = "bysquare" | "epc" | "spd";
 
@@ -25,14 +26,6 @@ const SPAYD_FILENAME = "platba.spayd";
 const SPD_QR_JPEG_FILENAME = "platba.jpg";
 const SPAYD_MIME_TYPE = "application/x-shortpaymentdescriptor";
 const SPD_QR_JPEG_MIME_TYPE = "image/jpeg";
-
-const safeDecodeURIComponent = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
 
 const isSpdPaymentPayload = (input: string): boolean =>
   String(input ?? "")

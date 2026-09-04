@@ -35,6 +35,7 @@ import type {
 import type { ReplyContext } from "../messages/useSendChatMessage";
 import type { CashuMessagePaymentHookResult } from "./cashuMessagePaymentTypes";
 import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
+import { nowSeconds } from "../../../utils/time";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
@@ -184,7 +185,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             )
             .replace("{unit}", displayAmount.unitLabel)
             .replace("{name}", displayName),
-          createdAtSec: Math.floor(Date.now() / 1_000),
+          createdAtSec: nowSeconds(),
           direction: "out",
           localOnly: true,
           pubkey: "",

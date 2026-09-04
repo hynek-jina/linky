@@ -1,5 +1,6 @@
 import { isRecord } from "./unknown";
 import type { JsonRecord, JsonValue } from "../types/json";
+import { sleep } from "./time";
 
 const PUSH_DEBUG_CACHE_NAME = "linky-push-debug-v1";
 const PUSH_DEBUG_LOG_URL = "/__debug__/push-log.json";
@@ -108,9 +109,7 @@ async function writeStoredLog(entries: PushDebugLogEntry[]): Promise<void> {
 function schedulePushDebugLogFlush(): Promise<void> {
   if (pushDebugLogFlushPromise) return pushDebugLogFlushPromise;
 
-  pushDebugLogFlushPromise = new Promise<void>((resolve) => {
-    setTimeout(resolve, PUSH_DEBUG_LOG_BATCH_DELAY_MS);
-  })
+  pushDebugLogFlushPromise = sleep(PUSH_DEBUG_LOG_BATCH_DELAY_MS)
     .then(async () => {
       const nextEntries = pendingPushDebugEntries.splice(0);
       if (nextEntries.length === 0) return;

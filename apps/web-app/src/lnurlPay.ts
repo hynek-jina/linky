@@ -9,7 +9,9 @@ import {
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 import { isRecord } from "./utils/unknown";
-import { asNonEmptyString } from "./utils/validation";
+import { asNonEmptyString, isHttpUrl } from "./utils/validation";
+import { stripLightningPrefix } from "./utils/url";
+import { splitLightningAddress } from "./utils/lightningAddress";
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
 
@@ -126,19 +128,6 @@ const isKnownLnurlTag = (
 };
 
 const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:]+\.[^@\s/:]+$/;
-
-const stripLightningPrefix = (value: string): string => {
-  return value.replace(/^lightning:/i, "").trim();
-};
-
-const isHttpUrl = (value: string): boolean => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-};
 
 // Some LNURL encoders ship URLs with empty path segments (e.g.
 // `https://lnbits.cz/lnurlp//AVH9zJ`). Most servers respond 404 to the empty
@@ -389,14 +378,10 @@ const isLnurlWithdrawCallbackResponse = (
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   // LUD-16 usernames are lowercase-only and domains are case-insensitive;
   // servers reject mixed-case addresses (e.g. `Plex@21m.lol`) as not found.
-  const raw = lightningAddress.trim().toLowerCase();
-  const at = raw.lastIndexOf("@");
-  if (at <= 0 || at === raw.length - 1) {
-    throw new Error("Invalid lightning address");
-  }
-
-  const user = raw.slice(0, at);
-  const domain = raw.slice(at + 1);
+  const parts = splitLightningAddress(lightningAddress);
+  if (!parts) throw new Error("Invalid lightning address");
+  const user = parts.user.toLowerCase();
+  const domain = parts.domain.toLowerCase();
 
   // LNURL-pay well-known endpoint for lightning address.
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;

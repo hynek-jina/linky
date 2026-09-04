@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
+  formatRemainingTime,
   getLinkyBankPaymentOfferExpiresAtSec,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
@@ -41,6 +42,7 @@ import {
 import { BankPaymentAmount } from "../components/BankPaymentAmount";
 import { PrivateFileBubble } from "../components/PrivateFileBubble";
 import { PrivateImageBubble } from "../components/PrivateImageBubble";
+import { nowSeconds } from "../utils/time";
 
 interface BankPaymentOfferDetailPageProps {
   bankPaymentOfferMessages: LocalNostrMessage[];
@@ -426,19 +428,6 @@ const hasTimedPhase = (status: LinkyBankPaymentOfferStatus): boolean =>
 
 const BANK_PAYMENT_OFFER_EXTENSION_SEC = 60;
 
-const formatRemainingTime = (
-  remainingSec: number,
-  t: (key: string) => string,
-): string => {
-  if (remainingSec <= 0) return t("bankPaymentOfferExpired");
-
-  const minutes = Math.floor(remainingSec / 60);
-  const seconds = Math.max(0, remainingSec % 60);
-  return t("bankPaymentOfferTimeRemainingClock")
-    .replace("{minutes}", String(minutes))
-    .replace("{seconds}", String(seconds).padStart(2, "0"));
-};
-
 export const BankPaymentOfferDetailPage: React.FC<
   BankPaymentOfferDetailPageProps
 > = ({
@@ -638,7 +627,7 @@ export const BankPaymentOfferDetailPage: React.FC<
         offerEntry.info.status,
         {
           expiresAtSec:
-            Math.max(currentExpiresAtSec, Math.floor(Date.now() / 1_000)) +
+            Math.max(currentExpiresAtSec, nowSeconds()) +
             BANK_PAYMENT_OFFER_EXTENSION_SEC,
           extensionSec: BANK_PAYMENT_OFFER_EXTENSION_SEC,
           withPush: true,

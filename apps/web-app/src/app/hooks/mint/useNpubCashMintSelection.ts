@@ -13,6 +13,7 @@ import {
   NPUB_CASH_SERVER_BASE_URL,
 } from "../../../utils/npubCashServer";
 import { safeLocalStorageSet } from "../../../utils/storage";
+import { nowSeconds } from "../../../utils/time";
 
 interface UseNpubCashMintSelectionParams {
   currentNpub: string | null;
@@ -59,7 +60,7 @@ export const useNpubCashMintSelection = ({
       return makeLinkstrNip98AuthHeader(
         payload === undefined ? { url, method } : { url, method, payload },
         secretKey,
-        UnixSeconds.make(Math.floor(Date.now() / 1000)),
+        UnixSeconds.make(nowSeconds()),
       );
     },
     [currentNsec],

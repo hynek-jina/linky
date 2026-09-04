@@ -206,3 +206,12 @@ export const getMintIconOverride = (host: string | null) => {
   }
   return null;
 };
+
+export const formatMintHost = (mintUrl: string): string => {
+  const withoutScheme = mintUrl.replace(/^https?:\/\//i, "");
+  try {
+    return new URL(mintUrl).host || withoutScheme;
+  } catch {
+    return withoutScheme;
+  }
+};

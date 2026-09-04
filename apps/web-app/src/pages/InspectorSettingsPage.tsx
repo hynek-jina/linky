@@ -11,12 +11,7 @@ import {
 import type { PersistentInspectorLogStats } from "../devtools/inspector/persistentInspectorLogBuffer";
 import { SettingsLinkRow, SettingsToggleRow } from "../components/SettingsRows";
 import { useNavigation } from "../hooks/useRouting";
-
-const formatInspectorLogSize = (size: number): string => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
-};
+import { formatBytes } from "../utils/formatting";
 
 const formatInspectorLogAge = (
   oldestAt: number | null,
@@ -44,7 +39,7 @@ export function InspectorSettingsPage(): React.ReactElement {
   const inspectorLogStatsLabel = inspectorLogStats
     ? t("nostrInspectorLogsStats")
         .replace("{count}", String(inspectorLogStats.rowCount))
-        .replace("{size}", formatInspectorLogSize(inspectorLogStats.totalSize))
+        .replace("{size}", formatBytes(inspectorLogStats.totalSize))
         .replace(
           "{age}",
           formatInspectorLogAge(inspectorLogStats.oldestAt, Date.now()),

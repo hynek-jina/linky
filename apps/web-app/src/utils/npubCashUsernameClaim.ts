@@ -3,6 +3,7 @@ import type { LightningInvoicePreview } from "./lightningInvoice";
 import { getLightningInvoicePreview } from "./lightningInvoice";
 import { getUnknownErrorMessage } from "./unknown";
 import { asNonEmptyString, asRecord } from "./validation";
+import { sleep } from "./time";
 
 const OWN_LIGHTNING_ADDRESS_DOMAIN = "linky.fit";
 const OWN_LIGHTNING_USERNAME_MIN_LENGTH = 3;
@@ -257,12 +258,6 @@ export const finalizeOwnLightningAddressClaim = async (args: {
 const CLAIM_CONFIRM_RETRY_DELAY_MS = 1_000;
 const CLAIM_CONFIRM_RETRY_LIMIT = 5;
 
-const wait = (ms: number): Promise<void> => {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-};
-
 export const purchaseOwnLightningAddressClaim = async (args: {
   makeNip98AuthHeader: Nip98AuthHeaderFactory;
   payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
@@ -293,7 +288,7 @@ export const purchaseOwnLightningAddressClaim = async (args: {
     }
 
     if (result.kind === "unpaid" && attempt + 1 < CLAIM_CONFIRM_RETRY_LIMIT) {
-      await wait(CLAIM_CONFIRM_RETRY_DELAY_MS);
+      await sleep(CLAIM_CONFIRM_RETRY_DELAY_MS);
       continue;
     }
 

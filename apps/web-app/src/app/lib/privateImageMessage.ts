@@ -9,6 +9,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../../utils/base64";
 import { getUnknownErrorMessage, isRecord } from "../../utils/unknown";
 import { asNonEmptyString } from "../../utils/validation";
+import { nowSeconds } from "../../utils/time";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -324,7 +325,7 @@ const uploadToBlossom = async (
       const authHeader = makeBlossomUploadAuthHeader(
         { sha256: prepared.encryptedSha256, serverDomain },
         auth.privateKey,
-        UnixSeconds.make(Math.floor(Date.now() / 1000)),
+        UnixSeconds.make(nowSeconds()),
       );
       const uploadBody = copyToArrayBuffer(prepared.encryptedBytes);
       let response: Response;

@@ -19,6 +19,7 @@ import {
   normalizeCashuTokenState,
 } from "../../app/lib/cashuTokenState";
 import type { CashuTokenId, CashuTokenRow } from "../../evolu";
+import { nowSeconds } from "../../utils/time";
 
 /**
  * Linkshu's `TokenStore` port over the Evolu `cashuToken` table.
@@ -242,7 +243,7 @@ export const makeEvoluTokenStore = (
           throw new Error(`cashuToken upsert failed: ${String(result.error)}`);
         }
         const stored = new StoredTokenRow({
-          createdAt: UnixSeconds.make(Math.floor(Date.now() / 1000)),
+          createdAt: UnixSeconds.make(nowSeconds()),
           error: row.error,
           id: TokenRowId.make(String(id)),
           originalTokenText: row.originalTokenText,

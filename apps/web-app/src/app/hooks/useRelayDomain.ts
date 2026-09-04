@@ -18,6 +18,7 @@ import {
   NOSTR_RELAYS,
   saveCachedRelayLists,
 } from "../../utils/nostrRelays";
+import { nowSeconds } from "../../utils/time";
 
 interface UseRelayDomainParams {
   currentNpub: string | null;
@@ -102,11 +103,11 @@ export const useRelayDomain = ({
   const persistLocalRelayUrls = React.useCallback(
     (urls: readonly string[]) => {
       if (cachePubkey === null) return;
-      const nowSeconds = Math.floor(Date.now() / 1000);
+      const nowSec = nowSeconds();
       saveCachedRelayLists(cachePubkey, {
         relayUrls: urls,
-        relaysUpdatedAt: nowSeconds,
-        dmRelaysUpdatedAt: nowSeconds,
+        relaysUpdatedAt: nowSec,
+        dmRelaysUpdatedAt: nowSec,
       });
     },
     [cachePubkey],

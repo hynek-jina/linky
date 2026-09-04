@@ -33,6 +33,7 @@ import {
 } from "../../../utils/npubCashUsernameClaim";
 import { isHttpUrl } from "../../../utils/validation";
 import { applyLightningAddressToProfileMetadata } from "../../lib/profileMetadata";
+import { nowSeconds } from "../../../utils/time";
 
 interface UseProfileEditorParams {
   currentNpub: string | null;
@@ -308,7 +309,7 @@ export const useProfileEditor = ({
         const profileExit = await publishProfile(nextMetadata);
         if (Exit.isFailure(profileExit)) throw new Error("publish failed");
 
-        const nowSec = Math.floor(Date.now() / 1000);
+        const nowSec = nowSeconds();
         saveCachedProfile(currentNpub, nextMetadata, nowSec);
         saveCachedStatus(currentNpub, nextStatus ?? "", nowSec);
         setMyProfileMetadata(nextMetadata);
@@ -410,11 +411,7 @@ export const useProfileEditor = ({
         ).trim();
         const statusText = parseProfileGeneralStatusText(myProfileStatus) ?? "";
 
-        saveCachedProfile(
-          currentNpub,
-          next.metadata,
-          Math.floor(Date.now() / 1000),
-        );
+        saveCachedProfile(currentNpub, next.metadata, nowSeconds());
         setMyProfileMetadata(next.metadata);
         setMyProfileLnAddress(next.lightningAddress || null);
         setMyProfileName(bestName ?? effectiveProfileName);

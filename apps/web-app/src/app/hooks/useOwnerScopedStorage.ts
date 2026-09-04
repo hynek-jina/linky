@@ -29,6 +29,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { isRecord } from "../../utils/unknown";
+import { nowSeconds } from "../../utils/time";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -278,7 +279,7 @@ export const useOwnerScopedStorage = ({
       const ownerId = appOwnerIdRef.current ?? transactionsOwnerIdRef.current;
       if (!ownerId) return;
 
-      const nowSec = Math.floor(Date.now() / 1000);
+      const nowSec = nowSeconds();
       const transactionPayload = buildTransactionInsertPayload({
         createdAtSec: nowSec,
         event: {

@@ -26,6 +26,7 @@ import {
 import { isNativePlatform } from "../platform/runtime";
 import { appendPushDebugLog } from "./pushDebugLog";
 import { base64 } from "@scure/base";
+import { nowSeconds } from "./time";
 
 const PUSH_SERVER_URL =
   import.meta.env.VITE_PUSH_SERVER_URL ||
@@ -352,7 +353,7 @@ async function createOwnershipProof(params: {
     event: makePushOwnershipProof(
       { action: params.action, challenge: params.challenge },
       privBytes,
-      UnixSeconds.make(Math.floor(Date.now() / 1000)),
+      UnixSeconds.make(nowSeconds()),
     ),
     pubkey,
   };

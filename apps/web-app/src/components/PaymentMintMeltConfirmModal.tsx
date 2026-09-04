@@ -1,4 +1,5 @@
 import React from "react";
+import { formatMintHost } from "../utils/mint";
 
 interface PaymentMintMeltConfirmModalProps {
   fromMint: string;
@@ -8,14 +9,6 @@ interface PaymentMintMeltConfirmModalProps {
   t: (key: string) => string;
   toMint: string;
 }
-
-const formatMint = (mint: string): string => {
-  try {
-    return new URL(mint).host || mint;
-  } catch {
-    return mint.replace(/^https?:\/\//i, "");
-  }
-};
 
 export function PaymentMintMeltConfirmModal({
   fromMint,
@@ -37,8 +30,8 @@ export function PaymentMintMeltConfirmModal({
         <div className="modal-title">{t("cashuPaymentMeltTitle")}</div>
         <div className="modal-body">
           {t("cashuPaymentMeltBody")
-            .replace("{fromMint}", formatMint(fromMint))
-            .replace("{toMint}", formatMint(toMint))}
+            .replace("{fromMint}", formatMintHost(fromMint))
+            .replace("{toMint}", formatMintHost(toMint))}
         </div>
         <div className="modal-actions">
           <button

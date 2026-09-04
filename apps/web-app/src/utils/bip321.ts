@@ -15,6 +15,7 @@
  */
 
 import { isLightningAddress } from "../lnurlPay";
+import { safeDecodeURIComponent, stripLightningPrefix } from "./url";
 
 interface Bip321Parsed {
   address: string | null;
@@ -46,14 +47,6 @@ const BIP321_RESERVED_PARAMS: ReadonlySet<string> = new Set([
 
 const BIP321_SCHEME_RE = /^bitcoin:/i;
 
-const safeDecode = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
 const parseAmountBtcToSat = (raw: string | null): number | null => {
   if (!raw) return null;
   const trimmed = raw.trim();
@@ -66,9 +59,6 @@ const parseAmountBtcToSat = (raw: string | null): number | null => {
   const sat = Math.round(btc * 1e8);
   return sat >= 0 ? sat : null;
 };
-
-const stripLightningPrefix = (value: string): string =>
-  value.replace(/^lightning:/i, "").trim();
 
 /**
  * Returns `null` if the input is not a `bitcoin:` URI. Otherwise returns
@@ -93,7 +83,7 @@ export const parseBip321Uri = (input: unknown): Bip321Parsed | null => {
   const get = (key: string): string | null => {
     const raw = params.get(key);
     if (raw === null) return null;
-    const decoded = safeDecode(raw).trim();
+    const decoded = safeDecodeURIComponent(raw).trim();
     return decoded || null;
   };
 
@@ -115,7 +105,7 @@ export const parseBip321Uri = (input: unknown): Bip321Parsed | null => {
   const extensions: Record<string, string> = {};
   for (const [key, raw] of params.entries()) {
     if (BIP321_RESERVED_PARAMS.has(key.toLowerCase())) continue;
-    extensions[key] = safeDecode(raw);
+    extensions[key] = safeDecodeURIComponent(raw);
   }
 
   return {

@@ -13,6 +13,7 @@ import {
   PRESET_MINTS,
   PRODUCTION_MINTS,
 } from "../utils/mint";
+import { nowSeconds } from "../utils/time";
 
 const RECOMMENDED_MINT_URL = "https://cashu.cz";
 
@@ -126,7 +127,7 @@ export function MintsPage() {
   );
   React.useEffect(() => {
     if (selectedMintPpk !== null) return;
-    const nowSec = Math.floor(Date.now() / 1000);
+    const nowSec = nowSeconds();
     if (nowSec - selectedMintCheckedAtSec < FEE_INFO_RETRY_SEC) return;
     void refreshMintInfo(selectedMint);
   }, [
