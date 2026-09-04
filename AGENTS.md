@@ -60,7 +60,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 Two Playwright projects in `apps/web-app/playwright.config.ts`:
 
 - `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — `tests/proxy-payment.spec.ts` and `tests/linkshu-migration.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+- `local-stack` — `tests/proxy-payment.spec.ts`, `tests/linkshu-migration.spec.ts`, and `tests/chat-recovery.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)

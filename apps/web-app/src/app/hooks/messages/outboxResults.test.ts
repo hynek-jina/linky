@@ -63,23 +63,27 @@ describe("applyOutboxResult", () => {
   });
 
   it.each([
-    ["ChatMessageReceipt", new ChatMessageReceipt(copies)],
+    ["ChatMessageReceipt", new ChatMessageReceipt(copies), rumorId],
     [
       "MessageEditReceipt",
       new MessageEditReceipt({
         ...copies,
         editOf: RumorId.make("12".repeat(32)),
       }),
+      RumorId.make("12".repeat(32)),
     ],
-  ])("marks the message row sent from a %s", (_name, receipt) => {
-    const targets = apply(succeeded("message:row-2", receipt));
-    expect(targets.updateLocalNostrMessage).toHaveBeenCalledWith("row-2", {
-      rumorId,
-      status: "sent",
-      wrapId: selfWrapId,
-    });
-    expect(targets.updateLocalNostrReaction).not.toHaveBeenCalled();
-  });
+  ])(
+    "marks the message row sent from a %s",
+    (_name, receipt, expectedRumorId) => {
+      const targets = apply(succeeded("message:row-2", receipt));
+      expect(targets.updateLocalNostrMessage).toHaveBeenCalledWith("row-2", {
+        rumorId: expectedRumorId,
+        status: "sent",
+        wrapId: selfWrapId,
+      });
+      expect(targets.updateLocalNostrReaction).not.toHaveBeenCalled();
+    },
+  );
 
   it("ignores a receipt whose kind does not match the ref", () => {
     const targets = apply(
