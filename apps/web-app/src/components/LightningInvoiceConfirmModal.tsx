@@ -1,6 +1,6 @@
 import React from "react";
 import { WalletBalance } from "../components/WalletBalance";
-import type { LightningInvoicePreview } from "../utils/lightningInvoice";
+import type { LightningInvoicePreview } from "@linky/linkshu";
 
 interface LightningInvoiceConfirmModalProps {
   cashuBalance: number;

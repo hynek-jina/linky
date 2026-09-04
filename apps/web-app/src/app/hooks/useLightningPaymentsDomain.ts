@@ -12,7 +12,7 @@ import type { DisplayAmountParts } from "../../utils/displayAmounts";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
-} from "../../utils/lightningInvoice";
+} from "@linky/linkshu";
 import { normalizeMintUrl } from "../../utils/mint";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";

@@ -13,7 +13,7 @@ import {
 import { createCashuTokenId } from "../app/lib/cashuTokenIdentity";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
-import { getLightningInvoicePreview } from "../utils/lightningInvoice";
+import { getLightningInvoicePreview } from "@linky/linkshu";
 import { calculateTransactionHistoryFee } from "../app/lib/transactionHistoryFee";
 import type { JsonValue } from "../types/json";
 import {

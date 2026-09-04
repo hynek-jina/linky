@@ -69,6 +69,14 @@ and get receipts; token text is the currency of the API.
 - `mint/` — mint info (name, `input_fee_ppk`, MPP) and the known-mint set;
   internally the single wallet-instance cache every vertical shares
 
+## Invoice previews
+
+`getLightningInvoicePreview`, `parseBolt11AmountMsat`, and
+`getLightningInvoiceDescriptionHashHex` are pure exports for displaying invoice
+amounts, descriptions and expiry, and checking LNURL description hashes. They
+need no wallet runtime. These preserve the app's permissive preview behavior;
+they do not validate signatures or authorize payment.
+
 ## Token lifecycle
 
 The package owns the state machine; platforms persist rows, never decide

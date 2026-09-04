@@ -6,7 +6,7 @@ import { navigateTo } from "../../../hooks/useRouting";
 import type { Route } from "../../../types/route";
 import { buildBip321PaymentUri } from "../../../utils/bip321";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
-import { getLightningInvoicePreview } from "../../../utils/lightningInvoice";
+import { getLightningInvoicePreview } from "@linky/linkshu";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 import { optimizeCaseInsensitiveQrPayload } from "../../../utils/qrPayload";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";

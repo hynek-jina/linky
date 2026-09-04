@@ -6,7 +6,7 @@ import { fetchJson } from "./utils/http";
 import {
   getLightningInvoiceDescriptionHashHex,
   parseBolt11AmountMsat,
-} from "./utils/lightningInvoice";
+} from "@linky/linkshu";
 import { asNonEmptyString } from "./utils/validation";
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
