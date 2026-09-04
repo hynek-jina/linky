@@ -6,18 +6,14 @@ import {
 } from "../../utils/constants";
 import type { FiatRates } from "../../utils/displayAmounts";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
-
-const readObjectField = (value: unknown, field: string): unknown => {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Reflect.get(value, field);
-};
+import { readField } from "../../utils/unknown";
 
 const isFiatRates = (value: unknown): value is FiatRates => {
-  const chfPerBtc = readObjectField(value, "chfPerBtc");
-  const czkPerBtc = readObjectField(value, "czkPerBtc");
-  const eurPerBtc = readObjectField(value, "eurPerBtc");
-  const fetchedAtMs = readObjectField(value, "fetchedAtMs");
-  const usdPerBtc = readObjectField(value, "usdPerBtc");
+  const chfPerBtc = readField(value, "chfPerBtc");
+  const czkPerBtc = readField(value, "czkPerBtc");
+  const eurPerBtc = readField(value, "eurPerBtc");
+  const fetchedAtMs = readField(value, "fetchedAtMs");
+  const usdPerBtc = readField(value, "usdPerBtc");
 
   return (
     typeof chfPerBtc === "number" &&
@@ -56,12 +52,12 @@ const isFiatRatesStale = (value: FiatRates | null): boolean => {
 };
 
 const parseFetchedRates = (value: unknown): FiatRates | null => {
-  const data = readObjectField(value, "data");
-  const rates = readObjectField(data, "rates");
-  const chfRaw = readObjectField(rates, "CHF");
-  const czkRaw = readObjectField(rates, "CZK");
-  const eurRaw = readObjectField(rates, "EUR");
-  const usdRaw = readObjectField(rates, "USD");
+  const data = readField(value, "data");
+  const rates = readField(data, "rates");
+  const chfRaw = readField(rates, "CHF");
+  const czkRaw = readField(rates, "CZK");
+  const eurRaw = readField(rates, "EUR");
+  const usdRaw = readField(rates, "USD");
 
   const chf = Number.parseFloat(String(chfRaw ?? ""));
   const czk = Number.parseFloat(String(czkRaw ?? ""));

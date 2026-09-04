@@ -1,12 +1,13 @@
 import { bech32 } from "@scure/base";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { isNativePlatform } from "./platform/runtime";
-import type { JsonRecord, JsonValue } from "./types/json";
+import type { JsonValue } from "./types/json";
 import { fetchJson } from "./utils/http";
 import {
   getLightningInvoiceDescriptionHashHex,
   parseBolt11AmountMsat,
 } from "./utils/lightningInvoice";
+import { isRecord } from "./utils/unknown";
 import { asNonEmptyString } from "./utils/validation";
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
@@ -104,19 +105,11 @@ export class LnurlTagMismatchError extends Error {
   }
 }
 
-const isJsonRecord = (value: unknown): value is JsonRecord => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
-const isOptionalNumber = (
-  value: JsonValue | undefined,
-): value is number | undefined => {
+const isOptionalNumber = (value: unknown): value is number | undefined => {
   return value === undefined || typeof value === "number";
 };
 
-const isOptionalString = (
-  value: JsonValue | undefined,
-): value is string | undefined => {
+const isOptionalString = (value: unknown): value is string | undefined => {
   return value === undefined || typeof value === "string";
 };
 
@@ -306,7 +299,7 @@ export const inferLightningAddressFromLnurlTarget = (
 };
 
 const isLnurlPayRequest = (value: unknown): value is LnurlPayRequest => {
-  if (!isJsonRecord(value)) return false;
+  if (!isRecord(value)) return false;
   return (
     isOptionalString(value.callback) &&
     isOptionalNumber(value.commentAllowed) &&
@@ -322,7 +315,7 @@ const isLnurlPayRequest = (value: unknown): value is LnurlPayRequest => {
 const isLnurlInvoiceResponse = (
   value: unknown,
 ): value is LnurlInvoiceResponse => {
-  if (!isJsonRecord(value)) return false;
+  if (!isRecord(value)) return false;
   return (
     isOptionalString(value.paymentRequest) &&
     isOptionalString(value.pr) &&
@@ -332,9 +325,9 @@ const isLnurlInvoiceResponse = (
 };
 
 const parseLnurlPaySuccessAction = (
-  value: JsonValue | undefined,
+  value: unknown,
 ): LnurlPaySuccessAction | null => {
-  if (!isJsonRecord(value)) return null;
+  if (!isRecord(value)) return null;
   const tag = String(value.tag ?? "")
     .trim()
     .toLowerCase();
@@ -372,7 +365,7 @@ const parseLnurlPaySuccessAction = (
 const isLnurlWithdrawRequest = (
   value: unknown,
 ): value is LnurlWithdrawRequest => {
-  if (!isJsonRecord(value)) return false;
+  if (!isRecord(value)) return false;
   return (
     isOptionalString(value.callback) &&
     isOptionalString(value.defaultDescription) &&
@@ -388,7 +381,7 @@ const isLnurlWithdrawRequest = (
 const isLnurlWithdrawCallbackResponse = (
   value: unknown,
 ): value is LnurlWithdrawCallbackResponse => {
-  if (!isJsonRecord(value)) return false;
+  if (!isRecord(value)) return false;
   return isOptionalString(value.reason) && isOptionalString(value.status);
 };
 

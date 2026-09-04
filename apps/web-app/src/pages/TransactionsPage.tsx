@@ -21,6 +21,8 @@ import {
   getInitials,
   normalizeLocale,
 } from "../utils/formatting";
+import { isRecord } from "../utils/unknown";
+import { asNonEmptyString } from "../utils/validation";
 
 type TransactionStatus = "declined" | "error" | "ok" | "pending";
 type TransactionDirection = "in" | "out";
@@ -94,12 +96,6 @@ interface NostrMessageHistoryRow {
 
 const TRANSACTION_PAGE_SIZE = 50;
 
-const readText = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
 const readPositiveInt = (value: unknown): number | null => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -125,9 +121,6 @@ const readStatus = (value: unknown): TransactionStatus | null => {
     : null;
 };
 
-const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isJsonValue = (value: unknown): value is JsonValue => {
   if (value === null) return true;
   if (
@@ -138,7 +131,7 @@ const isJsonValue = (value: unknown): value is JsonValue => {
     return true;
   }
   if (Array.isArray(value)) return value.every(isJsonValue);
-  if (!isJsonRecord(value)) return false;
+  if (!isRecord(value)) return false;
   return Object.values(value).every(isJsonValue);
 };
 
@@ -157,22 +150,14 @@ const parseJsonValue = (value: unknown): JsonValue | null => {
 const readJsonRecord = (
   value: JsonValue | null,
 ): Record<string, JsonValue> | null =>
-  value !== null && isJsonRecord(value) ? value : null;
-
-const readStringFromJson = (
-  value: JsonValue | null | undefined,
-): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
+  value !== null && isRecord(value) ? value : null;
 
 const readStringArrayFromJson = (
   value: JsonValue | null | undefined,
 ): string[] => {
   if (!Array.isArray(value)) return [];
   return value
-    .map((entry) => readStringFromJson(entry))
+    .map((entry) => asNonEmptyString(entry))
     .filter((entry): entry is string => entry !== null);
 };
 
@@ -196,14 +181,14 @@ const formatCompactLongString = (value: string): string => {
 
 const readRequestIdFromDetails = (details: JsonValue | null): string | null => {
   const detailRecord = readJsonRecord(details);
-  return readStringFromJson(detailRecord?.requestId);
+  return asNonEmptyString(detailRecord?.requestId);
 };
 
 const readIssuedTokenFromDetails = (
   details: JsonValue | null,
 ): string | null => {
   const detailRecord = readJsonRecord(details);
-  return readStringFromJson(detailRecord?.issuedToken);
+  return asNonEmptyString(detailRecord?.issuedToken);
 };
 
 const readTokenReferenceIds = (
@@ -226,7 +211,7 @@ const readIssuedTokenReferenceId = (
   details: JsonValue | null,
 ): string | null => {
   const detailRecord = readJsonRecord(details);
-  const storedId = readStringFromJson(detailRecord?.issuedTokenId);
+  const storedId = asNonEmptyString(detailRecord?.issuedTokenId);
   if (storedId) return storedId;
   const legacyToken = readIssuedTokenFromDetails(details);
   return legacyToken ? String(createCashuTokenId(legacyToken)) : null;
@@ -277,37 +262,40 @@ const buildTransactionHistory = (
   const items: TransactionItem[] = [];
   const visibleOwnerIds = new Set(
     [evoluAppOwnerId, ...evoluTransactionsVisibleOwnerIds]
-      .map((ownerId) => readText(ownerId))
+      .map((ownerId) => asNonEmptyString(ownerId))
       .filter((ownerId): ownerId is string => ownerId !== null),
   );
   for (const row of transactionRows) {
-    const ownerId = readText(row.ownerId);
+    const ownerId = asNonEmptyString(row.ownerId);
     if (ownerId && visibleOwnerIds.size > 0 && !visibleOwnerIds.has(ownerId)) {
       continue;
     }
-    const id = readText(row.id);
+    const id = asNonEmptyString(row.id);
     const createdAtSec = readPositiveInt(row.createdAtSec);
     const direction = readDirection(row.direction);
     const status = readStatus(row.status);
     if (!id || !createdAtSec || !direction || !status) continue;
-    const method = readText(row.method);
+    const method = asNonEmptyString(row.method);
     items.push({
       amount: readAmount(row.amount),
-      category: deriveTransactionCategory(method, readText(row.category)),
-      contactId: readText(row.contactId),
+      category: deriveTransactionCategory(
+        method,
+        asNonEmptyString(row.category),
+      ),
+      contactId: asNonEmptyString(row.contactId),
       createdAtSec,
       details: parseJsonValue(row.detailsJson),
       direction,
-      error: readText(row.error),
+      error: asNonEmptyString(row.error),
       fee: readAmount(row.fee),
       id,
       method,
-      mint: readText(row.mint),
-      note: readText(row.note),
-      pendingLabel: readText(row.pendingLabel),
-      phase: readText(row.phase),
+      mint: asNonEmptyString(row.mint),
+      note: asNonEmptyString(row.note),
+      pendingLabel: asNonEmptyString(row.pendingLabel),
+      phase: asNonEmptyString(row.phase),
       status,
-      unit: readText(row.unit),
+      unit: asNonEmptyString(row.unit),
     });
   }
   items.sort((left, right) => {
@@ -424,8 +412,8 @@ const deriveDeclinedRequestIds = (
   const latestDeclineAtByRequestId = new Map<string, number>();
 
   for (const row of nostrMessageRows) {
-    const rumorId = readText(row.rumorId);
-    const content = readText(row.content) || "";
+    const rumorId = asNonEmptyString(row.rumorId);
+    const content = asNonEmptyString(row.content) || "";
     const requestInfo = parseCashuPaymentRequestMessage(content);
     const requestId = String(requestInfo?.requestId ?? "").trim();
 
@@ -435,7 +423,7 @@ const deriveDeclinedRequestIds = (
   }
 
   for (const row of nostrMessageRows) {
-    const content = readText(row.content) || "";
+    const content = asNonEmptyString(row.content) || "";
     const declineInfo = parseLinkyPaymentRequestDeclineMessage(content);
     const requestRumorId = String(declineInfo?.requestRumorId ?? "").trim();
     if (!requestRumorId) continue;
@@ -462,11 +450,11 @@ const deriveDeclinedRequestIds = (
 const readLnurlSuccessMessage = (item: TransactionItem): string | null => {
   const details = readJsonRecord(item.details);
   if (!details) return null;
-  const message = readStringFromJson(details.lnurlSuccessMessage);
+  const message = asNonEmptyString(details.lnurlSuccessMessage);
   if (message) return message;
-  const url = readStringFromJson(details.lnurlSuccessUrl);
+  const url = asNonEmptyString(details.lnurlSuccessUrl);
   if (!url) return null;
-  const description = readStringFromJson(details.lnurlSuccessUrlDescription);
+  const description = asNonEmptyString(details.lnurlSuccessUrlDescription);
   return description ? `${description} ${url}` : url;
 };
 
@@ -490,7 +478,7 @@ const hasTransactionDetails = (
     referenceKey: string,
   ): boolean => {
     if (
-      rawKeys.some((key) => readStringFromJson(details[key]) !== null) ||
+      rawKeys.some((key) => asNonEmptyString(details[key]) !== null) ||
       readStringArrayFromJson(details[referenceKey]).some((id) =>
         tokenByReferenceId.has(id),
       )
@@ -511,7 +499,7 @@ const hasTransactionDetails = (
       details.lightningPreimage,
       details.lnurlSuccessMessage,
       details.lnurlSuccessUrl,
-    ].some((value) => readStringFromJson(value) !== null)
+    ].some((value) => asNonEmptyString(value) !== null)
   );
 };
 
@@ -754,7 +742,7 @@ export function TransactionsPage(): React.ReactElement {
         "token" in row ? row.token : null,
         "rawToken" in row ? row.rawToken : null,
       ]) {
-        const token = readText(candidate);
+        const token = asNonEmptyString(candidate);
         if (!token) continue;
         tokens.set(String(createCashuTokenId(token)), token);
       }
@@ -766,13 +754,13 @@ export function TransactionsPage(): React.ReactElement {
     const byId = new Map<string, ContactSummary>();
     for (const row of contactRows) {
       if (typeof row !== "object" || row === null) continue;
-      const id = readText("id" in row ? row.id : null);
+      const id = asNonEmptyString("id" in row ? row.id : null);
       if (!id) continue;
       const candidate: ContactSummary = {
         id,
-        lnAddress: readText("lnAddress" in row ? row.lnAddress : null),
-        name: readText("name" in row ? row.name : null),
-        npub: readText("npub" in row ? row.npub : null),
+        lnAddress: asNonEmptyString("lnAddress" in row ? row.lnAddress : null),
+        name: asNonEmptyString("name" in row ? row.name : null),
+        npub: asNonEmptyString("npub" in row ? row.npub : null),
       };
       const existing = byId.get(id);
       if (!existing || scoreContact(candidate) >= scoreContact(existing)) {
@@ -927,8 +915,8 @@ export function TransactionsPage(): React.ReactElement {
         ]),
       );
       const legacyGainedTokens = [
-        readStringFromJson(details?.gainedToken),
-        readStringFromJson(details?.acceptedToken),
+        asNonEmptyString(details?.gainedToken),
+        asNonEmptyString(details?.acceptedToken),
       ].filter((value): value is string => value !== null);
       const gainedTokens = Array.from(
         new Set([
@@ -949,18 +937,18 @@ export function TransactionsPage(): React.ReactElement {
             })
           : null;
       const feeText = fee !== null ? formatAmountText(fee, item.unit) : "";
-      const lightningInvoice = readStringFromJson(details?.lightningInvoice);
+      const lightningInvoice = asNonEmptyString(details?.lightningInvoice);
       const lightningMemo =
-        readStringFromJson(details?.lightningMemo) ??
+        asNonEmptyString(details?.lightningMemo) ??
         (lightningInvoice
           ? (getLightningInvoicePreview(lightningInvoice)?.description ?? null)
           : null);
-      const lightningPreimage = readStringFromJson(details?.lightningPreimage);
-      const lnurlSuccessMessage = readStringFromJson(
+      const lightningPreimage = asNonEmptyString(details?.lightningPreimage);
+      const lnurlSuccessMessage = asNonEmptyString(
         details?.lnurlSuccessMessage,
       );
-      const lnurlSuccessUrl = readStringFromJson(details?.lnurlSuccessUrl);
-      const lnurlSuccessUrlDescription = readStringFromJson(
+      const lnurlSuccessUrl = asNonEmptyString(details?.lnurlSuccessUrl);
+      const lnurlSuccessUrlDescription = asNonEmptyString(
         details?.lnurlSuccessUrlDescription,
       );
 

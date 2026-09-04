@@ -1,3 +1,4 @@
+import { isRecord } from "./unknown";
 import type { JsonRecord, JsonValue } from "../types/json";
 
 const PUSH_DEBUG_CACHE_NAME = "linky-push-debug-v1";
@@ -12,12 +13,6 @@ export interface PushDebugLogEntry {
   message: string;
   source: string;
   timestamp: string;
-}
-
-function isRecord(
-  value: unknown,
-): value is Record<string | number | symbol, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function normalizeJsonValue(value: unknown): JsonValue {

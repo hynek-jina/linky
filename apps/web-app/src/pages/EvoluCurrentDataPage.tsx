@@ -9,6 +9,7 @@ import {
   MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../utils/constants";
+import { readRowOwnerId } from "../app/lib/rowOwnerId";
 
 interface EvoluDataSectionConfig {
   editsUntilRotation: number | null;
@@ -19,14 +20,6 @@ interface EvoluDataSectionConfig {
   rotateLabel: string | null;
   rotatingLabel: string | null;
   rotationLimit: number | null;
-}
-
-function readRowOwnerId(row: unknown): string {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("ownerId" in row)) return "";
-  const ownerId = row.ownerId;
-  if (typeof ownerId !== "string") return "";
-  return ownerId.trim();
 }
 
 function isTrackedTable(tableName: string): boolean {

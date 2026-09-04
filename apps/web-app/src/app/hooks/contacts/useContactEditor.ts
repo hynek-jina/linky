@@ -41,6 +41,7 @@ import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import { useContactSuggestions } from "./useContactSuggestions";
+import { asNonEmptyString } from "../../../utils/validation";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -121,14 +122,8 @@ interface UseContactEditorParams {
   upsert: EvoluMutations["upsert"];
 }
 
-const readText = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
 const readLightningAddressFromDetailsJson = (value: unknown): string | null => {
-  const detailsJson = readText(value);
+  const detailsJson = asNonEmptyString(value);
   if (!detailsJson) return null;
 
   try {
@@ -141,7 +136,7 @@ const readLightningAddressFromDetailsJson = (value: unknown): string | null => {
       return null;
     }
 
-    return readText(
+    return asNonEmptyString(
       "lightningAddress" in parsed ? parsed.lightningAddress : null,
     );
   } catch {
@@ -241,12 +236,12 @@ export const useContactEditor = ({
 
   const buildFullContactOverridePayload = React.useCallback(
     (payload: ContactFieldsPatch) => {
-      const currentOwnerId = readText(appOwnerId);
+      const currentOwnerId = asNonEmptyString(appOwnerId);
       if (!currentOwnerId) return null;
 
       const source =
         contacts.find((contact) => contact.id === payload.id) ?? null;
-      const sourceOwnerId = readText(source?.ownerId);
+      const sourceOwnerId = asNonEmptyString(source?.ownerId);
       if (!source || !sourceOwnerId || sourceOwnerId === currentOwnerId) {
         return null;
       }
@@ -275,31 +270,31 @@ export const useContactEditor = ({
         name:
           payload.name !== undefined
             ? payload.name
-            : (readText(source.name) as
+            : (asNonEmptyString(source.name) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
         npub:
           payload.npub !== undefined
             ? payload.npub
-            : (readText(source.npub) as
+            : (asNonEmptyString(source.npub) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
         lnAddress:
           payload.lnAddress !== undefined
             ? payload.lnAddress
-            : (readText(source.lnAddress) as
+            : (asNonEmptyString(source.lnAddress) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
         groupName:
           payload.groupName !== undefined
             ? payload.groupName
-            : (readText(source.groupName) as
+            : (asNonEmptyString(source.groupName) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
         groupNamesJson:
           payload.groupNamesJson !== undefined
             ? payload.groupNamesJson
-            : (readText(source.groupNamesJson) as
+            : (asNonEmptyString(source.groupNamesJson) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
       };
@@ -354,15 +349,15 @@ export const useContactEditor = ({
       for (const row of transactionRows) {
         if (typeof row !== "object" || row === null) continue;
 
-        const transactionId = readText("id" in row ? row.id : null);
+        const transactionId = asNonEmptyString("id" in row ? row.id : null);
         if (!transactionId) continue;
 
-        const existingContactId = readText(
+        const existingContactId = asNonEmptyString(
           "contactId" in row ? row.contactId : null,
         );
         if (existingContactId) continue;
 
-        const method = readText("method" in row ? row.method : null);
+        const method = asNonEmptyString("method" in row ? row.method : null);
         if (method !== "lightning_address") continue;
 
         const transactionLnAddress = readLightningAddressFromDetailsJson(

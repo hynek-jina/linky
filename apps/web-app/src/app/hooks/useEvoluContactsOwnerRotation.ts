@@ -32,6 +32,8 @@ import {
   encodeRotationSnapshot,
   type RotationSnapshot,
 } from "../lib/rotationSnapshot";
+import { readRowOwnerId } from "../lib/rowOwnerId";
+import { getUnknownErrorMessage } from "../../utils/unknown";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -145,24 +147,6 @@ const createMetaPointerRowId = (scope: string): Evolu.Id =>
 // render loops on the unauthenticated shell.
 const EMPTY_OWNER_IDS: Evolu.OwnerId[] = [];
 const EMPTY_SYNC_OWNERS: Evolu.SyncOwner[] = [];
-
-const formatMutationError = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
-const readRowOwnerId = (row: unknown): string => {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("ownerId" in row)) return "";
-  const ownerId = row.ownerId;
-  if (typeof ownerId !== "string") return "";
-  return ownerId.trim();
-};
 
 const readRowPointerValue = (row: unknown): unknown => {
   if (typeof row !== "object" || row === null) return null;
@@ -1426,7 +1410,7 @@ export const useEvoluContactsOwnerRotation = ({
 
       if (!contactsPointerResult.ok) {
         pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(contactsPointerResult.error)}`,
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(contactsPointerResult.error, "unknown")}`,
         );
         return;
       }
@@ -1513,7 +1497,7 @@ export const useEvoluContactsOwnerRotation = ({
 
       if (!cashuPointerResult.ok) {
         pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(cashuPointerResult.error)}`,
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(cashuPointerResult.error, "unknown")}`,
         );
         return;
       }
@@ -1663,7 +1647,7 @@ export const useEvoluContactsOwnerRotation = ({
 
       if (!pointerResult.ok) {
         pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(pointerResult.error)}`,
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(pointerResult.error, "unknown")}`,
         );
         return;
       }
@@ -1794,7 +1778,7 @@ export const useEvoluContactsOwnerRotation = ({
 
       if (!pointerResult.ok) {
         pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(pointerResult.error)}`,
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(pointerResult.error, "unknown")}`,
         );
         return;
       }

@@ -1,5 +1,7 @@
 import { decodeNprofilePubkey } from "@linky/linkstr";
 import { decode, encode } from "cbor-x";
+import { isRecord } from "../../utils/unknown";
+import { trimString } from "../../utils/validation";
 
 type PaymentRequestTransport = {
   a: string;
@@ -31,11 +33,6 @@ export interface CashuPaymentRequestMessageInfo {
 
 const CASHU_PAYMENT_REQUEST_PREFIX = "creqA";
 const LINKY_PAYMENT_REQUEST_DECLINE_PREFIX = "linky:req-decline:v1";
-
-const toTrimmedString = (value: unknown): string => String(value ?? "").trim();
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -114,7 +111,7 @@ export const buildCashuPaymentRequestMessage = (args: {
     a: args.amount,
     u: "sat",
     s: true,
-    m: args.mintUrls.map((mintUrl) => toTrimmedString(mintUrl)).filter(Boolean),
+    m: args.mintUrls.map((mintUrl) => trimString(mintUrl)).filter(Boolean),
     t: [
       {
         t: "nostr",
@@ -124,10 +121,10 @@ export const buildCashuPaymentRequestMessage = (args: {
     ],
   };
 
-  const requestId = toTrimmedString(args.requestId);
+  const requestId = trimString(args.requestId);
   if (requestId) payload.i = requestId;
 
-  const description = toTrimmedString(args.description);
+  const description = trimString(args.description);
   if (description) payload.d = description;
 
   return `${CASHU_PAYMENT_REQUEST_PREFIX}${bytesToBase64Url(encode(payload))}`;
@@ -136,7 +133,7 @@ export const buildCashuPaymentRequestMessage = (args: {
 export const parseCashuPaymentRequestMessage = (
   value: string,
 ): CashuPaymentRequestMessageInfo | null => {
-  const normalized = toTrimmedString(value);
+  const normalized = trimString(value);
   if (!normalized.startsWith(CASHU_PAYMENT_REQUEST_PREFIX)) return null;
 
   const bytes = base64UrlToBytes(
@@ -160,16 +157,13 @@ export const parseCashuPaymentRequestMessage = (
     return null;
   }
 
-  const unit = toTrimmedString(decoded.u).toLowerCase();
+  const unit = trimString(decoded.u).toLowerCase();
   if (unit !== "sat") return null;
 
   const transports = Array.isArray(decoded.t) ? decoded.t : [];
   const nostrTransport =
-    transports.find((transport) => toTrimmedString(transport.t) === "nostr") ??
-    null;
-  const transportTarget = nostrTransport
-    ? toTrimmedString(nostrTransport.a)
-    : "";
+    transports.find((transport) => trimString(transport.t) === "nostr") ?? null;
+  const transportTarget = nostrTransport ? trimString(nostrTransport.a) : "";
   const transportNprofile =
     transportTarget && decodeNprofilePubkey(transportTarget)
       ? transportTarget
@@ -178,20 +172,17 @@ export const parseCashuPaymentRequestMessage = (
     ? decodeNprofilePubkey(transportNprofile)
     : null;
   const postTransport =
-    transports.find((transport) => toTrimmedString(transport.t) === "post") ??
-    null;
-  const transportPostUrl = postTransport
-    ? toTrimmedString(postTransport.a)
-    : null;
+    transports.find((transport) => trimString(transport.t) === "post") ?? null;
+  const transportPostUrl = postTransport ? trimString(postTransport.a) : null;
 
   return {
     amount: Math.trunc(decoded.a),
-    description: toTrimmedString(decoded.d) || null,
+    description: trimString(decoded.d) || null,
     encodedRequest: normalized,
     mintUrls: Array.isArray(decoded.m)
-      ? decoded.m.map((mintUrl) => toTrimmedString(mintUrl)).filter(Boolean)
+      ? decoded.m.map((mintUrl) => trimString(mintUrl)).filter(Boolean)
       : [],
-    requestId: toTrimmedString(decoded.i) || null,
+    requestId: trimString(decoded.i) || null,
     transportNprofile,
     transportPostUrl,
     transportPubkeyHex,
@@ -201,18 +192,17 @@ export const parseCashuPaymentRequestMessage = (
 
 export const buildLinkyPaymentRequestDeclineMessage = (
   requestRumorId: string,
-) =>
-  `${LINKY_PAYMENT_REQUEST_DECLINE_PREFIX}:${toTrimmedString(requestRumorId)}`;
+) => `${LINKY_PAYMENT_REQUEST_DECLINE_PREFIX}:${trimString(requestRumorId)}`;
 
 export const parseLinkyPaymentRequestDeclineMessage = (
   value: string,
 ): { requestRumorId: string | null } | null => {
-  const normalized = toTrimmedString(value);
+  const normalized = trimString(value);
   if (!normalized.startsWith(`${LINKY_PAYMENT_REQUEST_DECLINE_PREFIX}:`)) {
     return null;
   }
 
-  const requestRumorId = toTrimmedString(
+  const requestRumorId = trimString(
     normalized.slice(LINKY_PAYMENT_REQUEST_DECLINE_PREFIX.length + 1),
   );
 

@@ -25,6 +25,7 @@ import type {
   MintUrlInput,
 } from "../types/appTypes";
 import { isUnknownContactId } from "./messages/contactIdentity";
+import { isRecord } from "../../utils/unknown";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -59,9 +60,6 @@ type TransactionEventLike = {
 };
 
 const LEGACY_PAYMENT_EVENTS_MIGRATED_SUFFIX = ".migratedToEvolu.v2";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const serializeJsonValue = (
   value: JsonValue | null | undefined,

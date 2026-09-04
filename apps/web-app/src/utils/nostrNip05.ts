@@ -1,6 +1,7 @@
+import { isRecord } from "./unknown";
+import { asNonEmptyString } from "./validation";
 import { encodeNpub, parsePubkey, RelayUrl } from "@linky/linkstr";
 import { Schema } from "effect";
-import type { JsonRecord } from "../types/json";
 
 export const DEFAULT_NIP05_DOMAIN = "linky.fit";
 
@@ -9,16 +10,6 @@ const NIP05_LOCAL_PART_RE = /^[a-z0-9._-]+$/i;
 const NIP05_DOMAIN_RE = /^[a-z0-9.-]+$/i;
 
 const isRelayUrl = Schema.is(RelayUrl);
-
-const isJsonRecord = (value: unknown): value is JsonRecord => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
-const readText = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
 
 interface Nip05Identifier {
   domain: string;
@@ -121,7 +112,7 @@ export const getDefaultNip05IdentifierFromAddress = (
 };
 
 const readRelays = (value: unknown, pubkeyHex: string): string[] => {
-  if (!isJsonRecord(value)) return [];
+  if (!isRecord(value)) return [];
 
   const rawList = value[pubkeyHex];
   if (!Array.isArray(rawList)) return [];
@@ -130,7 +121,7 @@ const readRelays = (value: unknown, pubkeyHex: string): string[] => {
   const seen = new Set<string>();
 
   for (const item of rawList) {
-    const relay = readText(item);
+    const relay = asNonEmptyString(item);
     if (!relay || !isRelayUrl(relay)) continue;
     if (seen.has(relay)) continue;
     seen.add(relay);
@@ -162,12 +153,12 @@ const resolveNip05Identifier = async (
     }
 
     const body: unknown = await response.json();
-    if (!isJsonRecord(body)) return { identifier, kind: "not_found" };
+    if (!isRecord(body)) return { identifier, kind: "not_found" };
 
     const names = body.names;
-    if (!isJsonRecord(names)) return { identifier, kind: "not_found" };
+    if (!isRecord(names)) return { identifier, kind: "not_found" };
 
-    const rawPubkey = readText(names[identifier.localPart]);
+    const rawPubkey = asNonEmptyString(names[identifier.localPart]);
     const pubkeyHex = parsePubkey(rawPubkey?.toLowerCase() ?? "");
     if (!pubkeyHex) {
       return { identifier, kind: "not_found" };

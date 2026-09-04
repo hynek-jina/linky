@@ -17,16 +17,9 @@ import type {
   OptionalText,
 } from "../types/appTypes";
 import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
+import { readRowOwnerId } from "../lib/rowOwnerId";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
-
-const getRowOwnerId = (row: unknown): string => {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("ownerId" in row)) return "";
-  const ownerId = row.ownerId;
-  if (typeof ownerId !== "string") return "";
-  return ownerId.trim();
-};
 
 interface UseContactsDomainParams {
   appOwnerId: Evolu.OwnerId | null;
@@ -140,7 +133,7 @@ export const useContactsDomain = ({
     >();
 
     for (const contact of allContacts) {
-      const ownerId = getRowOwnerId(contact);
+      const ownerId = readRowOwnerId(contact);
       const ownerRank = visibleOwnerRankById.get(ownerId);
       if (ownerRank === undefined) continue;
 
