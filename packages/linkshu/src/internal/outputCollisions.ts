@@ -27,6 +27,11 @@ export const isOutputsAlreadySignedError = (error: unknown): boolean => {
   );
 };
 
+// CDK also reports 11008 when unique outputs collide with stored promises.
+export const isDuplicateOutputsError = (error: unknown): boolean =>
+  mintErrorCode(error) === 11008 ||
+  lowercaseMessage(error).includes("duplicate outputs");
+
 // NUT-04/NUT-05 code 11004: the mint holds orphan unsigned promise rows
 // (`c_ IS NULL`) matching our B_'s, typically melt-blank leftovers. Restore
 // cannot surface unsigned promises, so recovery uses a fixed bump instead.
@@ -40,7 +45,9 @@ const isOutputsPendingError = (error: unknown): boolean => {
 };
 
 export const isRecoverableOutputCollision = (error: unknown): boolean =>
-  isOutputsAlreadySignedError(error) || isOutputsPendingError(error);
+  isOutputsAlreadySignedError(error) ||
+  isOutputsPendingError(error) ||
+  isDuplicateOutputsError(error);
 
 /** cashu-ts's own throw when the offered proofs cannot cover amount + fees. */
 export const isInsufficientBalanceError = (error: unknown): boolean =>
