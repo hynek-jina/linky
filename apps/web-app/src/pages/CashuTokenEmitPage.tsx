@@ -3,7 +3,6 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
 import { useAmountInputKeypad } from "../components/useAmountInputKeypad";
-import type { Translate } from "../i18n";
 
 interface CashuTokenEmitPageProps {
   cashuBalance: number;
@@ -16,7 +15,6 @@ interface CashuTokenEmitPageProps {
   emitCashuToken: () => Promise<void>;
   meltLargestForeignMintToMainMint: () => Promise<void>;
   setCashuEmitAmount: Dispatch<SetStateAction<string>>;
-  t: Translate;
 }
 
 export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
@@ -30,9 +28,8 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
   emitCashuToken,
   meltLargestForeignMintToMainMint,
   setCashuEmitAmount,
-  t,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
   const [mintWarningDismissed, setMintWarningDismissed] = useState(false);
   const amountSat = Number.parseInt(cashuEmitAmount.trim(), 10);
   const invalid =

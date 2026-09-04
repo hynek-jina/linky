@@ -12,6 +12,7 @@ const { appShellMock } = vi.hoisted(() => ({
   appShellMock: {
     allowedDisplayCurrencies: ["sat"] as string[],
     cycleDisplayCurrency: vi.fn(),
+    t: (key: string): string => key,
   },
 }));
 
@@ -25,7 +26,7 @@ vi.mock("../app/context/AppShellContexts", () => ({
     nostrPictureByNpub: {
       npub1alice: "https://example.com/alice.jpg",
     },
-    t: (key: string) => key,
+    t: (key: string) => appShellMock.t(key),
   }),
 }));
 
@@ -91,7 +92,6 @@ const renderOffer = async ({
       onRespondBankPaymentOffer={async () => true}
       onSendChatImage={async () => undefined}
       onSettleBankPaymentOffer={async () => undefined}
-      t={(key) => key}
       {...overrides}
     />,
   );
@@ -105,6 +105,7 @@ describe("BankPaymentOfferDetailPage", () => {
     localStorage.clear();
     appShellMock.allowedDisplayCurrencies = ["sat"];
     appShellMock.cycleDisplayCurrency.mockClear();
+    appShellMock.t = (key) => key;
   });
 
   it("keeps the offerer's countdown ticking while the own chat is accepted_by_other", async () => {
@@ -114,6 +115,7 @@ describe("BankPaymentOfferDetailPage", () => {
         key === "bankPaymentOfferTimeRemainingClock"
           ? "{minutes}:{seconds}"
           : key;
+      appShellMock.t = clock;
       const acceptedEntry: LocalNostrMessage = {
         ...createOfferMessage("accepted"),
         contactId: "contact-2",
@@ -130,7 +132,6 @@ describe("BankPaymentOfferDetailPage", () => {
           { id: "contact-1", name: "Alice" },
           { id: "contact-2", name: "Bob" },
         ],
-        t: clock,
       });
 
       expect(container.textContent).toContain("5:00");
@@ -291,10 +292,10 @@ describe("BankPaymentOfferDetailPage", () => {
       key === "bankPaymentOfferProgressAcceptedByName"
         ? "{name} has already accepted the offer."
         : key;
+    appShellMock.t = named;
     const container = await renderOffer({
       chatOwnPubkeyHex: OFFERER_PUBKEY,
       status: "accepted",
-      t: named,
     });
 
     expect(container.textContent).toContain(

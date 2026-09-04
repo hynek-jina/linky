@@ -18,7 +18,6 @@ import type { CashuTokenId, CashuTokenRow } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
 import { getMintDisplay } from "../app/lib/tokenMessageInfo";
-import type { Translate } from "../i18n";
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
@@ -38,7 +37,6 @@ interface CashuTokenPageProps {
   shareTokenText: (id: CashuTokenId, text: string) => Promise<void>;
   showPaidOverlay: (title?: string) => void;
   startSendCashuTokenToContact: (id: CashuTokenId) => Promise<void>;
-  t: Translate;
   writeToNfc: (id: CashuTokenId, tokenText: string) => Promise<void>;
 }
 
@@ -58,10 +56,9 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   shareTokenText,
   showPaidOverlay,
   startSendCashuTokenToContact,
-  t,
   writeToNfc,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
   const navigateTo = useNavigation();
   const [tokenQr, setTokenQr] = React.useState<string | null>(null);
   const row = cashuTokensAll.find(

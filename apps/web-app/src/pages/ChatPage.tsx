@@ -137,7 +137,6 @@ interface ChatPageProps {
   setMintIconUrlByMint: React.Dispatch<
     React.SetStateAction<Record<string, string | null>>
   >;
-  t: Translate;
 }
 
 interface IndexedBankPaymentOffer {
@@ -281,7 +280,7 @@ interface ChatMessageListProps {
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   selectedContactId: string;
   setMintIconUrlByMint: ChatPageProps["setMintIconUrlByMint"];
-  t: ChatPageProps["t"];
+  t: Translate;
 }
 
 const ChatMessageList = memo(function ChatMessageList({
@@ -605,7 +604,7 @@ interface ChatComposerProps {
   sendChatImage: ChatPageProps["sendChatImage"];
   sendChatMessage: ChatPageProps["sendChatMessage"];
   setChatDraft: ChatPageProps["setChatDraft"];
-  t: ChatPageProps["t"];
+  t: Translate;
 }
 
 const ChatComposer = memo(function ChatComposer({
@@ -1110,7 +1109,7 @@ const useChatComposeHeight = (
 interface UnknownContactWarningProps {
   onAdd: () => Promise<void>;
   onBlock: () => Promise<void>;
-  t: ChatPageProps["t"];
+  t: Translate;
 }
 
 const UnknownContactWarning = memo(function UnknownContactWarning({
@@ -1182,9 +1181,8 @@ export const ChatPage: FC<ChatPageProps> = ({
   sendChatMessage,
   setChatDraft,
   setMintIconUrlByMint,
-  t,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
   const composeInputRef = useRef<HTMLDivElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
   const npub = selectedContact

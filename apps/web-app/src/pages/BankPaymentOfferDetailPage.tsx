@@ -67,7 +67,6 @@ interface BankPaymentOfferDetailPageProps {
     replyToMessage?: LocalNostrMessage,
   ) => Promise<void>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
-  t: Translate;
 }
 
 interface BankPaymentOfferEntry {
@@ -442,9 +441,9 @@ export const BankPaymentOfferDetailPage: React.FC<
   onRespondBankPaymentOffer,
   onSendChatImage,
   onSettleBankPaymentOffer,
-  t,
 }) => {
-  const { formatDisplayedAmountText, nostrPictureByNpub } = useAppShellCore();
+  const { formatDisplayedAmountText, nostrPictureByNpub, t } =
+    useAppShellCore();
   const confirmationInputRef = React.useRef<HTMLInputElement | null>(null);
   const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
   const [isAttachingConfirmation, setIsAttachingConfirmation] =
