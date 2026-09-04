@@ -9,7 +9,10 @@ import {
 } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
-import { isNpubCashDisabled } from "../../../utils/npubCashServer";
+import {
+  isNpubCashDisabled,
+  NPUB_CASH_SERVER_BASE_URL,
+} from "../../../utils/npubCashServer";
 import type { Route } from "../../../types/route";
 import {
   safeLocalStorageGet,
@@ -44,7 +47,6 @@ interface UseNpubCashClaimParams {
     tag?: string,
   ) => Promise<void>;
   mintInfoByUrl: ReadonlyMap<string, LocalMintInfoRow>;
-  npubCashServerBaseUrl: string;
   npubCashClaimInFlightRef: React.MutableRefObject<boolean>;
   /** Null until the linkshu runtime is composed (seed + owners resolved). */
   receiveCashuToken: ReceiveCashuToken | null;
@@ -62,15 +64,6 @@ interface UseNpubCashClaimParams {
 const NPUB_CASH_CLAIM_IDLE_MIN_INTERVAL_MS = 25_000;
 const NPUB_CASH_CLAIM_TOPUP_MIN_INTERVAL_MS = 5_000;
 const NPUB_CASH_CLAIM_LOCK_TTL_MS = 20_000;
-
-const makeNpubCashClaimScopedStorageKey = (
-  makeLocalStorageKey: (prefix: string) => string,
-  prefix: string,
-  serverBaseUrl: string,
-): string => {
-  const serverKey = encodeURIComponent(serverBaseUrl.replace(/\/+$/, ""));
-  return makeLocalStorageKey(`${prefix}.${serverKey}`);
-};
 
 const readLastClaimAttemptMs = (key: string): number => {
   const raw = safeLocalStorageGet(key);
@@ -99,7 +92,6 @@ export const useNpubCashClaim = ({
   makeNip98AuthHeader,
   maybeShowPwaNotification,
   mintInfoByUrl,
-  npubCashServerBaseUrl,
   npubCashClaimInFlightRef,
   receiveCashuToken,
   refreshMintInfo,
@@ -242,15 +234,11 @@ export const useNpubCashClaim = ({
     if (!(await resolveOwnerIdForWrite())) return;
 
     try {
-      const lockKey = makeNpubCashClaimScopedStorageKey(
-        makeLocalStorageKey,
+      const lockKey = makeLocalStorageKey(
         LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
-        npubCashServerBaseUrl,
       );
-      const lastAttemptKey = makeNpubCashClaimScopedStorageKey(
-        makeLocalStorageKey,
+      const lastAttemptKey = makeLocalStorageKey(
         LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
-        npubCashServerBaseUrl,
       );
 
       await withLocalStorageLeaseLock({
@@ -271,7 +259,7 @@ export const useNpubCashClaim = ({
 
           npubCashClaimInFlightRef.current = true;
           try {
-            const url = `${npubCashServerBaseUrl}/api/v1/claim`;
+            const url = `${NPUB_CASH_SERVER_BASE_URL}/api/v1/claim`;
             const auth = await makeNip98AuthHeader(url, "GET");
             const res = await fetch(url, {
               method: "GET",
@@ -300,7 +288,6 @@ export const useNpubCashClaim = ({
     currentNsec,
     makeLocalStorageKey,
     makeNip98AuthHeader,
-    npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     receiveCashuToken,
     resolveOwnerIdForWrite,

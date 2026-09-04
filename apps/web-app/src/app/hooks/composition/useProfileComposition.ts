@@ -1,7 +1,6 @@
 import type { ProfileMetadata } from "@linky/linkstr";
 import React from "react";
 import {
-  DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
 } from "../../../derivedProfile";
@@ -9,7 +8,6 @@ import type { Lang } from "../../../i18n";
 import { navigateTo, type useRouting } from "../../../hooks/useRouting";
 import { getBestNostrName } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
-import { resolveNpubCashServerBaseUrl } from "../../../utils/npubCashServer";
 import { getInitialShowProfileQrOnTiltEnabled } from "../../../utils/storage";
 import { usePortraitOrientationLock } from "../usePortraitOrientationLock";
 import { useProfileEditor } from "../profile/useProfileEditor";
@@ -84,16 +82,6 @@ export const useProfileComposition = ({
 
   const effectiveMyLightningAddress =
     myProfileLnAddress ?? defaultLightningAddress;
-
-  const npubCashServerBaseUrl = React.useMemo(() => {
-    return resolveNpubCashServerBaseUrl(effectiveMyLightningAddress);
-  }, [effectiveMyLightningAddress]);
-
-  const profileClaimLightningAddressServerBaseUrl = React.useMemo(() => {
-    return resolveNpubCashServerBaseUrl(
-      `claim@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}`,
-    );
-  }, []);
 
   const {
     cycleProfileAvatarControl,
@@ -230,14 +218,12 @@ export const useProfileComposition = ({
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
-    npubCashServerBaseUrl,
     onPickProfilePhoto,
     onProfilePhotoError,
     onProfilePhotoSelected,
     openProfileQr,
     ownedProfileLightningAddresses,
     ownedProfileLightningAddressesLoading,
-    profileClaimLightningAddressServerBaseUrl,
     profileCustomPictureUrl,
     profileEditInitialRef,
     profileEditLnAddress,

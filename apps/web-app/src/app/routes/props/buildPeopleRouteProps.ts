@@ -1,4 +1,5 @@
 import type { Route } from "../../../types/route";
+import { NPUB_CASH_SERVER_BASE_URL } from "../../../utils/npubCashServer";
 import type { PeopleRoutesProps } from "../AppRouteContent";
 
 interface BuildPeopleRoutePropsParams {
@@ -76,7 +77,6 @@ interface BuildPeopleRoutePropsParams {
   route: Route;
   selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
-  profileClaimLightningAddressServerBaseUrl: PeopleRoutesProps["profileProps"]["serverBaseUrl"];
   profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
@@ -192,7 +192,6 @@ export const buildPeopleRouteProps = ({
   route,
   selectedContactStatusText,
   pendingDeleteId,
-  profileClaimLightningAddressServerBaseUrl,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
@@ -384,7 +383,7 @@ export const buildPeopleRouteProps = ({
       payLightningInvoiceWithCashu,
       saveClaimedLightningAddress,
       selectedProfileStatusCurrencies,
-      serverBaseUrl: profileClaimLightningAddressServerBaseUrl,
+      serverBaseUrl: NPUB_CASH_SERVER_BASE_URL,
       setProfileEditName,
       setProfileEditLnAddress,
       setProfileEditStatus,
