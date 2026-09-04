@@ -308,6 +308,8 @@ describe("PushInbox", () => {
     const refreshInterval = Duration.minutes(1);
 
     await Effect.gen(function* () {
+      // TestClock starts at epoch 0, which is not a valid UnixSeconds.
+      yield* TestClock.setTime(1_754_000_000_000);
       const inbox = yield* PushInbox;
       const events = yield* inbox.open({
         lookback: Duration.days(3),

@@ -2,12 +2,9 @@ import { Effect } from "effect";
 import { PaymentNoticeNotDelivered } from "../domain/errors";
 import { RumorId } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
-import {
-  freshClientId,
-  inspectOperation,
-  nowSeconds,
-} from "../internal/operations";
+import { freshClientId, inspectOperation } from "../internal/operations";
 import type { OperationReceiptSummary } from "../internal/operations";
+import { nowSeconds } from "../internal/time";
 import { deliverRumorToRecipient } from "../internal/wrapDelivery";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";

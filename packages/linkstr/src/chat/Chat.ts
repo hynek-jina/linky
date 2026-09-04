@@ -2,12 +2,9 @@ import { Effect } from "effect";
 import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
 import { RumorId } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
-import {
-  freshClientId,
-  inspectOperation,
-  nowSeconds,
-} from "../internal/operations";
+import { freshClientId, inspectOperation } from "../internal/operations";
 import type { OperationReceiptSummary } from "../internal/operations";
+import { nowSeconds } from "../internal/time";
 import { deliverRumorToPeer } from "../internal/wrapDelivery";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";

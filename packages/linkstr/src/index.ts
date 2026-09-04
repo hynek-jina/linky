@@ -34,6 +34,7 @@ export * from "./inspector/events";
 export * from "./inspector/Inspector";
 export * from "./inspector/inspectTransport";
 export { SignedPlainEvent } from "./internal/nostrEvent";
+export type { StringStorage } from "./internal/stringStorage";
 export * from "./muteList/MuteList";
 export * from "./outbox/domain";
 export * from "./outbox/Outbox";

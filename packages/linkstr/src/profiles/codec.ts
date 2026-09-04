@@ -1,5 +1,6 @@
 import { Either, Option, Schema } from "effect";
-import { UnixSeconds } from "../domain/primitives";
+import { isUnixSeconds } from "../domain/primitives";
+import type { UnixSeconds } from "../domain/primitives";
 import { firstTagValue } from "../internal/nostrEvent";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
 import { ProfileMetadata } from "./domain";
@@ -89,8 +90,6 @@ export const decodeProfileEvent = (
         }),
       ),
   });
-
-const isUnixSeconds = Schema.is(UnixSeconds);
 
 /** NIP-40 expiration tag, tolerantly: an unparsable value means no expiry. */
 const expirationOf = (event: SignedPlainEvent): UnixSeconds | null => {
