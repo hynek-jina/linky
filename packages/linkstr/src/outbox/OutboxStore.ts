@@ -1,4 +1,6 @@
 import { Context, Effect, Either, Layer, Schema } from "effect";
+import { stringStorageSlot } from "../internal/stringStorage";
+import type { StringStorage } from "../internal/stringStorage";
 import { StoredOutboxJob } from "./domain";
 import type { OutboxJobId } from "./domain";
 
@@ -8,15 +10,6 @@ export interface OutboxStoreService {
   readonly remove: (jobId: OutboxJobId) => Effect.Effect<void>;
   /** Jobs in insertion order. */
   readonly loadAll: Effect.Effect<ReadonlyArray<StoredOutboxJob>>;
-}
-
-/**
- * Minimal synchronous string key-value storage. The web `localStorage`
- * satisfies it as-is; other platforms adapt their own storage.
- */
-export interface OutboxStringStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
 }
 
 const StoredJobsJson = Schema.parseJson(Schema.Array(StoredOutboxJob));
@@ -41,17 +34,15 @@ const makeInMemory = (): OutboxStoreService => {
 };
 
 const makeStringStorage = (
-  storage: OutboxStringStorage,
+  storage: StringStorage,
   key: string,
 ): OutboxStoreService => {
-  const load = (): ReadonlyArray<StoredOutboxJob> => {
-    const raw = storage.getItem(key);
-    if (raw === null) return [];
-    return Either.getOrElse(decodeJobs(raw), () => []);
-  };
-  const save = (jobs: ReadonlyArray<StoredOutboxJob>): void => {
-    storage.setItem(key, encodeJobs(jobs));
-  };
+  const slot = stringStorageSlot<ReadonlyArray<StoredOutboxJob>>(storage, key, {
+    decode: (raw) => Either.getOrElse(decodeJobs(raw), () => []),
+    encode: encodeJobs,
+  });
+  const load = (): ReadonlyArray<StoredOutboxJob> => slot.read() ?? [];
+  const save = slot.write;
   return {
     insert: (job) => Effect.sync(() => save([...load(), job])),
     update: (job) =>
@@ -85,7 +76,7 @@ export class OutboxStore extends Context.Tag("linkstr/OutboxStore")<
    * (web: `localStorage`).
    */
   static fromStringStorage(
-    storage: OutboxStringStorage,
+    storage: StringStorage,
     key: string,
   ): Layer.Layer<OutboxStore> {
     return Layer.sync(OutboxStore, () => makeStringStorage(storage, key));

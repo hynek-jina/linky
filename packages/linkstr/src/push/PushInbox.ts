@@ -1,10 +1,11 @@
-import { Clock, Duration, Effect, Either, Option, Queue, Stream } from "effect";
+import { Duration, Effect, Either, Option, Queue, Stream } from "effect";
 import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import type { RelayUrl } from "../domain/primitives";
 import type { InboxDelivery } from "../inbox/events";
 import { resubscribeForever } from "../internal/resubscribe";
+import { nowSeconds } from "../internal/time";
 import {
   DEFAULT_SEEN_WRAP_IDS_CAPACITY,
   makeSeenWrapIds,
@@ -84,15 +85,12 @@ export class PushInbox extends Effect.Service<PushInbox>()(
 
           const subscribe = (relay: RelayUrl) =>
             Effect.gen(function* () {
-              const nowSeconds = Math.floor(
-                (yield* Clock.currentTimeMillis) / 1000,
-              );
               const lookbackSeconds = Math.floor(
                 Duration.toMillis(options.lookback) / 1000,
               );
               const filter: Filter = {
                 kinds: [GIFT_WRAP_KIND],
-                since: Math.max(nowSeconds - lookbackSeconds, 0),
+                since: Math.max((yield* nowSeconds) - lookbackSeconds, 0),
               };
               let eoseSeen = false;
               const reportAttemptEnded = (reason: string) =>
