@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "eslint": "eslint --fix .",
     "prettier": "prettier --write .",
+    "test": "vitest run",
     "typecheck": "tsc -b",
     "preview": "vite preview"
   },
@@ -30,6 +31,7 @@
     "eslint": "^9.39.1",
     "prettier": "^3.4.2",
     "typescript": "~5.9.3",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.0.18"
   }
 }
