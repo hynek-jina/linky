@@ -73,15 +73,19 @@ export function EvoluDataDetailPage(): React.ReactElement {
     .filter(([name]) => systemTables.includes(name))
     .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0));
 
-  const totalCurrentRows = scopedEntries.reduce<number>(
-    (sum, [, count]) => sum + (count ?? 0),
-    0,
+  const totalCurrentRows = scopedEntries.reduce<number | null>(
+    (sum, [, count]) => (sum === null || count === null ? null : sum + count),
+    scopedEntries.length ? 0 : null,
   );
-  const historyRows = evoluHistoryCount ?? 0;
-  const totalRows = totalCurrentRows + historyRows;
+  const historyRows = evoluHistoryCount;
+  const totalRows =
+    totalCurrentRows === null || historyRows === null
+      ? null
+      : totalCurrentRows + historyRows;
 
   // Calculate row distribution percentages
-  const calculatePercentage = (rows: number) => {
+  const calculatePercentage = (rows: number | null) => {
+    if (rows === null || totalRows === null) return null;
     if (totalRows === 0) return 0;
     return Math.round((rows / totalRows) * 100);
   };
@@ -369,7 +373,11 @@ export function EvoluDataDetailPage(): React.ReactElement {
               </span>
             </div>
             <div className="settings-right">
-              <span className="muted">{totalCurrentRows} rows</span>
+              <span className="muted">
+                {totalCurrentRows === null
+                  ? t("unknown")
+                  : `${totalCurrentRows} rows`}
+              </span>
             </div>
           </div>
 
@@ -380,7 +388,9 @@ export function EvoluDataDetailPage(): React.ReactElement {
               </span>
             </div>
             <div className="settings-right">
-              <span className="muted">{historyRows} rows</span>
+              <span className="muted">
+                {historyRows === null ? t("unknown") : `${historyRows} rows`}
+              </span>
             </div>
           </div>
 
@@ -389,7 +399,9 @@ export function EvoluDataDetailPage(): React.ReactElement {
               <span className="settings-label">{t("evoluTotalRows")}</span>
             </div>
             <div className="settings-right">
-              <span className="muted">{totalRows} rows</span>
+              <span className="muted">
+                {totalRows === null ? t("unknown") : `${totalRows} rows`}
+              </span>
             </div>
           </div>
 
@@ -630,13 +642,19 @@ export function EvoluDataDetailPage(): React.ReactElement {
           </h3>
 
           {userTableEntries.length === 0 ? (
-            <p className="muted">{t("evoluNoDataYet")}</p>
+            <p className="muted">
+              {t(tableEntries.length === 0 ? "unknown" : "evoluNoDataYet")}
+            </p>
           ) : (
             userTableEntries.map(([tableName, count]) => {
-              const rows = count ?? 0;
+              const rows = count;
               const percentage = calculatePercentage(rows);
               const estimatedTableBytes =
-                totalRows > 0 ? Math.round((rows / totalRows) * rawDbBytes) : 0;
+                rows === null || totalRows === null
+                  ? null
+                  : totalRows > 0
+                    ? Math.round((rows / totalRows) * rawDbBytes)
+                    : 0;
 
               return (
                 <div key={tableName} className="settings-row">
@@ -645,13 +663,16 @@ export function EvoluDataDetailPage(): React.ReactElement {
                   </div>
                   <div className="settings-right">
                     <span className="muted">
-                      {rows} rows ({percentage}%)
+                      {rows === null ? t("unknown") : `${rows} rows`}
+                      {percentage === null ? "" : ` (${percentage}%)`}
                     </span>
                     <span
                       className="muted"
                       style={{ marginLeft: 8, fontSize: 12 }}
                     >
-                      ~{formatBytes(estimatedTableBytes)}
+                      {estimatedTableBytes === null
+                        ? ""
+                        : `~${formatBytes(estimatedTableBytes)}`}
                     </span>
                   </div>
                 </div>
@@ -665,12 +686,14 @@ export function EvoluDataDetailPage(): React.ReactElement {
                 {t("evoluSystemTables")}
               </h3>
               {systemTableEntries.map(([tableName, count]) => {
-                const rows = count ?? 0;
+                const rows = count;
                 const percentage = calculatePercentage(rows);
                 const estimatedTableBytes =
-                  totalRows > 0
-                    ? Math.round((rows / totalRows) * rawDbBytes)
-                    : 0;
+                  rows === null || totalRows === null
+                    ? null
+                    : totalRows > 0
+                      ? Math.round((rows / totalRows) * rawDbBytes)
+                      : 0;
 
                 return (
                   <div key={tableName} className="settings-row">
@@ -679,13 +702,16 @@ export function EvoluDataDetailPage(): React.ReactElement {
                     </div>
                     <div className="settings-right">
                       <span className="muted">
-                        {rows} rows ({percentage}%)
+                        {rows === null ? t("unknown") : `${rows} rows`}
+                        {percentage === null ? "" : ` (${percentage}%)`}
                       </span>
                       <span
                         className="muted"
                         style={{ marginLeft: 8, fontSize: 12 }}
                       >
-                        ~{formatBytes(estimatedTableBytes)}
+                        {estimatedTableBytes === null
+                          ? ""
+                          : `~${formatBytes(estimatedTableBytes)}`}
                       </span>
                     </div>
                   </div>
@@ -699,7 +725,7 @@ export function EvoluDataDetailPage(): React.ReactElement {
           </p>
         </>
       ) : (
-        <p className="muted">{t("evoluCapacityMeasuring")}</p>
+        <p className="muted">{t("unknown")}</p>
       )}
     </section>
   );

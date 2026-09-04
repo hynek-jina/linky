@@ -337,14 +337,21 @@ export const useAppShellComposition = ({
     }
   }, [evoluLastError]);
 
-  const evoluDbInfo = useEvoluDatabaseInfoState({ enabled: true });
+  const evoluDbInfo = useEvoluDatabaseInfoState({
+    enabled:
+      route.kind === "evoluServers" ||
+      route.kind === "evoluServer" ||
+      route.kind === "evoluServerNew" ||
+      route.kind === "evoluData" ||
+      route.kind === "evoluCurrentData" ||
+      route.kind === "evoluHistoryData",
+  });
 
   const evoluConnectedServerCount = useMemo(() => {
-    if (evoluHasError) return 0;
     return evoluActiveServerUrls.reduce((sum, url) => {
       return sum + (evoluServerStatusByUrl[url] === "connected" ? 1 : 0);
     }, 0);
-  }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl]);
+  }, [evoluActiveServerUrls, evoluServerStatusByUrl]);
 
   const evoluOverallStatus = useMemo(() => {
     if (!syncOwner) return "disconnected" as const;
@@ -1633,6 +1640,7 @@ export const useAppShellComposition = ({
       evoluContactsOwnerPointer: contactsOwnerPointer,
       evoluDatabaseBytes: evoluDbInfo.info.bytes,
       evoluHasError,
+      evoluErrorType: evoluLastError?.type ?? null,
       evoluHistoryAllowedOwnerIds,
       evoluHistoryCount: evoluDbInfo.info.historyCount,
       evoluMessagesOwnerEditsUntilRotation: messagesOwnerEditsUntilRotation,

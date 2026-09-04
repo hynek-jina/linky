@@ -66,6 +66,7 @@ const createEvoluSettings = (
   evoluContactsOwnerPointer: "",
   evoluDatabaseBytes: null,
   evoluHasError: false,
+  evoluErrorType: null,
   evoluHistoryAllowedOwnerIds: [],
   evoluHistoryCount: null,
   evoluMessagesOwnerEditsUntilRotation: 0,

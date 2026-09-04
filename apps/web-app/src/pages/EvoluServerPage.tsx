@@ -1,4 +1,5 @@
 import React from "react";
+import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
@@ -23,6 +24,7 @@ export function EvoluServerPage(): React.ReactElement {
   const navigateTo = useNavigation();
   return (
     <section className="panel">
+      <EvoluSyncErrorNotice />
       {evoluServersReloadRequired ? (
         <>
           <p className="muted" style={{ marginTop: 2 }}>
