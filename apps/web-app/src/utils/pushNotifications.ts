@@ -1,3 +1,8 @@
+import {
+  safeLocalStorageGet,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+} from "./storage";
 import { decodeBase64Url, encodeBase64Url } from "./base64";
 import { isRecord } from "./unknown";
 import {
@@ -66,15 +71,15 @@ async function fetchVapidPublicKey(): Promise<string> {
 }
 
 function getStoredVapidKey(): string | null {
-  return localStorage.getItem(VAPID_KEY_STORAGE_KEY);
+  return safeLocalStorageGet(VAPID_KEY_STORAGE_KEY);
 }
 
 function storeVapidKey(key: string): void {
-  localStorage.setItem(VAPID_KEY_STORAGE_KEY, key);
+  safeLocalStorageSet(VAPID_KEY_STORAGE_KEY, key);
 }
 
 function getOrCreatePushInstallationId(): string {
-  const existing = localStorage.getItem(PUSH_INSTALLATION_ID_STORAGE_KEY);
+  const existing = safeLocalStorageGet(PUSH_INSTALLATION_ID_STORAGE_KEY);
   if (existing && existing.trim().length > 0) {
     return existing;
   }
@@ -83,69 +88,69 @@ function getOrCreatePushInstallationId(): string {
     typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : encodeBase64Url(crypto.getRandomValues(new Uint8Array(16)));
-  localStorage.setItem(PUSH_INSTALLATION_ID_STORAGE_KEY, nextId);
+  safeLocalStorageSet(PUSH_INSTALLATION_ID_STORAGE_KEY, nextId);
   return nextId;
 }
 
 function readStoredRegisteredPushEndpoint(): string | null {
-  return localStorage.getItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
+  return safeLocalStorageGet(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
 }
 
 function storeRegisteredPushEndpoint(endpoint: string): void {
-  localStorage.setItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY, endpoint);
+  safeLocalStorageSet(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY, endpoint);
 }
 
 function clearStoredRegisteredPushEndpoint(): void {
-  localStorage.removeItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
+  safeLocalStorageRemove(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
 }
 
 function readStoredRegisteredPushPubkey(): string | null {
-  return localStorage.getItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
+  return safeLocalStorageGet(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
 }
 
 function storeRegisteredPushPubkey(pubkey: string): void {
-  localStorage.setItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY, pubkey);
+  safeLocalStorageSet(REGISTERED_PUSH_PUBKEY_STORAGE_KEY, pubkey);
 }
 
 function clearStoredRegisteredPushPubkey(): void {
-  localStorage.removeItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
+  safeLocalStorageRemove(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
 }
 
 function readStoredRegisteredNativePushToken(): string | null {
-  return localStorage.getItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
+  return safeLocalStorageGet(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
 }
 
 function storeRegisteredNativePushToken(token: string): void {
-  localStorage.setItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
+  safeLocalStorageSet(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
 }
 
 function clearStoredRegisteredNativePushToken(): void {
-  localStorage.removeItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
+  safeLocalStorageRemove(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
 }
 
 function readStoredRegisteredNativePushPubkey(): string | null {
-  return localStorage.getItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
+  return safeLocalStorageGet(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
 }
 
 function storeRegisteredNativePushPubkey(pubkey: string): void {
-  localStorage.setItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY, pubkey);
+  safeLocalStorageSet(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY, pubkey);
 }
 
 function clearStoredRegisteredNativePushPubkey(): void {
-  localStorage.removeItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
+  safeLocalStorageRemove(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
 }
 
 export function arePushNotificationsDisabledByUser(): boolean {
-  return localStorage.getItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY) === "1";
+  return safeLocalStorageGet(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY) === "1";
 }
 
 export function setPushNotificationsDisabledByUser(disabled: boolean): void {
   if (disabled) {
-    localStorage.setItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY, "1");
+    safeLocalStorageSet(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY, "1");
     return;
   }
 
-  localStorage.removeItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY);
+  safeLocalStorageRemove(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY);
 }
 
 export async function hasNativePushRegistrationForIdentity(

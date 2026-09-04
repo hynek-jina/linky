@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
@@ -9,10 +10,6 @@ import {
   LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX,
   LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX,
 } from "../../utils/constants";
-import {
-  safeLocalStorageGetJson,
-  safeLocalStorageSetJson,
-} from "../../utils/storage";
 import { isIdentityChangeMessageContent } from "../lib/identityChangeMessage";
 import type {
   LocalNostrMessage,
@@ -29,6 +26,14 @@ import {
   dedupeNostrMessagesByPriority,
   getLocalNostrMessageRumorKey,
 } from "./messages/messageHelpers";
+import { UnknownRecord } from "../../utils/unknown";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+  safeLocalStorageSetJson,
+} from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
 import {
   asNonEmptyString,
@@ -157,7 +162,7 @@ const toLocalNostrReaction = (
 };
 
 const normalizeLegacyLocalMessage = (
-  row: LocalNostrMessage,
+  row: Record<string, unknown>,
 ): LocalNostrMessage | null => {
   const contactId = trimString(row.contactId);
   const directionRaw = trimString(row.direction);
@@ -531,16 +536,13 @@ export const useMessagesDomain = ({
       return;
     }
 
-    const raw = safeLocalStorageGetJson(
+    const normalized = safeLocalStorageGetJson(
       overlayMessagesKeyForOwner(String(ownerId)),
-      [] as LocalNostrMessage[],
-    );
-
-    const normalized = Array.isArray(raw)
-      ? raw
-          .map((message) => normalizeLegacyLocalMessage(message))
-          .filter((message): message is LocalNostrMessage => Boolean(message))
-      : [];
+      Schema.Array(UnknownRecord),
+      [],
+    )
+      .map((message) => normalizeLegacyLocalMessage(message))
+      .filter((message): message is LocalNostrMessage => Boolean(message));
 
     setOverlayMessages(dedupeNostrMessagesByPriority(normalized));
   }, [appOwnerId, appOwnerIdRef]);
@@ -709,27 +711,20 @@ export const useMessagesDomain = ({
     if (migrationDoneForOwnerRef.current === ownerKey) return;
 
     const migrationKey = migrationKeyForOwner(ownerKey);
-    try {
-      if (localStorage.getItem(migrationKey) === "1") {
-        migrationDoneForOwnerRef.current = ownerKey;
-        return;
-      }
-    } catch {
-      // ignore localStorage read failures
+    if (safeLocalStorageGet(migrationKey) === "1") {
+      migrationDoneForOwnerRef.current = ownerKey;
+      return;
     }
 
     migrationRunningRef.current = true;
     try {
-      const legacy = safeLocalStorageGetJson(
+      const normalizedLegacy = safeLocalStorageGetJson(
         `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${ownerKey}`,
-        [] as LocalNostrMessage[],
-      );
-
-      const normalizedLegacy = Array.isArray(legacy)
-        ? legacy
-            .map((message) => normalizeLegacyLocalMessage(message))
-            .filter((message): message is LocalNostrMessage => Boolean(message))
-        : [];
+        Schema.Array(UnknownRecord),
+        [],
+      )
+        .map((message) => normalizeLegacyLocalMessage(message))
+        .filter((message): message is LocalNostrMessage => Boolean(message));
 
       const dedupedLegacy = dedupeNostrMessagesByPriority(normalizedLegacy);
       const existingMessages =
@@ -773,14 +768,10 @@ export const useMessagesDomain = ({
         if (rumorKey) seenRumorKeys.add(rumorKey);
       }
 
-      try {
-        localStorage.setItem(migrationKey, "1");
-        localStorage.removeItem(
-          `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${ownerKey}`,
-        );
-      } catch {
-        // ignore localStorage write failures
-      }
+      safeLocalStorageSet(migrationKey, "1");
+      safeLocalStorageRemove(
+        `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${ownerKey}`,
+      );
       migrationDoneForOwnerRef.current = ownerKey;
     } finally {
       migrationRunningRef.current = false;
@@ -1646,35 +1637,32 @@ export const useMessagesDomain = ({
       return;
     }
 
-    const raw = safeLocalStorageGetJson(
+    const normalized = safeLocalStorageGetJson(
       `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
-      [] as LocalPendingPayment[],
-    );
-
-    const normalized = Array.isArray(raw)
-      ? raw
-          .map((pendingPayment) => ({
-            id: trimString(pendingPayment.id),
-            contactId: trimString(pendingPayment.contactId),
-            amountSat: Math.max(
-              0,
-              Math.trunc(Number(pendingPayment.amountSat ?? 0) || 0),
-            ),
-            createdAtSec: Math.max(
-              0,
-              Math.trunc(Number(pendingPayment.createdAtSec ?? 0) || 0),
-            ),
-            ...(pendingPayment.messageId
-              ? { messageId: toText(pendingPayment.messageId) }
-              : {}),
-          }))
-          .filter(
-            (pendingPayment) =>
-              pendingPayment.id &&
-              pendingPayment.contactId &&
-              pendingPayment.amountSat > 0,
-          )
-      : [];
+      Schema.Array(UnknownRecord),
+      [],
+    )
+      .map((pendingPayment) => ({
+        id: trimString(pendingPayment.id),
+        contactId: trimString(pendingPayment.contactId),
+        amountSat: Math.max(
+          0,
+          Math.trunc(Number(pendingPayment.amountSat ?? 0) || 0),
+        ),
+        createdAtSec: Math.max(
+          0,
+          Math.trunc(Number(pendingPayment.createdAtSec ?? 0) || 0),
+        ),
+        ...(pendingPayment.messageId
+          ? { messageId: toText(pendingPayment.messageId) }
+          : {}),
+      }))
+      .filter(
+        (pendingPayment) =>
+          pendingPayment.id &&
+          pendingPayment.contactId &&
+          pendingPayment.amountSat > 0,
+      );
 
     setPendingPayments(normalized);
   }, [appOwnerId, appOwnerIdRef]);

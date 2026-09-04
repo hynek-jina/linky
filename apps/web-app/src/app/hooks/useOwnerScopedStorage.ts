@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+import { isLocalPaymentTelemetryEvent } from "./useAnonymousPaymentTelemetry";
 import type { OwnerId } from "@evolu/common";
 import React from "react";
 import type { JsonValue } from "../../types/json";
@@ -10,21 +12,22 @@ import {
   normalizeMintUrl,
 } from "../../utils/mint";
 import {
-  safeLocalStorageGetJson,
-  safeLocalStorageSetJson,
-} from "../../utils/storage";
-import {
   createLocalPaymentTelemetryEvent,
   normalizePaymentTelemetryStatus,
 } from "../lib/paymentTelemetry";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 import type {
   LocalPaymentEvent,
-  LocalPaymentTelemetryEvent,
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../types/appTypes";
 import { isUnknownContactId } from "./messages/contactIdentity";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageSet,
+  safeLocalStorageSetJson,
+} from "../../utils/storage";
 import { isRecord } from "../../utils/unknown";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -244,37 +247,28 @@ export const useOwnerScopedStorage = ({
     [appOwnerIdRef],
   );
 
-  const readSeenMintsFromStorage = React.useCallback((): string[] => {
-    try {
-      const raw = localStorage.getItem(
+  const readSeenMintsFromStorage = React.useCallback(
+    (): string[] =>
+      safeLocalStorageGetJson(
         makeLocalStorageKey(CASHU_SEEN_MINTS_STORAGE_KEY),
-      );
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .map((value) => normalizeMintUrl(String(value ?? "")))
-        .filter(Boolean);
-    } catch {
-      return [];
-    }
-  }, [makeLocalStorageKey]);
+        Schema.Array(Schema.String),
+        [],
+      )
+        .map((value) => normalizeMintUrl(value))
+        .filter(Boolean),
+    [makeLocalStorageKey],
+  );
 
   const rememberSeenMint = React.useCallback(
     (mintUrl: MintUrlInput): void => {
       const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned) return;
-      try {
-        const key = makeLocalStorageKey(CASHU_SEEN_MINTS_STORAGE_KEY);
-        const existing = new Set(readSeenMintsFromStorage());
-        existing.add(cleaned);
-        localStorage.setItem(
-          key,
-          JSON.stringify(Array.from(existing).slice(0, 50)),
-        );
-      } catch {
-        // ignore
-      }
+      const existing = new Set(readSeenMintsFromStorage());
+      existing.add(cleaned);
+      safeLocalStorageSetJson(
+        makeLocalStorageKey(CASHU_SEEN_MINTS_STORAGE_KEY),
+        Array.from(existing).slice(0, 50),
+      );
     },
     [makeLocalStorageKey, readSeenMintsFromStorage],
   );
@@ -317,11 +311,11 @@ export const useOwnerScopedStorage = ({
       }
 
       const telemetryEntry = createLocalPaymentTelemetryEvent(event, nowSec);
-      const emptyTelemetryQueue: LocalPaymentTelemetryEvent[] = [];
       const telemetryQueue = safeLocalStorageGetJson(
         makeLocalStorageKey(LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX),
-        emptyTelemetryQueue,
-      );
+        Schema.Array(Schema.Unknown),
+        [],
+      ).filter(isLocalPaymentTelemetryEvent);
       const nextTelemetryQueue = [telemetryEntry, ...telemetryQueue].slice(
         0,
         250,
@@ -341,25 +335,18 @@ export const useOwnerScopedStorage = ({
 
       if (migratedLegacyPaymentsKeyRef.current === migratedKey) return;
 
-      try {
-        if (localStorage.getItem(migratedKey) === "1") {
-          migratedLegacyPaymentsKeyRef.current = migratedKey;
-          return;
-        }
-      } catch {
+      if (safeLocalStorageGet(migratedKey) === "1") {
+        migratedLegacyPaymentsKeyRef.current = migratedKey;
         return;
       }
 
-      const legacyItems = safeLocalStorageGetJson<readonly JsonValue[]>(
+      const legacyItems = safeLocalStorageGetJson(
         legacyStorageKey,
+        Schema.Array(Schema.Unknown),
         [],
       );
-      if (!Array.isArray(legacyItems) || legacyItems.length === 0) {
-        try {
-          localStorage.setItem(migratedKey, "1");
-        } catch {
-          // ignore
-        }
+      if (legacyItems.length === 0) {
+        safeLocalStorageSet(migratedKey, "1");
         migratedLegacyPaymentsKeyRef.current = migratedKey;
         return;
       }
@@ -387,11 +374,7 @@ export const useOwnerScopedStorage = ({
         }
       }
 
-      try {
-        localStorage.setItem(migratedKey, "1");
-      } catch {
-        // ignore
-      }
+      safeLocalStorageSet(migratedKey, "1");
       migratedLegacyPaymentsKeyRef.current = migratedKey;
     },
     [insert],

@@ -64,12 +64,13 @@ import {
   deriveNostrKeysFromSlip39,
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
-import {
-  getInitialNostrIdentitySource,
-  safeLocalStorageSet,
-} from "../../utils/storage";
 import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
 import { buildLinkstrConfig } from "./useLinkstrConfigSync";
+import {
+  getInitialNostrIdentitySource,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+} from "../../utils/storage";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -180,12 +181,8 @@ const OWNER_ROTATION_STORAGE_KEYS = [
 ] as const;
 
 const resetStoredOwnerRotationState = (): void => {
-  try {
-    for (const storageKey of OWNER_ROTATION_STORAGE_KEYS) {
-      localStorage.removeItem(storageKey);
-    }
-  } catch {
-    // ignore storage unavailability
+  for (const storageKey of OWNER_ROTATION_STORAGE_KEYS) {
+    safeLocalStorageRemove(storageKey);
   }
 };
 

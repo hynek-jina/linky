@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { CashuTokenRow } from "../../../evolu";
@@ -8,11 +9,6 @@ import {
   normalizeMintUrl,
   PRESET_MINTS,
 } from "../../../utils/mint";
-import {
-  safeLocalStorageGetJson,
-  safeLocalStorageSetJson,
-} from "../../../utils/storage";
-import { makeLocalId } from "../../../utils/validation";
 import type { LocalMintInfoRow, MintUrlInput } from "../../types/appTypes";
 import {
   buildMintDedupeSignature,
@@ -24,6 +20,32 @@ import {
   isMintDeletedRow,
   parseMintInfoPayload,
 } from "./mintInfoHelpers";
+import {
+  safeLocalStorageGetJson,
+  safeLocalStorageSetJson,
+} from "../../../utils/storage";
+import { makeLocalId } from "../../../utils/validation";
+
+const OptionalStoredValue = Schema.optional(
+  Schema.NullOr(Schema.Union(Schema.String, Schema.Number, Schema.Boolean)),
+);
+
+const StoredMintInfoRow = Schema.Struct({
+  feesJson: OptionalStoredValue,
+  firstSeenAtSec: OptionalStoredValue,
+  id: Schema.String,
+  infoJson: OptionalStoredValue,
+  isDeleted: OptionalStoredValue,
+  lastCheckedAtSec: OptionalStoredValue,
+  lastSeenAtSec: OptionalStoredValue,
+  supportsMpp: OptionalStoredValue,
+  url: Schema.String,
+});
+
+const isStoredMintInfoRow = (
+  value: unknown,
+): value is typeof StoredMintInfoRow.Type =>
+  Schema.is(StoredMintInfoRow)(value);
 
 interface UseMintInfoStoreParams {
   appOwnerId: Evolu.OwnerId | null;
@@ -67,8 +89,9 @@ export const useMintInfoStore = ({
     setMintInfoAll(
       safeLocalStorageGetJson(
         `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
-        [] as LocalMintInfoRow[],
-      ),
+        Schema.Array(Schema.Unknown),
+        [],
+      ).filter(isStoredMintInfoRow),
     );
   }, [appOwnerId, appOwnerIdRef]);
 

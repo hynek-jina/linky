@@ -14,12 +14,12 @@ import {
   LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX,
   PAYMENT_ANALYTICS_RECIPIENT_NPUB,
 } from "../../utils/constants";
+import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../utils/storage";
-import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
 
 interface UseAnonymousPaymentTelemetryParams {
   appOwnerId: OwnerId | null;
@@ -94,7 +94,7 @@ const isTelemetryDevicePlatform = (
   );
 };
 
-const isLocalPaymentTelemetryEvent = (
+export const isLocalPaymentTelemetryEvent = (
   value: unknown,
 ): value is LocalPaymentTelemetryEvent => {
   if (typeof value !== "object" || value === null) return false;
@@ -141,9 +141,11 @@ const isLocalPaymentTelemetryEvent = (
 };
 
 const readQueue = (storageKey: string): LocalPaymentTelemetryEvent[] => {
-  const parsed = safeLocalStorageGetJson(storageKey, []);
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter(isLocalPaymentTelemetryEvent);
+  return safeLocalStorageGetJson(
+    storageKey,
+    Schema.Array(Schema.Unknown),
+    [],
+  ).filter(isLocalPaymentTelemetryEvent);
 };
 
 const writeQueue = (
