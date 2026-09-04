@@ -45,7 +45,10 @@ import {
   WALLET_WARNING_DISMISSED_STORAGE_KEY,
 } from "../../../utils/constants";
 import { formatDisplayAmountParts } from "../../../utils/displayAmounts";
-import { isNpubCashDisabled } from "../../../utils/npubCashServer";
+import {
+  isNpubCashDisabled,
+  NPUB_CASH_SERVER_BASE_URL,
+} from "../../../utils/npubCashServer";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
@@ -212,9 +215,6 @@ interface UseCashuWalletCompositionParams {
     | "npubCashInfoInFlightRef"
     | "npubCashInfoLoadedAtMsRef"
     | "npubCashInfoLoadedForNpubRef"
-    | "npubCashServerBaseUrl"
-    | "ownedProfileLightningAddresses"
-    | "profileClaimLightningAddressServerBaseUrl"
     | "setIsProfileEditing"
     | "setMyProfileQr"
     | "setOwnedProfileLightningAddresses"
@@ -300,9 +300,6 @@ export const useCashuWalletComposition = ({
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
-    npubCashServerBaseUrl,
-    ownedProfileLightningAddresses,
-    profileClaimLightningAddressServerBaseUrl,
     setIsProfileEditing,
     setMyProfileQr,
     setOwnedProfileLightningAddresses,
@@ -932,9 +929,6 @@ export const useCashuWalletComposition = ({
     defaultMintUrlDraft,
     hasMintOverrideRef,
     makeLocalStorageKey,
-    npubCashServerBaseUrl,
-    ownedLightningAddresses: ownedProfileLightningAddresses,
-    profileClaimLightningAddressServerBaseUrl,
     npubCashMintSyncRef,
     pushToast,
     setDefaultMintUrl,
@@ -969,7 +963,7 @@ export const useCashuWalletComposition = ({
 
     const loadOwnedLightningAddresses = async () => {
       try {
-        const url = `${profileClaimLightningAddressServerBaseUrl}/api/v1/info`;
+        const url = `${NPUB_CASH_SERVER_BASE_URL}/api/v1/info`;
         const auth = await makeNip98AuthHeader(url, "GET");
         const response = await fetch(url, {
           method: "GET",
@@ -1007,7 +1001,6 @@ export const useCashuWalletComposition = ({
     currentNpub,
     currentNsec,
     makeNip98AuthHeader,
-    profileClaimLightningAddressServerBaseUrl,
     setOwnedProfileLightningAddresses,
     setOwnedProfileLightningAddressesLoading,
   ]);
@@ -1024,7 +1017,6 @@ export const useCashuWalletComposition = ({
     makeNip98AuthHeader,
     maybeShowPwaNotification,
     mintInfoByUrl,
-    npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     receiveCashuToken,
     refreshMintInfo,
@@ -1046,7 +1038,6 @@ export const useCashuWalletComposition = ({
     hasMintOverrideRef,
     makeNip98AuthHeader,
     networkEnabled: nostrBootstrapReady,
-    npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,

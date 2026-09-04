@@ -3,43 +3,17 @@ import { createRoot } from "react-dom/client";
 import { nip19 } from "nostr-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY } from "../../../utils/mint";
-import {
-  resolveMintSyncServerBaseUrl,
-  useNpubCashMintSelection,
-} from "./useNpubCashMintSelection";
+import { useNpubCashMintSelection } from "./useNpubCashMintSelection";
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
   configurable: true,
   value: true,
 });
 
-describe("resolveMintSyncServerBaseUrl", () => {
-  it("uses the dedicated Linky claim host when the user owns a hosted Linky alias", () => {
-    expect(
-      resolveMintSyncServerBaseUrl({
-        npubCashServerBaseUrl: "https://npub.cash",
-        ownedLightningAddresses: ["alice@linky.fit"],
-        profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
-      }),
-    ).toBe("https://npub.linky.fit");
-  });
-
-  it("falls back to the current lightning-address host when no hosted Linky alias is owned", () => {
-    expect(
-      resolveMintSyncServerBaseUrl({
-        npubCashServerBaseUrl: "https://npub.cash",
-        ownedLightningAddresses: [],
-        profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
-      }),
-    ).toBe("https://npub.cash");
-  });
-});
-
 interface SelectionHarnessProps {
   applyRef: React.RefObject<((mintUrl: string) => Promise<void>) | null>;
   defaultMintUrl: string;
   makeLocalStorageKey: (prefix: string) => string;
-  ownedLightningAddresses: readonly string[];
   pushToast: (message: string) => void;
   setDefaultMintUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setDefaultMintUrlDraft: React.Dispatch<React.SetStateAction<string>>;
@@ -54,7 +28,6 @@ const SelectionHarness = ({
   applyRef,
   defaultMintUrl,
   makeLocalStorageKey,
-  ownedLightningAddresses,
   pushToast,
   setDefaultMintUrl,
   setDefaultMintUrlDraft,
@@ -70,9 +43,6 @@ const SelectionHarness = ({
     hasMintOverrideRef,
     makeLocalStorageKey,
     npubCashMintSyncRef,
-    npubCashServerBaseUrl: "https://npub.cash",
-    ownedLightningAddresses,
-    profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
     pushToast,
     setDefaultMintUrl,
     setDefaultMintUrlDraft,
@@ -96,12 +66,10 @@ const readApplyMintSelection = (
 
 interface RenderSelectionHarnessOptions {
   defaultMintUrl?: string;
-  ownedLightningAddresses?: readonly string[];
 }
 
 const renderSelectionHarness = async ({
   defaultMintUrl = "https://cashu.cz",
-  ownedLightningAddresses = ["alice@linky.fit"],
 }: RenderSelectionHarnessOptions = {}) => {
   const pushToast = vi.fn();
   const setDefaultMintUrl =
@@ -122,7 +90,6 @@ const renderSelectionHarness = async ({
         applyRef={applyRef}
         defaultMintUrl={defaultMintUrl}
         makeLocalStorageKey={makeLocalStorageKey}
-        ownedLightningAddresses={ownedLightningAddresses}
         pushToast={pushToast}
         setDefaultMintUrl={setDefaultMintUrl}
         setDefaultMintUrlDraft={setDefaultMintUrlDraft}

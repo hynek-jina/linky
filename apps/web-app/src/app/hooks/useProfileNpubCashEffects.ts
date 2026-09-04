@@ -1,7 +1,10 @@
 import React from "react";
 import type { JsonValue } from "../../types/json";
 import { normalizeMintUrl } from "../../utils/mint";
-import { isNpubCashDisabled } from "../../utils/npubCashServer";
+import {
+  isNpubCashDisabled,
+  NPUB_CASH_SERVER_BASE_URL,
+} from "../../utils/npubCashServer";
 import { optimizeCaseInsensitiveQrPayload } from "../../utils/qrPayload";
 import { asRecord } from "../../utils/validation";
 
@@ -13,7 +16,6 @@ interface UseProfileNpubCashEffectsParams {
   hasMintOverrideRef: React.MutableRefObject<boolean>;
   makeNip98AuthHeader: (url: string, method: "GET" | "POST") => Promise<string>;
   networkEnabled?: boolean;
-  npubCashServerBaseUrl: string;
   npubCashInfoInFlightRef: React.MutableRefObject<boolean>;
   npubCashInfoLoadedAtMsRef: React.MutableRefObject<number>;
   npubCashInfoLoadedForNpubRef: React.MutableRefObject<string | null>;
@@ -32,7 +34,6 @@ export const useProfileNpubCashEffects = ({
   hasMintOverrideRef,
   makeNip98AuthHeader,
   networkEnabled = true,
-  npubCashServerBaseUrl,
   npubCashInfoInFlightRef,
   npubCashInfoLoadedAtMsRef,
   npubCashInfoLoadedForNpubRef,
@@ -120,7 +121,6 @@ export const useProfileNpubCashEffects = ({
     // Hosted npub.cash-compatible integration:
     // - read default mint (preferred mint) for the user
     // - auto-claim pending payments and store them as Cashu tokens
-    // Uses the server bound to the current lightning-address domain.
     if (isNpubCashDisabled()) return;
     if (!networkEnabled) return;
     if (!currentNpub) return;
@@ -128,13 +128,12 @@ export const useProfileNpubCashEffects = ({
 
     let cancelled = false;
     const infoController = new AbortController();
-    const infoCacheKey = `${currentNpub}|${npubCashServerBaseUrl}`;
 
     const loadInfo = async () => {
       if (npubCashInfoInFlightRef.current) return;
       const nowMs = Date.now();
       if (
-        npubCashInfoLoadedForNpubRef.current === infoCacheKey &&
+        npubCashInfoLoadedForNpubRef.current === currentNpub &&
         nowMs - npubCashInfoLoadedAtMsRef.current < 10 * 60_000
       ) {
         return;
@@ -142,7 +141,7 @@ export const useProfileNpubCashEffects = ({
 
       npubCashInfoInFlightRef.current = true;
       try {
-        const url = `${npubCashServerBaseUrl}/api/v1/info`;
+        const url = `${NPUB_CASH_SERVER_BASE_URL}/api/v1/info`;
         const auth = await makeNip98AuthHeader(url, "GET");
         const res = await fetch(url, {
           method: "GET",
@@ -171,7 +170,7 @@ export const useProfileNpubCashEffects = ({
           }
         }
 
-        npubCashInfoLoadedForNpubRef.current = infoCacheKey;
+        npubCashInfoLoadedForNpubRef.current = currentNpub;
         npubCashInfoLoadedAtMsRef.current = Date.now();
       } catch {
         // ignore
@@ -204,7 +203,6 @@ export const useProfileNpubCashEffects = ({
     hasMintOverrideRef,
     makeNip98AuthHeader,
     networkEnabled,
-    npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
