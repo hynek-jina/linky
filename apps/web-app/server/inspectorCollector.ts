@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import type { ServerResponse } from "node:http";
 import path from "node:path";
+import { TLSSocket } from "node:tls";
 import type { Connect, Plugin } from "vite";
 import {
   INSPECTOR_CLEAR_PATH,
@@ -51,10 +52,15 @@ const parseQuery = (searchParams: URLSearchParams): InspectorQuery => {
   return query;
 };
 
-const setCorsHeaders = (res: ServerResponse): void => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Last-Event-ID");
+const isSameOriginRequest = (req: Connect.IncomingMessage): boolean => {
+  const site = req.headers["sec-fetch-site"];
+  if (site !== undefined && site !== "same-origin" && site !== "none") {
+    return false;
+  }
+  const origin = req.headers.origin;
+  if (origin === undefined) return true;
+  const protocol = req.socket instanceof TLSSocket ? "https" : "http";
+  return origin === `${protocol}://${req.headers.host}`;
 };
 
 const sendJson = (
@@ -141,8 +147,10 @@ export const inspectorCollector = (): Plugin => ({
     const sseClients = new Set<ServerResponse>();
     let fileQueue = Promise.resolve();
 
-    await fs.mkdir(inspectorDirectory, { recursive: true });
-    await fs.writeFile(rowsFile, "", "utf8");
+    await fs.mkdir(inspectorDirectory, { recursive: true, mode: 0o700 });
+    await fs.chmod(inspectorDirectory, 0o700);
+    await fs.writeFile(rowsFile, "", { encoding: "utf8", mode: 0o600 });
+    await fs.chmod(rowsFile, 0o600);
 
     const queueFileOperation = (
       operation: () => Promise<void>,
@@ -188,7 +196,11 @@ export const inspectorCollector = (): Plugin => ({
       const requestUrl = req.url ?? "";
       if (!requestUrl.startsWith("/__inspector")) return next();
 
-      setCorsHeaders(res);
+      res.removeHeader("Access-Control-Allow-Origin");
+      if (!isSameOriginRequest(req)) {
+        sendJson(res, 403, { error: "Inspector requests must be same-origin" });
+        return;
+      }
       const parsedUrl = new URL(requestUrl, "http://localhost");
       const requestPath = parsedUrl.pathname;
 
