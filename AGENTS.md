@@ -60,7 +60,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 Two Playwright projects in `apps/web-app/playwright.config.ts`:
 
 - `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — `tests/proxy-payment.spec.ts`, `tests/linkshu-migration.spec.ts`, and `tests/chat-recovery.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+- `local-stack` — `tests/proxy-payment.spec.ts`, `tests/linkshu-migration.spec.ts`, `tests/chat-recovery.spec.ts`, and `tests/password-manager-save.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)
@@ -86,7 +86,7 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 
 ## linkshu integration tests
 
-`packages/linkshu` has a second vitest project (`tests/integration/`, excluded from `bun run test`) that needs the dev-stack mint: `docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`, then `bun run --filter @linky/linkshu test:integration`. CI runs it as the `linkshu-integration` job in `.github/workflows/tests.yml`.
+`packages/linkshu` has a second vitest project (`tests/integration/`, excluded from `bun run test`) that needs both dev-stack mints: `docker compose -f docker-compose.dev.yml up -d --wait cashu-mint cashu-mint-target`, then `bun run --filter @linky/linkshu test:integration`. CI runs it as the `linkshu-integration` job in `.github/workflows/tests.yml`.
 
 ## linkshu CLI wallet
 
@@ -99,6 +99,8 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 - linkstr test helpers (`makeIdentity`, publish stubs, `FakeRelay`, `eventually`, `stubStorage`) live in `packages/linkstr/src/testing`, exported as `@linky/linkstr/testing` and excluded from the app build; `packages/linkstr-react/src/testing` adds `settle`/`configWith`/`fakeTransport`. Extend them instead of redeclaring fixtures per test file, and never import them from production code
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - Playwright cannot intercept requests made by a service worker, and `src/sw.ts` has a Workbox `CacheFirst` route for image destinations that matches cross-origin URLs — any test stubbing remote images must use `serviceWorkers: "block"`
+- Payment integration tests use source mint :3338 and target mint :3339, with separate keys and databases. `cashu-mint-target` starts with the `integration` or `e2e` profile. Use the target mint for payable invoices; the source mint auto-pays its own quotes, so same-mint tests race its three-second timer
+- The local Nginx server accepts the password-save form POST only at `/password-save.html` and serves the empty static document. Keep this exception scoped so other unsupported POST requests still fail
 - The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent
 - The dev mint runs with `MINT_RATE_LIMIT=FALSE`; nutshell's defaults (60 requests/minute globally, 20/minute for transactions) answer 429 partway through any full integration run
 - The `nostr-rs-relay` image's `/bin/sh` is dash, so its healthcheck must invoke `bash` explicitly for `/dev/tcp`

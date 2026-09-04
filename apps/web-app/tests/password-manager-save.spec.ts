@@ -1,52 +1,54 @@
 import { expect, test } from "@playwright/test";
+import { setBaseStorage } from "./helpers/appState";
+import { stubFiatRates } from "./helpers/network";
 
-test("password save does not boot a nested app instance", async ({ page }) => {
-  let mainBundleRequests = 0;
-  let passwordSaveMethod = "";
-
-  await page.addInitScript(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-    localStorage.setItem("linky.lang", "en");
-  });
+test("password save returns an inert document and signup reaches the wallet", async ({
+  page,
+}) => {
+  const nestedScriptRequests: string[] = [];
+  await setBaseStorage(page);
+  await stubFiatRates(page);
   page.on("request", (request) => {
-    if (request.url().includes("/src/main.tsx")) {
-      mainBundleRequests += 1;
+    if (
+      request.resourceType() === "script" &&
+      request.frame() !== page.mainFrame()
+    ) {
+      nestedScriptRequests.push(request.url());
     }
-  });
-  await page.route("**/password-save.html", async (route) => {
-    passwordSaveMethod = route.request().method();
-    await route.fulfill({
-      body: "<!doctype html><html><body>Password saved</body></html>",
-      contentType: "text/html",
-      status: 200,
-    });
   });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Create a profile" }).click();
-  await page
-    .getByRole("button", { name: "Continue" })
-    .click({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(
     page.getByRole("button", { name: "Confirm profile" }),
   ).toBeVisible();
 
-  const mainBundleRequestsBeforeSave = mainBundleRequests;
-  const saveForm = page.locator(".onboarding-password-save-form");
-  await expect(saveForm).toHaveCount(1);
-  await saveForm.evaluate((element) => {
+  const saveResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/password-save.html" &&
+      response.request().method() === "POST",
+  );
+  await page.locator(".onboarding-password-save-form").evaluate((element) => {
     if (!(element instanceof HTMLFormElement)) {
       throw new Error("Expected password-save form");
     }
     element.requestSubmit();
   });
 
-  await expect.poll(() => passwordSaveMethod, { timeout: 10_000 }).toBe("POST");
-  await expect(
-    page
-      .frameLocator('iframe[name="linky-password-manager-save-target"]')
-      .getByText("Password saved"),
-  ).toHaveCount(1);
-  expect(mainBundleRequests).toBe(mainBundleRequestsBeforeSave);
+  const saveResponse = await saveResponsePromise;
+  expect(saveResponse.status()).toBe(200);
+  expect(saveResponse.headers()["content-type"]).toContain("text/html");
+  await saveResponse.finished();
+  const saveFrame = saveResponse.frame();
+  expect(saveFrame.parentFrame()).toBe(page.mainFrame());
+  await saveFrame.waitForURL("**/password-save.html");
+  await expect(saveFrame.locator("html")).toHaveAttribute("lang", "en");
+  await expect(saveFrame.locator("body")).toBeEmpty();
+  await expect(saveFrame.locator("script, #root")).toHaveCount(0);
+  expect(nestedScriptRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Confirm profile" }).click();
+  await expect(page.getByLabel("Available balance")).toBeVisible();
+  expect(nestedScriptRequests).toEqual([]);
 });

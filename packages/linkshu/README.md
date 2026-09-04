@@ -116,14 +116,18 @@ already injectable).
 Unit tests are colocated (`src/**/*.test.ts`) and run with
 `bun run --filter @linky/linkshu test` (included in the root `bun run test`).
 The integration suite in `tests/integration/` exercises the public API
-against the dev-stack docker mint:
+against two dev-stack docker mints:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --wait cashu-mint
+docker compose -f docker-compose.dev.yml up -d --wait cashu-mint cashu-mint-target
 bun run --filter @linky/linkshu test:integration
 ```
 
-CI runs it as the `linkshu-integration` job in `tests.yml`.
+CI runs it as the `linkshu-integration` job in `tests.yml`. Source and target
+use separate keys and databases on :3338 and :3339. Override their URLs with
+`LINKSHU_MINT_URL` and `LINKSHU_TARGET_MINT_URL`. Autoswap verifies source
+proofs are spent and target proofs can be redeemed; FakeWallet simulates
+Lightning settlement.
 
 ## Usage
 

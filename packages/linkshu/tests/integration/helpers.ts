@@ -26,6 +26,10 @@ export const mintUrl = MintUrl.make(
   process.env.LINKSHU_MINT_URL ?? "http://localhost:3338",
 );
 
+export const targetMintUrl = MintUrl.make(
+  process.env.LINKSHU_TARGET_MINT_URL ?? "http://localhost:3339",
+);
+
 /** The local mint charges input_fee_ppk=100 on purpose (see CLAUDE.md). */
 export const INPUT_FEE_PPK = 100;
 export const inputFee = (proofCount: number): number =>
@@ -39,8 +43,8 @@ export const randomSeed = (): Bip39Seed =>
   Bip39Seed.make(crypto.getRandomValues(new Uint8Array(64)));
 
 /** A plain cashu-ts wallet at the mint, outside linkshu. */
-export const loadMintWallet = async (): Promise<Wallet> => {
-  const wallet = new Wallet(new Mint(mintUrl), { unit: "sat" });
+export const loadMintWallet = async (mint = mintUrl): Promise<Wallet> => {
+  const wallet = new Wallet(new Mint(mint), { unit: "sat" });
   await wallet.loadMint();
   return wallet;
 };
@@ -60,9 +64,9 @@ export const tokenOf = (proofs: Proof[]): string =>
 export const fundToken = async (amountSat: number): Promise<string> =>
   tokenOf(await fundProofs(amountSat));
 
-/** A bolt11 invoice the FakeWallet backend can "pay": a mint quote's request. */
+/** A different mint's invoice avoids Nutshell's internal self-payment path. */
 export const invoiceFor = async (amountSat: number): Promise<Bolt11Invoice> => {
-  const wallet = await loadMintWallet();
+  const wallet = await loadMintWallet(targetMintUrl);
   const quote = await wallet.createMintQuoteBolt11(amountSat);
   return Bolt11Invoice.make(quote.request);
 };
