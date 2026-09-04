@@ -1,82 +1,37 @@
-import { Mint, Wallet, getEncodedToken } from "@cashu/cashu-ts";
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import {
   Amount,
   Autoswap,
   AutoswapDraft,
-  Bip39Seed,
   Bolt11Invoice,
   CurrencyUnit,
   KeysetId,
-  KeyValueStore,
-  makeInMemoryKeyValueStore,
-  makeInMemoryTokenStore,
-  MintUrl,
   QuoteId,
   Receive,
   ReceiveDraft,
-  TokenStore,
-  UnixSeconds,
-  parseTokenText,
   runLinkshu,
+  UnixSeconds,
 } from "../../src";
-import type { Bip39Seed as Bip39SeedType, StoredTokenRow } from "../../src";
+import type { KeyValueStoreService } from "../../src";
 import {
   PENDING_AUTOSWAP_CLAIM_KEY_PREFIX,
   PendingAutoswapClaim,
   pendingClaims,
 } from "../../src/autoswap/internal/pendingClaim";
+import {
+  acceptedTotalOf,
+  durableStorage,
+  fundToken,
+  loadMintWallet,
+  mintUrl,
+  randomSeed,
+} from "./helpers";
 
 // The dev stack runs a single mint, so source and target are the same url: the
 // FakeWallet backend pays the target's mint-quote invoice out of the source's
 // melt, which is the shape of the cross-mint flow the app performs.
-const mintUrl = MintUrl.make(
-  process.env.LINKSHU_MINT_URL ?? "http://localhost:3338",
-);
 
-// Fresh seed per run: deterministic counters live at the mint, so a reused
-// seed would start every run inside an already-signed counter range.
-const randomSeed = (): Bip39SeedType =>
-  Bip39Seed.make(crypto.getRandomValues(new Uint8Array(64)));
-
-const loadWallet = async () => {
-  const wallet = new Wallet(new Mint(mintUrl), { unit: "sat" });
-  await wallet.loadMint();
-  return wallet;
-};
-
-/** Mints fresh sats via a bolt11 quote the FakeWallet backend auto-settles. */
-const fundToken = async (amountSat: number): Promise<string> => {
-  const wallet = await loadWallet();
-  const quote = await wallet.createMintQuoteBolt11(amountSat);
-  const proofs = await wallet.mintProofsBolt11(amountSat, quote, undefined, {
-    type: "random",
-  });
-  return getEncodedToken({ mint: mintUrl, unit: "sat", proofs });
-};
-
-const durableStorage = () => {
-  const kv = makeInMemoryKeyValueStore();
-  const tokens = makeInMemoryTokenStore();
-  return {
-    kv,
-    tokens,
-    layers: {
-      keyValueStore: Layer.succeed(KeyValueStore, kv),
-      tokenStore: Layer.succeed(TokenStore, tokens),
-    },
-  };
-};
-
-const acceptedTotalOf = (rows: ReadonlyArray<StoredTokenRow>): number =>
-  rows
-    .filter((row) => row.state === "accepted")
-    .reduce(
-      (sum, row) => sum + (parseTokenText(row.tokenText)?.amount ?? 0),
-      0,
-    );
-
-const pendingKeys = (kv: ReturnType<typeof makeInMemoryKeyValueStore>) =>
+const pendingKeys = (kv: KeyValueStoreService) =>
   Effect.runPromise(kv.listKeys(PENDING_AUTOSWAP_CLAIM_KEY_PREFIX));
 
 describe("autoswap against the local mint", () => {
@@ -117,7 +72,7 @@ describe("autoswap against the local mint", () => {
     // The state an interrupted claim leaves: the invoice is settled at the
     // mint (the FakeWallet backend pays its own quotes) and the record names
     // the quote to mint against, but no run ever minted it.
-    const wallet = await loadWallet();
+    const wallet = await loadMintWallet();
     const quote = await wallet.createMintQuoteBolt11(64);
     await Effect.runPromise(
       pendingClaims.write(
