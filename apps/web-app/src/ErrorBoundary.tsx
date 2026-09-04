@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { getInitialLang, translations } from "./i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -32,7 +33,7 @@ export class ErrorBoundary extends React.Component<
         <div
           style={{ padding: "40px", color: "#ff6b6b", fontFamily: "monospace" }}
         >
-          <h2>Aplikace se zhroutila</h2>
+          <h2>{translations[getInitialLang()].appCrashed}</h2>
           <pre
             style={{ overflow: "auto", background: "#1a1a1a", padding: "10px" }}
           >

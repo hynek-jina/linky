@@ -1,5 +1,6 @@
 export const cs = {
   appTitle: "Linky",
+  appCrashed: "Aplikace se zhroutila",
 
   settings: "Nastavení",
   detail: "Detail",
@@ -236,6 +237,7 @@ export const cs = {
   evoluCurrentDataJson: "Aktuální data",
   evoluHistoryDataJson: "Historie změn",
   evoluTotalRows: "Celkem řádků",
+  evoluUsageOfLimit: "{percent} % z 1 MiB limitu",
   evoluTable: "Tabulka",
   evoluColumn: "Sloupec",
   evoluId: "ID",

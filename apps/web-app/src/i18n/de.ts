@@ -2,6 +2,7 @@ import type { cs } from "./cs";
 
 export const de = {
   appTitle: "Linky",
+  appCrashed: "Die App ist abgestürzt",
   settings: "Einstellungen",
   detail: "Details",
   settingsGeneral: "Allgemein",
@@ -242,6 +243,7 @@ export const de = {
   evoluCurrentDataJson: "Aktuelle Daten",
   evoluHistoryDataJson: "Änderungsverlauf",
   evoluTotalRows: "Zeilen gesamt",
+  evoluUsageOfLimit: "{percent} % des 1-MiB-Limits",
   evoluTable: "Tabelle",
   evoluColumn: "Spalte",
   evoluId: "ID",
