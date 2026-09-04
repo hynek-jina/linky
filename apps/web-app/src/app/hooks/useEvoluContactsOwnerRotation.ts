@@ -39,7 +39,8 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
-import { UnknownRecord, getUnknownErrorMessage } from "../../utils/unknown";
+import { UnknownRecord } from "../../utils/schema";
+import { getUnknownErrorMessage } from "../../utils/unknown";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 

@@ -4,7 +4,8 @@ import {
   safeLocalStorageSet,
 } from "./storage";
 import { decodeBase64Url, encodeBase64Url } from "./base64";
-import { isRecord } from "./unknown";
+import { Option, Schema } from "effect";
+import { NonBlankString } from "./schema";
 import {
   PushNotifications,
   type PushNotificationActionPerformed,
@@ -64,11 +65,11 @@ async function fetchVapidPublicKey(): Promise<string> {
   if (!response.ok) {
     throw new Error(`Push server vrátil HTTP ${response.status}`);
   }
-  const data: unknown = await response.json();
-  if (!isRecord(data) || typeof data.vapidPublicKey !== "string") {
+  const data = decodeVapidPublicKeyResponse(await response.json());
+  if (Option.isNone(data)) {
     throw new Error("Push server vrátil neplatný VAPID klíč");
   }
-  return data.vapidPublicKey;
+  return data.value.vapidPublicKey;
 }
 
 function getStoredVapidKey(): string | null {
@@ -189,12 +190,17 @@ type NativePushDeviceData = {
   token: string;
 };
 
-type ChallengeResponse = {
-  action: "subscribe" | "unsubscribe";
-  challenge: string;
-  expiresAt: number;
-  pubkey: string;
-};
+const ChallengeResponse = Schema.Struct({
+  action: Schema.Literal("subscribe", "unsubscribe"),
+  challenge: NonBlankString,
+  expiresAt: Schema.Finite,
+  pubkey: NonBlankString,
+});
+type ChallengeResponse = typeof ChallengeResponse.Type;
+const decodeChallengeResponse = Schema.decodeUnknownSync(ChallengeResponse);
+const decodeVapidPublicKeyResponse = Schema.decodeUnknownOption(
+  Schema.Struct({ vapidPublicKey: Schema.String }),
+);
 
 type OwnershipProof = {
   event: SignedPlainEvent;
@@ -235,37 +241,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 function encodeKey(value: ArrayBuffer | null): string {
   return value ? base64.encode(new Uint8Array(value)) : "";
-}
-
-function readChallengeResponse(value: unknown): ChallengeResponse {
-  if (!isRecord(value)) {
-    throw new Error("Challenge response must be an object");
-  }
-
-  const action = value.action;
-  const challenge = value.challenge;
-  const expiresAt = value.expiresAt;
-  const pubkey = value.pubkey;
-
-  if (action !== "subscribe" && action !== "unsubscribe") {
-    throw new Error("Challenge response action is invalid");
-  }
-  if (typeof challenge !== "string" || challenge.trim().length === 0) {
-    throw new Error("Challenge response challenge is invalid");
-  }
-  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) {
-    throw new Error("Challenge response expiry is invalid");
-  }
-  if (typeof pubkey !== "string" || pubkey.trim().length === 0) {
-    throw new Error("Challenge response pubkey is invalid");
-  }
-
-  return {
-    action,
-    challenge,
-    expiresAt,
-    pubkey,
-  };
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -313,7 +288,7 @@ async function requestChallengeForAction(
     throw new Error(await readErrorMessage(response));
   }
 
-  return readChallengeResponse(await response.json());
+  return decodeChallengeResponse(await response.json());
 }
 
 async function unregisterEndpointOnServer(params: {

@@ -1,12 +1,14 @@
 import type { LocalNostrMessage } from "../types/appTypes";
 import {
-  safeLocalStorageGet,
+  safeLocalStorageGetJson,
   safeLocalStorageKeys,
   safeLocalStorageRemove,
   safeLocalStorageSetJson,
 } from "../../utils/storage";
-import { readField } from "../../utils/unknown";
+import { Option, Schema } from "effect";
+import { NonBlankString, PositiveFiniteNumber } from "../../utils/schema";
 import { nowSeconds } from "../../utils/time";
+import { asNonEmptyString } from "../../utils/validation";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
@@ -28,15 +30,18 @@ const LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX =
 export const LINKY_BANK_PAYMENT_OFFER_STAGGER_LOCK_KEY_PREFIX =
   "linky.bank_payment_offer_stagger_lock.v1";
 
+const LinkyBankPaymentOfferStatus = Schema.Literal(
+  "accepted",
+  "accepted_by_other",
+  "bank_details_sent",
+  "bank_paid",
+  "canceled",
+  "declined",
+  "offered",
+  "settled",
+);
 export type LinkyBankPaymentOfferStatus =
-  | "accepted"
-  | "accepted_by_other"
-  | "bank_details_sent"
-  | "bank_paid"
-  | "canceled"
-  | "declined"
-  | "offered"
-  | "settled";
+  typeof LinkyBankPaymentOfferStatus.Type;
 
 export interface LinkyBankPaymentOfferInfo {
   amountSat: number | null;
@@ -123,31 +128,14 @@ export const setLinkyBankPaymentOfferMinimized = (
   }
 };
 
-interface LinkyBankPaymentOfferSpdRecord {
-  createdAtSec: number;
-  ownerPubkey: string;
-  sentCandidateKeys: string[];
-  spdPayload: string;
-}
-
-const isLinkyBankPaymentOfferSpdRecord = (
-  value: unknown,
-): value is LinkyBankPaymentOfferSpdRecord => {
-  const createdAtSec = readField(value, "createdAtSec");
-  const ownerPubkey = readField(value, "ownerPubkey");
-  const sentCandidateKeys = readField(value, "sentCandidateKeys");
-  const spdPayload = readField(value, "spdPayload");
-  return (
-    typeof createdAtSec === "number" &&
-    Number.isFinite(createdAtSec) &&
-    createdAtSec > 0 &&
-    typeof ownerPubkey === "string" &&
-    Array.isArray(sentCandidateKeys) &&
-    sentCandidateKeys.every((key) => typeof key === "string") &&
-    typeof spdPayload === "string" &&
-    spdPayload.trim() !== ""
-  );
-};
+const LinkyBankPaymentOfferSpdRecord = Schema.Struct({
+  createdAtSec: PositiveFiniteNumber,
+  ownerPubkey: Schema.String,
+  sentCandidateKeys: Schema.Array(Schema.String),
+  spdPayload: NonBlankString,
+});
+type LinkyBankPaymentOfferSpdRecord =
+  typeof LinkyBankPaymentOfferSpdRecord.Type;
 
 // One storage key per offer so concurrent tabs working on different offers
 // never overwrite each other's records.
@@ -165,18 +153,12 @@ const isExpiredSpdRecord = (
 
 const readSpdRecordByStorageKey = (
   storageKey: string,
-): LinkyBankPaymentOfferSpdRecord | null => {
-  const raw = safeLocalStorageGet(storageKey);
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (isLinkyBankPaymentOfferSpdRecord(parsed)) return parsed;
-  } catch {
-    // ignore corrupted storage content
-  }
-  return null;
-};
+): LinkyBankPaymentOfferSpdRecord | null =>
+  safeLocalStorageGetJson(
+    storageKey,
+    Schema.NullOr(LinkyBankPaymentOfferSpdRecord),
+    null,
+  );
 
 const writeSpdRecord = (
   offerId: string,
@@ -256,70 +238,23 @@ export const forgetLinkyBankPaymentOfferSpdPayload = (
   safeLocalStorageRemove(getSpdRecordStorageKey(offerId));
 };
 
-interface LinkyBankPaymentOfferStaggerRecipient {
-  contactId: string;
-  contactPubHex: string;
-  dueAtSec: number;
-}
+const LinkyBankPaymentOfferStaggerRecipient = Schema.Struct({
+  contactId: NonBlankString,
+  contactPubHex: NonBlankString,
+  dueAtSec: PositiveFiniteNumber,
+});
 
-export interface LinkyBankPaymentOfferStaggerRecord {
-  amountSat: number | null;
-  amountText: string;
-  createdAtSec: number;
-  expiresAtSec: number;
-  offerId: string;
-  ownerPubkey: string;
-  pending: LinkyBankPaymentOfferStaggerRecipient[];
-}
-
-const isLinkyBankPaymentOfferStaggerRecipient = (
-  value: unknown,
-): value is LinkyBankPaymentOfferStaggerRecipient => {
-  const contactId = readField(value, "contactId");
-  const contactPubHex = readField(value, "contactPubHex");
-  const dueAtSec = readField(value, "dueAtSec");
-  return (
-    typeof contactId === "string" &&
-    contactId.trim() !== "" &&
-    typeof contactPubHex === "string" &&
-    contactPubHex.trim() !== "" &&
-    typeof dueAtSec === "number" &&
-    Number.isFinite(dueAtSec) &&
-    dueAtSec > 0
-  );
-};
-
-const isLinkyBankPaymentOfferStaggerRecord = (
-  value: unknown,
-): value is LinkyBankPaymentOfferStaggerRecord => {
-  const amountSat = readField(value, "amountSat");
-  const amountText = readField(value, "amountText");
-  const createdAtSec = readField(value, "createdAtSec");
-  const expiresAtSec = readField(value, "expiresAtSec");
-  const offerId = readField(value, "offerId");
-  const ownerPubkey = readField(value, "ownerPubkey");
-  const pending = readField(value, "pending");
-  return (
-    (amountSat === null ||
-      (typeof amountSat === "number" &&
-        Number.isFinite(amountSat) &&
-        amountSat > 0)) &&
-    typeof amountText === "string" &&
-    amountText.trim() !== "" &&
-    typeof createdAtSec === "number" &&
-    Number.isFinite(createdAtSec) &&
-    createdAtSec > 0 &&
-    typeof expiresAtSec === "number" &&
-    Number.isFinite(expiresAtSec) &&
-    expiresAtSec > 0 &&
-    typeof offerId === "string" &&
-    offerId.trim() !== "" &&
-    typeof ownerPubkey === "string" &&
-    ownerPubkey.trim() !== "" &&
-    Array.isArray(pending) &&
-    pending.every(isLinkyBankPaymentOfferStaggerRecipient)
-  );
-};
+const LinkyBankPaymentOfferStaggerRecord = Schema.Struct({
+  amountSat: Schema.NullOr(PositiveFiniteNumber),
+  amountText: NonBlankString,
+  createdAtSec: PositiveFiniteNumber,
+  expiresAtSec: PositiveFiniteNumber,
+  offerId: NonBlankString,
+  ownerPubkey: NonBlankString,
+  pending: Schema.Array(LinkyBankPaymentOfferStaggerRecipient),
+});
+export type LinkyBankPaymentOfferStaggerRecord =
+  typeof LinkyBankPaymentOfferStaggerRecord.Type;
 
 const getStaggerRecordStorageKey = (offerId: string): string =>
   `${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.${encodeURIComponent(offerId)}`;
@@ -333,18 +268,12 @@ const isExpiredStaggerRecord = (
 
 const readStaggerRecordByStorageKey = (
   storageKey: string,
-): LinkyBankPaymentOfferStaggerRecord | null => {
-  const raw = safeLocalStorageGet(storageKey);
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (isLinkyBankPaymentOfferStaggerRecord(parsed)) return parsed;
-  } catch {
-    // ignore corrupted storage content
-  }
-  return null;
-};
+): LinkyBankPaymentOfferStaggerRecord | null =>
+  safeLocalStorageGetJson(
+    storageKey,
+    Schema.NullOr(LinkyBankPaymentOfferStaggerRecord),
+    null,
+  );
 
 export const forgetLinkyBankPaymentOfferStaggerQueue = (
   offerId: string,
@@ -398,18 +327,6 @@ export const removeLinkyBankPaymentOfferStaggerRecipients = (
   }
   rememberLinkyBankPaymentOfferStaggerQueue({ ...record, pending });
 };
-
-const isLinkyBankPaymentOfferStatus = (
-  value: unknown,
-): value is LinkyBankPaymentOfferStatus =>
-  value === "accepted" ||
-  value === "accepted_by_other" ||
-  value === "bank_details_sent" ||
-  value === "bank_paid" ||
-  value === "canceled" ||
-  value === "declined" ||
-  value === "offered" ||
-  value === "settled";
 
 export const isLinkyBankPaymentOfferTerminalStatus = (
   status: LinkyBankPaymentOfferStatus,
@@ -487,89 +404,63 @@ export const getLinkyBankPaymentOfferMessageText = (
   return getOfferText(amountText, status);
 };
 
+// Only the identifying fields are strict; every timestamp and optional text
+// degrades to null so an offer from a newer or older build still renders.
+const LinkyBankPaymentOfferMessage = Schema.Struct({
+  amountSat: Schema.optional(Schema.Unknown),
+  amountText: NonBlankString,
+  bankPaidAtSec: Schema.optional(Schema.Unknown),
+  expiresAtSec: Schema.optional(Schema.Unknown),
+  extensionSec: Schema.optional(Schema.Unknown),
+  initiatedAtSec: Schema.optional(Schema.Unknown),
+  offerId: NonBlankString,
+  offererPublicKey: Schema.optional(Schema.Unknown),
+  spdPayload: Schema.optional(Schema.Unknown),
+  status: LinkyBankPaymentOfferStatus,
+  statusUpdatedAtSec: Schema.optional(Schema.Unknown),
+  text: Schema.optional(Schema.Unknown),
+  type: Schema.Literal("linky.bank_payment_offer"),
+});
+const decodeLinkyBankPaymentOfferMessage = Schema.decodeUnknownOption(
+  LinkyBankPaymentOfferMessage,
+);
+
+const isPositiveFiniteNumber = Schema.is(PositiveFiniteNumber);
+
+const readPositiveSeconds = (value: unknown): number | null =>
+  isPositiveFiniteNumber(value) ? Math.trunc(value) : null;
+
 export const getLinkyBankPaymentOfferInfo = (
   content: string,
 ): LinkyBankPaymentOfferInfo | null => {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(content);
-    const type = readField(parsed, "type");
-    if (type !== "linky.bank_payment_offer") return null;
-
-    const offerId = readField(parsed, "offerId");
-    const amountText = readField(parsed, "amountText");
-    const amountSat = readField(parsed, "amountSat");
-    const bankPaidAtSec = readField(parsed, "bankPaidAtSec");
-    const expiresAtSec = readField(parsed, "expiresAtSec");
-    const extensionSec = readField(parsed, "extensionSec");
-    const initiatedAtSec = readField(parsed, "initiatedAtSec");
-    const status = readField(parsed, "status");
-    const statusUpdatedAtSec = readField(parsed, "statusUpdatedAtSec");
-    if (typeof offerId !== "string" || !offerId.trim()) return null;
-    if (typeof amountText !== "string" || !amountText.trim()) return null;
-    if (!isLinkyBankPaymentOfferStatus(status)) return null;
-
-    const text = readField(parsed, "text");
-    const offererPublicKey = readField(parsed, "offererPublicKey");
-    const spdPayload = readField(parsed, "spdPayload");
-
-    return {
-      amountSat:
-        typeof amountSat === "number" &&
-        Number.isFinite(amountSat) &&
-        amountSat > 0
-          ? Math.round(amountSat)
-          : null,
-      amountText: amountText.trim(),
-      bankPaidAtSec:
-        typeof bankPaidAtSec === "number" &&
-        Number.isFinite(bankPaidAtSec) &&
-        bankPaidAtSec > 0
-          ? Math.trunc(bankPaidAtSec)
-          : null,
-      expiresAtSec:
-        typeof expiresAtSec === "number" &&
-        Number.isFinite(expiresAtSec) &&
-        expiresAtSec > 0
-          ? Math.trunc(expiresAtSec)
-          : null,
-      extensionSec:
-        typeof extensionSec === "number" &&
-        Number.isFinite(extensionSec) &&
-        extensionSec > 0
-          ? Math.trunc(extensionSec)
-          : null,
-      initiatedAtSec:
-        typeof initiatedAtSec === "number" &&
-        Number.isFinite(initiatedAtSec) &&
-        initiatedAtSec > 0
-          ? Math.trunc(initiatedAtSec)
-          : null,
-      offerId: offerId.trim(),
-      offererPublicKey:
-        typeof offererPublicKey === "string" && offererPublicKey.trim()
-          ? offererPublicKey.trim()
-          : null,
-      spdPayload:
-        typeof spdPayload === "string" && spdPayload.trim()
-          ? spdPayload.trim()
-          : null,
-      status,
-      statusUpdatedAtSec:
-        typeof statusUpdatedAtSec === "number" &&
-        Number.isFinite(statusUpdatedAtSec) &&
-        statusUpdatedAtSec > 0
-          ? Math.trunc(statusUpdatedAtSec)
-          : null,
-      text:
-        typeof text === "string" && text.trim()
-          ? text.trim()
-          : getOfferText(amountText.trim(), status),
-    };
+    parsed = JSON.parse(content);
   } catch {
-    // ignore invalid offer content
+    return null;
   }
+  const message = Option.getOrNull(decodeLinkyBankPaymentOfferMessage(parsed));
+  if (!message) return null;
 
-  return null;
+  const amountText = message.amountText.trim();
+  return {
+    amountSat: isPositiveFiniteNumber(message.amountSat)
+      ? Math.round(message.amountSat)
+      : null,
+    amountText,
+    bankPaidAtSec: readPositiveSeconds(message.bankPaidAtSec),
+    expiresAtSec: readPositiveSeconds(message.expiresAtSec),
+    extensionSec: readPositiveSeconds(message.extensionSec),
+    initiatedAtSec: readPositiveSeconds(message.initiatedAtSec),
+    offerId: message.offerId.trim(),
+    offererPublicKey: asNonEmptyString(message.offererPublicKey),
+    spdPayload: asNonEmptyString(message.spdPayload),
+    status: message.status,
+    statusUpdatedAtSec: readPositiveSeconds(message.statusUpdatedAtSec),
+    text:
+      asNonEmptyString(message.text) ??
+      getOfferText(amountText, message.status),
+  };
 };
 
 export const getLinkyBankPaymentOfferText = (

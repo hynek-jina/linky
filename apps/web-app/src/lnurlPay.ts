@@ -8,6 +8,7 @@ import {
 } from "./utils/lightningInvoice";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
+import { Schema } from "effect";
 import { isRecord } from "./utils/unknown";
 import { asNonEmptyString, isHttpUrl } from "./utils/validation";
 import { stripLightningPrefix } from "./utils/url";
@@ -19,24 +20,26 @@ const HOSTED_APP_ORIGIN = "https://app.linky.fit";
 // amount and still be paid without re-confirmation (fiat re-quotes, rounding).
 const FIXED_AMOUNT_REQUOTE_TOLERANCE = 0.02;
 
-type LnurlPayRequest = {
-  callback?: string;
-  commentAllowed?: number;
-  maxSendable?: number;
-  metadata?: string;
-  minSendable?: number;
-  reason?: string;
-  status?: string;
-  tag?: string;
-};
+const LnurlPayRequest = Schema.Struct({
+  callback: Schema.optional(Schema.String),
+  commentAllowed: Schema.optional(Schema.Number),
+  maxSendable: Schema.optional(Schema.Number),
+  metadata: Schema.optional(Schema.String),
+  minSendable: Schema.optional(Schema.Number),
+  reason: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.String),
+  tag: Schema.optional(Schema.String),
+});
+const isLnurlPayRequest = Schema.is(LnurlPayRequest);
 
-type LnurlInvoiceResponse = {
-  paymentRequest?: string;
-  pr?: string;
-  reason?: string;
-  status?: string;
-  successAction?: JsonValue;
-};
+const LnurlInvoiceResponse = Schema.Struct({
+  paymentRequest: Schema.optional(Schema.String),
+  pr: Schema.optional(Schema.String),
+  reason: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.String),
+  successAction: Schema.optional(Schema.Unknown),
+});
+const isLnurlInvoiceResponse = Schema.is(LnurlInvoiceResponse);
 
 interface LnurlPaySuccessActionMessage {
   message: string;
@@ -59,21 +62,25 @@ export interface LnurlPayInvoiceResult {
   successAction: LnurlPaySuccessAction | null;
 }
 
-type LnurlWithdrawRequest = {
-  callback?: string;
-  defaultDescription?: string;
-  k1?: string;
-  maxWithdrawable?: number;
-  minWithdrawable?: number;
-  reason?: string;
-  status?: string;
-  tag?: string;
-};
+const LnurlWithdrawRequest = Schema.Struct({
+  callback: Schema.optional(Schema.String),
+  defaultDescription: Schema.optional(Schema.String),
+  k1: Schema.optional(Schema.String),
+  maxWithdrawable: Schema.optional(Schema.Number),
+  minWithdrawable: Schema.optional(Schema.Number),
+  reason: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.String),
+  tag: Schema.optional(Schema.String),
+});
+const isLnurlWithdrawRequest = Schema.is(LnurlWithdrawRequest);
 
-type LnurlWithdrawCallbackResponse = {
-  reason?: string;
-  status?: string;
-};
+const LnurlWithdrawCallbackResponse = Schema.Struct({
+  reason: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.String),
+});
+const isLnurlWithdrawCallbackResponse = Schema.is(
+  LnurlWithdrawCallbackResponse,
+);
 
 export interface LnurlWithdrawPreview {
   amountSat: number;
@@ -107,14 +114,6 @@ export class LnurlTagMismatchError extends Error {
     this.tag = tag;
   }
 }
-
-const isOptionalNumber = (value: unknown): value is number | undefined => {
-  return value === undefined || typeof value === "number";
-};
-
-const isOptionalString = (value: unknown): value is string | undefined => {
-  return value === undefined || typeof value === "string";
-};
 
 const isKnownLnurlTag = (
   value: string | undefined,
@@ -288,32 +287,6 @@ export const inferLightningAddressFromLnurlTarget = (
   return inferLightningAddressFromRequestUrl(requestUrl);
 };
 
-const isLnurlPayRequest = (value: unknown): value is LnurlPayRequest => {
-  if (!isRecord(value)) return false;
-  return (
-    isOptionalString(value.callback) &&
-    isOptionalNumber(value.commentAllowed) &&
-    isOptionalNumber(value.maxSendable) &&
-    isOptionalString(value.metadata) &&
-    isOptionalNumber(value.minSendable) &&
-    isOptionalString(value.reason) &&
-    isOptionalString(value.status) &&
-    isOptionalString(value.tag)
-  );
-};
-
-const isLnurlInvoiceResponse = (
-  value: unknown,
-): value is LnurlInvoiceResponse => {
-  if (!isRecord(value)) return false;
-  return (
-    isOptionalString(value.paymentRequest) &&
-    isOptionalString(value.pr) &&
-    isOptionalString(value.reason) &&
-    isOptionalString(value.status)
-  );
-};
-
 const parseLnurlPaySuccessAction = (
   value: unknown,
 ): LnurlPaySuccessAction | null => {
@@ -350,29 +323,6 @@ const parseLnurlPaySuccessAction = (
   // caller can fall back to a generic "Paid" message; we only render the
   // tags we know how to display safely.
   return null;
-};
-
-const isLnurlWithdrawRequest = (
-  value: unknown,
-): value is LnurlWithdrawRequest => {
-  if (!isRecord(value)) return false;
-  return (
-    isOptionalString(value.callback) &&
-    isOptionalString(value.defaultDescription) &&
-    isOptionalString(value.k1) &&
-    isOptionalNumber(value.maxWithdrawable) &&
-    isOptionalNumber(value.minWithdrawable) &&
-    isOptionalString(value.reason) &&
-    isOptionalString(value.status) &&
-    isOptionalString(value.tag)
-  );
-};
-
-const isLnurlWithdrawCallbackResponse = (
-  value: unknown,
-): value is LnurlWithdrawCallbackResponse => {
-  if (!isRecord(value)) return false;
-  return isOptionalString(value.reason) && isOptionalString(value.status);
 };
 
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
