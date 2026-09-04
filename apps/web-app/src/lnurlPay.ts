@@ -3,7 +3,7 @@ import { isNativePlatform } from "./platform/runtime";
 import {
   getLightningInvoiceDescriptionHashHex,
   parseBolt11AmountMsat,
-} from "./utils/lightningInvoice";
+} from "@linky/linkshu";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 import { Schema } from "effect";
@@ -11,6 +11,7 @@ import { isRecord } from "./utils/unknown";
 import { asNonEmptyString, isHttpUrl } from "./utils/validation";
 import { stripLightningPrefix } from "./utils/url";
 import { splitLightningAddress } from "./utils/lightningAddress";
+
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
 

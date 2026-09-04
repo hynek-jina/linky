@@ -52,7 +52,7 @@ import {
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
-} from "../../../utils/lightningInvoice";
+} from "@linky/linkshu";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   formatMintHost,

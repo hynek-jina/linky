@@ -17,7 +17,7 @@ import { parseNativeDeepLinkUrl } from "../../utils/deepLinks";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
-} from "../../utils/lightningInvoice";
+} from "@linky/linkshu";
 import { isBankPaymentPayload, parseBankPayment } from "../../utils/spdPayment";
 import {
   parseCashuPaymentRequestMessage,

@@ -13,7 +13,7 @@ import type {
   DisplayAmountParts,
   DisplayCurrency,
 } from "../../utils/displayAmounts";
-import type { LightningInvoicePreview } from "../../utils/lightningInvoice";
+import type { LightningInvoicePreview } from "@linky/linkshu";
 import type {
   MainSwipeRoutesProps,
   MoneyRoutesProps,

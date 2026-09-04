@@ -1,6 +1,6 @@
 import type { JsonValue } from "../types/json";
-import type { LightningInvoicePreview } from "./lightningInvoice";
-import { getLightningInvoicePreview } from "./lightningInvoice";
+import type { LightningInvoicePreview } from "@linky/linkshu";
+import { getLightningInvoicePreview } from "@linky/linkshu";
 import { getUnknownErrorMessage } from "./unknown";
 import { asNonEmptyString, asRecord } from "./validation";
 import { sleep } from "./time";

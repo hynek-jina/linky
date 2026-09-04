@@ -17,6 +17,7 @@ import { calculateTransactionHistoryFee } from "../app/lib/transactionHistoryFee
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
 import type { Translate } from "../i18n";
+import { getLightningInvoicePreview } from "@linky/linkshu";
 import type { JsonValue } from "../types/json";
 import {
   formatInteger,

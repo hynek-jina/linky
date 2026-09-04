@@ -89,7 +89,7 @@
     },
     "apps/web-app": {
       "name": "@linky/web-app",
-      "version": "26.9.6",
+      "version": "26.9.7",
       "dependencies": {
         "@capacitor/clipboard": "^7.0.0",
         "@capacitor/core": "^7.4.3",
@@ -181,6 +181,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@cashu/cashu-ts": "^4.0.0",
+        "@scure/base": "^2.0.0",
         "effect": "^3.19.19",
       },
       "devDependencies": {

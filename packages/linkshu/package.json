@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@cashu/cashu-ts": "^4.0.0",
-    "effect": "^3.19.19"
+    "effect": "^3.19.19",
+    "@scure/base": "^2.0.0"
   },
   "devDependencies": {
     "@linky/config": "workspace:*",
