@@ -6,13 +6,26 @@ import type { JsonValue } from "../../../types/json";
 import {
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
   LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
+  LOCAL_NPUB_CASH_UPSTREAM_QUOTES_STORAGE_KEY_PREFIX,
 } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
 import {
   isNpubCashDisabled,
   NPUB_CASH_SERVER_BASE_URL,
+  NPUB_CASH_UPSTREAM_BASE_URL,
 } from "../../../utils/npubCashServer";
+import {
+  isUpstreamQuoteSettled,
+  listUpstreamPaidQuotes,
+  parseUpstreamQuoteLedger,
+  settleUpstreamQuotes,
+} from "../../../utils/npubCashUpstreamQuotes";
+import type {
+  SettledUpstreamQuote,
+  UpstreamPaidQuote,
+  UpstreamPaidQuotesListing,
+} from "../../../utils/npubCashUpstreamQuotes";
 import type { Route } from "../../../types/route";
 import {
   safeLocalStorageGet,
@@ -20,18 +33,26 @@ import {
   withLocalStorageLeaseLock,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
+import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
+import { reportInspectorRows } from "../../../devtools/inspector/reportInspectorRows";
 import type {
   LocalMintInfoRow,
   LoggedPaymentEventParams,
+  PaymentTelemetryMethod,
 } from "../../types/appTypes";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
-import type { ReceiveCashuToken } from "../composition/useLinkshuComposition";
+import type {
+  AdoptPaidCashuQuote,
+  ReceiveCashuToken,
+} from "../composition/useLinkshuComposition";
 
 interface UseNpubCashClaimParams {
+  /** Null until the linkshu runtime is composed (seed + owners resolved). */
+  adoptPaidCashuQuote: AdoptPaidCashuQuote | null;
   cashuIsBusy: boolean;
   currentNpub: string | null;
   currentNsec: string | null;
-  enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
+  enqueueCashuOp: <T>(op: () => Promise<T>) => Promise<T>;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
@@ -73,14 +94,54 @@ const readLastClaimAttemptMs = (key: string): number => {
   return Number.isFinite(value) && value > 0 ? value : 0;
 };
 
+interface ReceivedPayment {
+  readonly amount: number;
+  readonly mint: string;
+  readonly unit: string | null;
+  readonly method: PaymentTelemetryMethod;
+  readonly details?: JsonValue;
+}
+
+const reportUpstreamQuotesListed = (
+  listing: UpstreamPaidQuotesListing,
+  fresh: readonly UpstreamPaidQuote[],
+  since: number | null,
+): void => {
+  if (!getInspectorEmissionEnabled()) return;
+  reportInspectorRows([
+    {
+      at: Date.now(),
+      channel: "cashu",
+      tag: "npubCash.upstreamQuotesListed",
+      summary: `npub.cash lists ${listing.paid.length} paid quotes, ${fresh.length} new`,
+      links: { quote: fresh.map((quote) => quote.quoteId) },
+      context: { server: NPUB_CASH_UPSTREAM_BASE_URL },
+      payload: {
+        since,
+        complete: listing.complete,
+        paid: listing.paid.length,
+        fresh: fresh.map(({ quoteId, mint, amountSat, locked }) => ({
+          quoteId,
+          mint,
+          amountSat,
+          locked,
+        })),
+      },
+    },
+  ]);
+};
+
 /**
- * npub.cash claim: fetched tokens are accepted through linkshu `Receive` —
- * the same vertical as pasted tokens — which owns parse/dedup/swap/persist.
- * Only the claim polling, its lock/interval bookkeeping, and the app-side
- * notifications live here. Transient accept failures persist no row; the
- * next claim poll simply retries the token.
+ * Collects payments made to the user's lightning addresses, on both hosts
+ * that resolve the same npub and regardless of which `lud16` the profile
+ * publishes: Linky's own server hands proofs over as tokens (accepted through
+ * linkshu `Receive`, like a pasted token), upstream npub.cash only lists paid
+ * mint quotes, which linkshu `Topup.adopt` mints. Only the polling, its
+ * lock/interval/cursor bookkeeping, and the app-side notifications live here.
+ * Transient failures persist nothing; the next poll simply retries.
  */
 export const useNpubCashClaim = ({
+  adoptPaidCashuQuote,
   cashuIsBusy,
   currentNpub,
   currentNsec,
@@ -104,6 +165,70 @@ export const useNpubCashClaim = ({
   t,
   touchMintInfo,
 }: UseNpubCashClaimParams) => {
+  const announceReceived = React.useCallback(
+    ({ amount, mint, unit, method, details }: ReceivedPayment) => {
+      const cleanedMint = mint.trim().replace(/\/+$/, "");
+      if (cleanedMint && !isMintDeleted(cleanedMint)) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const existing = mintInfoByUrl.get(cleanedMint);
+        touchMintInfo(cleanedMint, nowSec);
+
+        const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+        if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
+      }
+
+      logPaymentEvent({
+        direction: "in",
+        status: "ok",
+        amount,
+        fee: null,
+        mint,
+        unit,
+        error: null,
+        contactId: null,
+        method,
+        phase: "receive",
+        ...(details === undefined ? {} : { details }),
+      });
+
+      const displayAmount =
+        amount > 0 ? formatDisplayedAmountParts(amount) : null;
+
+      if (routeKind !== "topupInvoice") {
+        showPaidOverlay(
+          displayAmount === null
+            ? t("cashuAccepted")
+            : t("paidReceived")
+                .replace(
+                  "{amount}",
+                  `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                )
+                .replace("{unit}", displayAmount.unitLabel),
+        );
+      }
+
+      void maybeShowPwaNotification(
+        t("mints"),
+        displayAmount === null
+          ? t("cashuAccepted")
+          : `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`,
+        "cashu_claim",
+      );
+    },
+    [
+      formatDisplayedAmountParts,
+      isMintDeleted,
+      logPaymentEvent,
+      maybeShowPwaNotification,
+      mintInfoByUrl,
+      refreshMintInfo,
+      routeKind,
+      showPaidOverlay,
+      t,
+      touchMintInfo,
+    ],
+  );
+
   const acceptAndStoreCashuToken = React.useCallback(
     async (tokenText: string) => {
       const tokenRaw = tokenText.trim();
@@ -145,55 +270,12 @@ export const useNpubCashClaim = ({
 
           const receipt = outcome.right;
           rememberCashuTokenKnown(tokenRaw, receipt.tokenText);
-
-          const cleanedMint = String(receipt.mint).trim().replace(/\/+$/, "");
-          if (cleanedMint && !isMintDeleted(cleanedMint)) {
-            const nowSec = Math.floor(Date.now() / 1000);
-            const existing = mintInfoByUrl.get(cleanedMint);
-            touchMintInfo(cleanedMint, nowSec);
-
-            const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
-            if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
-          }
-
-          logPaymentEvent({
-            direction: "in",
-            status: "ok",
+          announceReceived({
             amount: receipt.amount,
-            fee: null,
             mint: receipt.mint,
             unit: receipt.unit,
-            error: null,
-            contactId: null,
             method: "cashu_receive",
-            phase: "receive",
           });
-
-          const displayAmount =
-            receipt.amount > 0
-              ? formatDisplayedAmountParts(receipt.amount)
-              : null;
-
-          if (routeKind !== "topupInvoice") {
-            showPaidOverlay(
-              displayAmount === null
-                ? t("cashuAccepted")
-                : t("paidReceived")
-                    .replace(
-                      "{amount}",
-                      `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-                    )
-                    .replace("{unit}", displayAmount.unitLabel),
-            );
-          }
-
-          void maybeShowPwaNotification(
-            t("mints"),
-            displayAmount === null
-              ? t("cashuAccepted")
-              : `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`,
-            "cashu_claim",
-          );
         } catch (error) {
           const message = getUnknownErrorMessage(error, "Accept failed");
           logFailure(message);
@@ -204,23 +286,127 @@ export const useNpubCashClaim = ({
       });
     },
     [
+      announceReceived,
       enqueueCashuOp,
-      formatDisplayedAmountParts,
-      isMintDeleted,
       logPaymentEvent,
-      maybeShowPwaNotification,
-      mintInfoByUrl,
       receiveCashuToken,
-      refreshMintInfo,
       rememberCashuTokenKnown,
-      routeKind,
       setCashuIsBusy,
       setStatus,
-      showPaidOverlay,
       t,
-      touchMintInfo,
     ],
   );
+
+  const claimFromLinkyServer = React.useCallback(async () => {
+    const url = `${NPUB_CASH_SERVER_BASE_URL}/api/v1/claim`;
+    const auth = await makeNip98AuthHeader(url, "GET");
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: auth },
+    });
+    if (!res.ok) return;
+    const json = (await res.json()) as JsonValue;
+    for (const tokenText of extractUniqueClaimTokens(json)) {
+      await acceptAndStoreCashuToken(tokenText);
+    }
+  }, [acceptAndStoreCashuToken, makeNip98AuthHeader]);
+
+  /**
+   * One quote at a time through the wallet queue. A definitive answer —
+   * minted, minted elsewhere, or rejected by the mint — settles the quote in
+   * the ledger; a transient one leaves it for the next sweep.
+   */
+  const adoptUpstreamQuote = React.useCallback(
+    async (quote: UpstreamPaidQuote): Promise<boolean> => {
+      if (adoptPaidCashuQuote === null) return false;
+      const outcome = await enqueueCashuOp(async () => {
+        setCashuIsBusy(true);
+        try {
+          return await adoptPaidCashuQuote({
+            mint: quote.mint,
+            quoteId: quote.quoteId,
+            amountSat: quote.amountSat,
+            invoice: quote.invoice,
+            expiresAt: quote.expiresAt,
+            locked: quote.locked,
+          });
+        } finally {
+          setCashuIsBusy(false);
+        }
+      });
+
+      if (Either.isRight(outcome)) {
+        const receipt = outcome.right;
+        rememberCashuTokenKnown(receipt.tokenText);
+        announceReceived({
+          amount: receipt.amount,
+          mint: receipt.mint,
+          unit: "sat",
+          method: "lightning_address",
+          details: { lightningInvoice: quote.invoice, quoteId: quote.quoteId },
+        });
+        return true;
+      }
+
+      const error = outcome.left;
+      if (error._tag === "QuoteAlreadyIssued") return true;
+      const definitive = error._tag === "MintRejected";
+      logPaymentEvent({
+        direction: "in",
+        status: "error",
+        amount: quote.amountSat,
+        fee: null,
+        mint: quote.mint,
+        unit: "sat",
+        error: describeTaggedCashuError(error) ?? error._tag,
+        contactId: null,
+        method: "lightning_address",
+        phase: "receive",
+        details: { quoteId: quote.quoteId, retry: !definitive },
+      });
+      return definitive;
+    },
+    [
+      adoptPaidCashuQuote,
+      announceReceived,
+      enqueueCashuOp,
+      logPaymentEvent,
+      rememberCashuTokenKnown,
+      setCashuIsBusy,
+    ],
+  );
+
+  const sweepUpstreamPaidQuotes = React.useCallback(async () => {
+    if (adoptPaidCashuQuote === null) return;
+    const ledgerKey = makeLocalStorageKey(
+      LOCAL_NPUB_CASH_UPSTREAM_QUOTES_STORAGE_KEY_PREFIX,
+    );
+    const ledger = parseUpstreamQuoteLedger(safeLocalStorageGet(ledgerKey));
+    const listing = await listUpstreamPaidQuotes({
+      baseUrl: NPUB_CASH_UPSTREAM_BASE_URL,
+      since: ledger.since,
+      makeNip98AuthHeader,
+    });
+    if (listing === null) return;
+    const fresh = listing.paid.filter(
+      (quote) => !isUpstreamQuoteSettled(ledger, quote.quoteId),
+    );
+    reportUpstreamQuotesListed(listing, fresh, ledger.since);
+
+    const settled: SettledUpstreamQuote[] = [];
+    for (const quote of fresh) {
+      if (await adoptUpstreamQuote(quote)) settled.push(quote);
+    }
+    safeLocalStorageSet(
+      ledgerKey,
+      JSON.stringify(settleUpstreamQuotes(ledger, settled, listing.complete)),
+    );
+  }, [
+    adoptPaidCashuQuote,
+    adoptUpstreamQuote,
+    makeLocalStorageKey,
+    makeNip98AuthHeader,
+  ]);
 
   const claimNpubCashOnce = React.useCallback(async () => {
     // Don't claim while we are paying/accepting, otherwise we risk consuming
@@ -259,19 +445,16 @@ export const useNpubCashClaim = ({
 
           npubCashClaimInFlightRef.current = true;
           try {
-            const url = `${NPUB_CASH_SERVER_BASE_URL}/api/v1/claim`;
-            const auth = await makeNip98AuthHeader(url, "GET");
-            const res = await fetch(url, {
-              method: "GET",
-              headers: { Authorization: auth },
-            });
-            if (!res.ok) return;
-            const json = (await res.json()) as JsonValue;
-            const tokens = extractUniqueClaimTokens(json);
-            if (tokens.length === 0) return;
-
-            for (const tokenText of tokens) {
-              await acceptAndStoreCashuToken(tokenText);
+            // Each host on its own: one being down must not starve the other.
+            for (const collect of [
+              claimFromLinkyServer,
+              sweepUpstreamPaidQuotes,
+            ]) {
+              try {
+                await collect();
+              } catch (error) {
+                console.warn("[linky][npubcash] collect failed", error);
+              }
             }
           } finally {
             npubCashClaimInFlightRef.current = false;
@@ -282,16 +465,16 @@ export const useNpubCashClaim = ({
       // ignore
     }
   }, [
-    acceptAndStoreCashuToken,
     cashuIsBusy,
+    claimFromLinkyServer,
     currentNpub,
     currentNsec,
     makeLocalStorageKey,
-    makeNip98AuthHeader,
     npubCashClaimInFlightRef,
     receiveCashuToken,
     resolveOwnerIdForWrite,
     routeKind,
+    sweepUpstreamPaidQuotes,
   ]);
 
   const claimNpubCashOnceLatestRef = React.useRef(claimNpubCashOnce);

@@ -101,7 +101,7 @@ const startTopup = (mint: MintUrl, amount: Amount): Command =>
 
 const resumeTopups: Command = Effect.scoped(
   Effect.gen(function* () {
-    const handles = yield* (yield* Topup).resumePending;
+    const handles = yield* (yield* Topup).resumePending();
     if (handles.length === 0) {
       print("no pending topups");
       return;

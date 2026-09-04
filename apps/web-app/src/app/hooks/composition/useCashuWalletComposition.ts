@@ -379,11 +379,17 @@ export const useCashuWalletComposition = ({
   const [tokensRestoreIsBusy, setTokensRestoreIsBusy] = useState(false);
 
   const cashuOpQueueRef = React.useRef<Promise<void>>(Promise.resolve());
-  const enqueueCashuOp = React.useCallback((op: () => Promise<void>) => {
-    const next = cashuOpQueueRef.current.then(op, op);
-    cashuOpQueueRef.current = next.catch(() => {});
-    return next;
-  }, []);
+  const enqueueCashuOp = React.useCallback(
+    <T>(op: () => Promise<T>): Promise<T> => {
+      const next = cashuOpQueueRef.current.then(op, op);
+      cashuOpQueueRef.current = next.then(
+        () => undefined,
+        () => undefined,
+      );
+      return next;
+    },
+    [],
+  );
 
   const [defaultMintUrl, setDefaultMintUrl] = useState<string | null>(null);
   const [defaultMintUrlDraft, setDefaultMintUrlDraft] = useState<string>("");
@@ -642,6 +648,7 @@ export const useCashuWalletComposition = ({
   );
 
   const {
+    adoptPaidCashuQuote,
     autoswapCashu,
     cashuTokenLifecycle,
     checkAllCashuTokens,
@@ -1006,6 +1013,7 @@ export const useCashuWalletComposition = ({
   ]);
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
+    adoptPaidCashuQuote,
     cashuIsBusy,
     currentNpub: nostrBootstrapReady ? currentNpub : null,
     currentNsec: nostrBootstrapReady ? currentNsec : null,

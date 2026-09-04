@@ -1,16 +1,24 @@
+import { Mint, Wallet } from "@cashu/cashu-ts";
+import type { MintQuoteBolt11Response } from "@cashu/cashu-ts";
 import { Effect, Layer } from "effect";
+import { createECDH } from "node:crypto";
 import {
   Amount,
   Bip39Seed,
+  Bolt11Invoice,
   KeyValueStore,
   makeInMemoryKeyValueStore,
   makeInMemoryTokenStore,
   MintUrl,
+  PaidQuoteDraft,
+  QuoteId,
+  QuoteLockingKey,
   Send,
   SendDraft,
   TokenStore,
   Topup,
   TopupDraft,
+  UnixSeconds,
   runLinkshu,
 } from "../../src";
 import type { Bip39Seed as Bip39SeedType } from "../../src";
@@ -113,7 +121,7 @@ describe("topup vertical against the local mint", () => {
       { bip39Seed: seed, ...layers },
       Effect.scoped(
         Effect.gen(function* () {
-          const handles = yield* (yield* Topup).resumePending;
+          const handles = yield* (yield* Topup).resumePending();
           const first = handles[0];
           if (first === undefined) throw new Error("no pending topup resumed");
           const receipt = yield* first.result;
@@ -168,7 +176,7 @@ describe("topup vertical against the local mint", () => {
         { bip39Seed: seed, ...layers },
         Effect.scoped(
           Effect.gen(function* () {
-            const handles = yield* (yield* Topup).resumePending;
+            const handles = yield* (yield* Topup).resumePending();
             const first = handles[0];
             return first === undefined ? null : yield* first.result;
           }),
@@ -186,5 +194,97 @@ describe("topup vertical against the local mint", () => {
       await Effect.runPromise(kv.listKeys(PENDING_TOPUP_KEY_PREFIX)),
     ).toEqual([]);
     expect(await Effect.runPromise(tokens.loadAll)).toHaveLength(1);
+  });
+});
+
+// A quote created by someone else (here: directly through cashu-ts, standing
+// in for an npub.cash server) and settled by the FakeWallet backend.
+describe("adopting externally paid quotes against the local mint", () => {
+  const loadWallet = async () => {
+    const wallet = new Wallet(new Mint(mintUrl), { unit: "sat" });
+    await wallet.loadMint();
+    return wallet;
+  };
+
+  const secp256k1Keypair = () => {
+    const ecdh = createECDH("secp256k1");
+    ecdh.generateKeys();
+    return {
+      privkey: QuoteLockingKey.make(
+        ecdh.getPrivateKey("hex").padStart(64, "0"),
+      ),
+      pubkey: ecdh.getPublicKey("hex", "compressed"),
+    };
+  };
+
+  const draftOf = (
+    quote: MintQuoteBolt11Response,
+    amount: number,
+    locked: boolean,
+  ) =>
+    new PaidQuoteDraft({
+      quoteId: QuoteId.make(quote.quote),
+      mint: mintUrl,
+      amount: Amount.make(amount),
+      invoice: Bolt11Invoice.make(quote.request),
+      expiresAt: quote.expiry ? UnixSeconds.make(quote.expiry) : null,
+      locked,
+    });
+
+  it("mints an unlocked quote once and reports it issued the second time", async () => {
+    const seed = randomSeed();
+    const { kv, tokens, layers } = durableStorage();
+    const wallet = await loadWallet();
+    const quote = await wallet.createMintQuoteBolt11(24);
+    const draft = draftOf(quote, 24, false);
+
+    const adoptOnce = () =>
+      runLinkshu(
+        { bip39Seed: seed, ...layers },
+        Effect.flatMap(Topup, (topup) => Effect.either(topup.adopt(draft))),
+      );
+
+    const first = await adoptOnce();
+    assert(first._tag === "Right");
+    expect(first.right.amount).toBe(24);
+    expect(first.right.quoteId).toBe(quote.quote);
+
+    const second = await adoptOnce();
+    assert(second._tag === "Left");
+    expect(second.left._tag).toBe("QuoteAlreadyIssued");
+
+    expect(await Effect.runPromise(tokens.loadAll)).toHaveLength(1);
+    expect(
+      await Effect.runPromise(kv.listKeys(PENDING_TOPUP_KEY_PREFIX)),
+    ).toEqual([]);
+  });
+
+  it("mints a NUT-20 locked quote with its key and rejects it without", async () => {
+    const seed = randomSeed();
+    const { tokens, layers } = durableStorage();
+    const { privkey, pubkey } = secp256k1Keypair();
+    const wallet = await loadWallet();
+    const quote = await wallet.createLockedMintQuote(40, pubkey);
+    const draft = draftOf(quote, 40, true);
+
+    const withoutKey = await runLinkshu(
+      { bip39Seed: seed, ...layers },
+      Effect.flatMap(Topup, (topup) => Effect.either(topup.adopt(draft))),
+    );
+    assert(withoutKey._tag === "Left");
+    expect(withoutKey.left._tag).toBe("MintRejected");
+
+    const withKey = await runLinkshu(
+      { bip39Seed: seed, ...layers },
+      Effect.flatMap(Topup, (topup) =>
+        Effect.either(topup.adopt(draft, { lockingKey: privkey })),
+      ),
+    );
+    assert(withKey._tag === "Right");
+    expect(withKey.right.amount).toBe(40);
+
+    const rows = await Effect.runPromise(tokens.loadAll);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].state).toBe("accepted");
   });
 });

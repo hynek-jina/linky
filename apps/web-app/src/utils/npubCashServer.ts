@@ -7,3 +7,8 @@ export const isNpubCashDisabled = (): boolean =>
 // npub.cash-compatible server, so hosted info/claim/mint-sync calls go here
 // no matter which `lud16` the profile currently publishes.
 export const NPUB_CASH_SERVER_BASE_URL = "https://npub.linky.fit";
+
+// The same npub is also payable as `<npub>@npub.cash`. Upstream's v2 API
+// hands out paid mint quotes instead of tokens, so the wallet sweeps it
+// separately (`npubCashUpstreamQuotes.ts`) and mints what it finds.
+export const NPUB_CASH_UPSTREAM_BASE_URL = "https://npub.cash";

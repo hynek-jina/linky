@@ -99,6 +99,19 @@ export class PaymentFailed extends Schema.TaggedError<PaymentFailed>()(
 ) {}
 
 /**
+ * The mint already issued this quote's proofs and no attempt of this wallet
+ * reserved counter slots for it, so another wallet holds them; nothing to
+ * mint or reclaim here.
+ */
+export class QuoteAlreadyIssued extends Schema.TaggedError<QuoteAlreadyIssued>()(
+  "QuoteAlreadyIssued",
+  {
+    quoteId: QuoteId,
+    mint: MintUrl,
+  },
+) {}
+
+/**
  * The cross-context lease protecting this deterministic counter could not be
  * acquired in time; another tab/process holds it. Nothing was derived.
  */

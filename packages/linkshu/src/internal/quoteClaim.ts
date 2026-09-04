@@ -1,4 +1,5 @@
 import type {
+  MintProofsConfig,
   MintQuoteBolt11Response,
   Proof as CashuProof,
 } from "@cashu/cashu-ts";
@@ -87,6 +88,8 @@ export interface QuoteClaimContext<R extends ClaimableQuote> {
   readonly wallet: LoadedWallet;
   /** Lifecycle reason recorded on the row the claim inserts. */
   readonly reason: string;
+  /** Passed to the mint call as-is, e.g. the NUT-20 key of a locked quote. */
+  readonly mintConfig?: MintProofsConfig | undefined;
   readonly withMintCounter: (record: R, counter: number) => R;
   readonly persist: (record: R) => Effect.Effect<void>;
   readonly clear: (record: R) => Effect.Effect<void>;
@@ -265,7 +268,7 @@ export const claimMintQuote = <R extends ClaimableQuote>(
               ctx.wallet.mintProofsBolt11(
                 record.amount,
                 record.quoteId,
-                undefined,
+                ctx.mintConfig,
                 { type: "deterministic", counter },
               ),
             catch: (error): unknown => error,

@@ -43,6 +43,8 @@ export class PendingTopup extends Schema.Class<PendingTopup>("PendingTopup")({
    * of burning a second block.
    */
   mintCounter: Schema.NullOr(Schema.Int),
+  /** NUT-20 locked quote: minting needs the owner's key. Absent in records written before adoption existed. */
+  locked: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 }) {}
 
 export const pendingTopupKey = (mint: MintUrl, quoteId: QuoteId): string =>
@@ -67,6 +69,16 @@ export const removePendingTopup = (
   pending: PendingTopup,
 ): Effect.Effect<void> =>
   kv.remove(pendingTopupKey(pending.mint, pending.quoteId));
+
+export const readPendingTopup = (
+  kv: KeyValueStoreService,
+  mint: MintUrl,
+  quoteId: QuoteId,
+): Effect.Effect<PendingTopup | null> =>
+  Effect.map(kv.get(pendingTopupKey(mint, quoteId)), (raw) => {
+    const decoded = decodePending(raw);
+    return decoded._tag === "Some" ? decoded.value : null;
+  });
 
 /** Every stored record; entries that no longer decode are dropped. */
 export const readPendingTopups = (

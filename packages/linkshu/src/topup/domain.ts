@@ -3,6 +3,7 @@ import {
   CounterLockTimeout,
   MintRejected,
   MintUnreachable,
+  QuoteAlreadyIssued,
   QuoteExpired,
 } from "../domain/errors";
 import {
@@ -44,6 +45,42 @@ export const TopupError = Schema.Union(
   CounterLockTimeout,
 );
 export type TopupError = typeof TopupError.Type;
+
+/**
+ * A bolt11 mint quote created and settled outside this wallet: a lightning
+ * address server requested it at `mint` on the owner's behalf and reports the
+ * invoice paid. A `locked` quote (NUT-20) is bound to the owner's key.
+ */
+export class PaidQuoteDraft extends Schema.Class<PaidQuoteDraft>(
+  "PaidQuoteDraft",
+)({
+  quoteId: QuoteId,
+  mint: MintUrl,
+  amount: Amount,
+  invoice: Bolt11Invoice,
+  expiresAt: Schema.NullOr(UnixSeconds),
+  locked: Schema.Boolean,
+}) {}
+
+/** Hex secp256k1 secret a NUT-20 locked quote is bound to; never persisted. */
+export const QuoteLockingKey = Schema.String.pipe(
+  Schema.pattern(/^[0-9a-f]{64}$/),
+  Schema.brand("QuoteLockingKey"),
+);
+export type QuoteLockingKey = typeof QuoteLockingKey.Type;
+
+export interface TopupLockingOptions {
+  /** Unlocks NUT-20 locked quotes; a locked record without it is rejected. */
+  readonly lockingKey?: QuoteLockingKey | undefined;
+}
+
+export const TopupAdoptError = Schema.Union(
+  MintUnreachable,
+  MintRejected,
+  QuoteAlreadyIssued,
+  CounterLockTimeout,
+);
+export type TopupAdoptError = typeof TopupAdoptError.Type;
 
 /**
  * A running topup: `quote` is available immediately for display; `result`

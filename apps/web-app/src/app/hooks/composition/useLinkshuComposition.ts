@@ -8,6 +8,8 @@ import {
   Melt,
   MeltDraft,
   NonNegativeAmount,
+  PaidQuoteDraft,
+  QuoteLockingKey,
   Receive,
   ReceiveDraft,
   Restore,
@@ -22,6 +24,8 @@ import {
   Validation,
   WalletBalances,
 } from "@linky/linkshu";
+import { decodeNsec } from "@linky/linkstr";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import type {
   AutoswapClaimResult,
   AutoswapError,
@@ -43,6 +47,7 @@ import type {
   SendError,
   SendReceipt,
   TokenRowNotFound,
+  TopupAdoptError,
   TopupError,
   TopupHandle,
   TopupQuote,
@@ -157,6 +162,23 @@ export type ResumePendingCashuTopups = () => Promise<
   ReadonlyArray<CashuTopupHandle>
 >;
 
+export interface AdoptPaidCashuQuoteArgs {
+  readonly mint: string;
+  readonly quoteId: string;
+  readonly amountSat: number;
+  readonly invoice: string;
+  readonly expiresAt: number | null;
+  readonly locked: boolean;
+}
+
+/**
+ * linkshu `Topup.adopt`: mints a quote a lightning-address server created
+ * and reports paid. Invalid input and defects reject.
+ */
+export type AdoptPaidCashuQuote = (
+  args: AdoptPaidCashuQuoteArgs,
+) => Promise<Either.Either<TopupReceipt, TopupAdoptError>>;
+
 export interface AutoswapCashuArgs {
   readonly sourceMint: string;
   readonly targetMint: string;
@@ -224,6 +246,19 @@ const decodeMeltDraft = Schema.decodeUnknownSync(MeltDraft);
 const decodeFeeProbeDraft = Schema.decodeUnknownSync(FeeProbeDraft);
 const decodeRestoreDraft = Schema.decodeUnknownSync(RestoreDraft);
 const decodeTopupDraft = Schema.decodeUnknownSync(TopupDraft);
+const decodePaidQuoteDraft = Schema.decodeUnknownSync(PaidQuoteDraft);
+
+/**
+ * NUT-20 locked quotes from npub.cash are bound to the nostr key, so the
+ * same secret unlocks them. It reaches linkshu only as a mint-call argument.
+ */
+const quoteLockingKeyOf = (nsec: string | null): QuoteLockingKey | null => {
+  if (!nsec) return null;
+  const secretKey = decodeNsec(nsec);
+  return secretKey === null
+    ? null
+    : QuoteLockingKey.make(bytesToHex(secretKey));
+};
 
 /**
  * The app's linkshu composition root: resolves the seed, layers
@@ -343,6 +378,9 @@ export const useLinkshuComposition = ({
     const runtime = linkshuRuntime;
     type Env = ManagedRuntime.ManagedRuntime.Context<typeof runtime>;
 
+    const lockingKey = quoteLockingKeyOf(currentNsec);
+    const lockingOptions = lockingKey === null ? {} : { lockingKey };
+
     const run = <A, E>(effect: Effect.Effect<A, E, Env>): Promise<A> =>
       runtime.runPromise(effect);
     const runEither = <A, E>(
@@ -394,8 +432,32 @@ export const useLinkshuComposition = ({
     const resumePendingCashuTopups: ResumePendingCashuTopups = () =>
       run(
         Effect.flatMap(Topup, (topup) =>
-          Scope.extend(topup.resumePending, topupScope),
+          Scope.extend(topup.resumePending(lockingOptions), topupScope),
         ).pipe(Effect.map((handles) => handles.map(toHandle))),
+      );
+
+    const adoptPaidCashuQuote: AdoptPaidCashuQuote = ({
+      mint,
+      quoteId,
+      amountSat,
+      invoice,
+      expiresAt,
+      locked,
+    }) =>
+      runEither(
+        Effect.suspend(() => {
+          const draft = decodePaidQuoteDraft({
+            mint,
+            quoteId,
+            amount: amountSat,
+            invoice,
+            expiresAt,
+            locked,
+          });
+          return Effect.flatMap(Topup, (topup) =>
+            topup.adopt(draft, lockingOptions),
+          );
+        }),
       );
 
     const autoswapCashu: AutoswapCashu = ({ sourceMint, targetMint }) =>
@@ -468,6 +530,7 @@ export const useLinkshuComposition = ({
     };
 
     return {
+      adoptPaidCashuQuote,
       autoswapCashu,
       cashuTokenLifecycle,
       checkAllCashuTokens,
@@ -481,9 +544,10 @@ export const useLinkshuComposition = ({
       sendCashuToken,
       startCashuTopup,
     };
-  }, [linkshuRuntime, topupScope]);
+  }, [currentNsec, linkshuRuntime, topupScope]);
 
   return {
+    adoptPaidCashuQuote: operations?.adoptPaidCashuQuote ?? null,
     autoswapCashu: operations?.autoswapCashu ?? null,
     cashuTokenLifecycle: operations?.cashuTokenLifecycle ?? null,
     checkAllCashuTokens: operations?.checkAllCashuTokens ?? null,
