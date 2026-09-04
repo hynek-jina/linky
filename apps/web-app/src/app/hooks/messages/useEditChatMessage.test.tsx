@@ -47,7 +47,7 @@ const receipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
   new EnqueueReceipt({
     jobId: OutboxJobId.make("job-1"),
     ref,
-    messageId: EDIT_MESSAGE_ID,
+    rumorId: EDIT_MESSAGE_ID,
     clientId,
     sentAt: SENT_AT,
   });

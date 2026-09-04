@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { WrapDelivery } from "../domain/delivery";
+import { WrapNotDelivered } from "../domain/errors";
 import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
 import { RumorId } from "../domain/primitives";
 import type {
@@ -118,7 +119,7 @@ export interface RecipientSendOutcome {
   readonly recipientCopy: WrapDelivery;
 }
 
-export interface RecipientSendSpec<Receipt, E> {
+export interface RecipientSendSpec<Receipt> {
   readonly rumor: Rumor;
   readonly recipient: Pubkey;
   readonly clientId: ClientId;
@@ -127,7 +128,6 @@ export interface RecipientSendSpec<Receipt, E> {
   /** Ephemeral author; defaults to the configured identity. */
   readonly senderSecretKey?: NostrSecretKey;
   readonly receipt: (outcome: RecipientSendOutcome) => Receipt;
-  readonly notDelivered: (outcome: RecipientSendOutcome) => E;
 }
 
 const summarizeRecipientSend = (
@@ -136,14 +136,14 @@ const summarizeRecipientSend = (
 
 /**
  * Recipient-only send for rumors that must not sync to the sender's other
- * devices; fails with `notDelivered` unless a relay accepted the copy.
+ * devices; fails unless a relay accepted the copy.
  */
-export const sendToRecipient = <Receipt, E>(
+export const sendToRecipient = <Receipt>(
   context: WrapSendContext,
   name: string,
   params: unknown,
-  spec: RecipientSendSpec<Receipt, E>,
-): Effect.Effect<Receipt, E> =>
+  spec: RecipientSendSpec<Receipt>,
+): Effect.Effect<Receipt, WrapNotDelivered> =>
   Effect.gen(function* () {
     const recipientCopy = yield* deliverRumorToRecipient(context, {
       rumor: spec.rumor,
@@ -158,7 +158,7 @@ export const sendToRecipient = <Receipt, E>(
       recipientCopy,
     };
     if (!recipientCopy.accepted) {
-      return yield* Effect.fail(spec.notDelivered(outcome));
+      return yield* new WrapNotDelivered(outcome);
     }
     return outcome;
   }).pipe(

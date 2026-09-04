@@ -23,14 +23,7 @@ export class Reactions extends Effect.Service<Reactions>()(
       > =>
         sendToPeer(context, "reactions.react", draft, {
           encode: encodeReactionRumor,
-          receipt: (outcome) =>
-            new ReactionReceipt({
-              reactionId: outcome.rumorId,
-              clientId: outcome.clientId,
-              sentAt: outcome.sentAt,
-              selfCopy: outcome.selfCopy,
-              recipientCopy: outcome.recipientCopy,
-            }),
+          receipt: (outcome) => new ReactionReceipt(outcome),
         });
 
       const retract = (
@@ -41,14 +34,7 @@ export class Reactions extends Effect.Service<Reactions>()(
       > =>
         sendToPeer(context, "reactions.retract", draft, {
           encode: encodeRetractionRumor,
-          receipt: (outcome) =>
-            new RetractionReceipt({
-              retractionId: outcome.rumorId,
-              clientId: outcome.clientId,
-              sentAt: outcome.sentAt,
-              selfCopy: outcome.selfCopy,
-              recipientCopy: outcome.recipientCopy,
-            }),
+          receipt: (outcome) => new RetractionReceipt(outcome),
         });
 
       return { react, retract } as const;

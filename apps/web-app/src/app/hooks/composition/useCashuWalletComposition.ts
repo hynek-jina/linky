@@ -2166,7 +2166,7 @@ export const useCashuWalletComposition = ({
 
         updateLocalNostrMessage(pendingId, {
           createdAtSec: exit.value.sentAt,
-          rumorId: exit.value.messageId,
+          rumorId: exit.value.rumorId,
         });
 
         const isOffline =

@@ -43,7 +43,7 @@ export class BankOfferDraft extends Schema.Class<BankOfferDraft>(
 export class BankOfferReceipt extends Schema.Class<BankOfferReceipt>(
   "BankOfferReceipt",
 )({
-  snapshotId: RumorId,
+  rumorId: RumorId,
   offerId: BankOfferId,
   status: BankOfferStatus,
   /** The encoded snapshot JSON; the app persists it as the offer's local state. */

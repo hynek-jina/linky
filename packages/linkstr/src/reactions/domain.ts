@@ -38,7 +38,7 @@ export class RetractionDraft extends Schema.Class<RetractionDraft>(
 export class ReactionReceipt extends Schema.Class<ReactionReceipt>(
   "ReactionReceipt",
 )({
-  reactionId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   selfCopy: WrapDelivery,
@@ -48,7 +48,7 @@ export class ReactionReceipt extends Schema.Class<ReactionReceipt>(
 export class RetractionReceipt extends Schema.Class<RetractionReceipt>(
   "RetractionReceipt",
 )({
-  retractionId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   selfCopy: WrapDelivery,

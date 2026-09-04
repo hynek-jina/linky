@@ -1743,7 +1743,7 @@ export const useContactsMessagingComposition = ({
         id: `bank-payment-offer:${contactId}:${offerId}`,
         localOnly: true,
         pubkey: myPubHex,
-        rumorId: exit.value.snapshotId,
+        rumorId: exit.value.rumorId,
         status: "sent",
         wrapId: exit.value.selfCopy.wrapId,
       });
@@ -2030,7 +2030,7 @@ export const useContactsMessagingComposition = ({
           id: `bank-payment-offer:${offerInfo.offerId}`,
           localOnly: true,
           pubkey: offererPublicKey === myPubHex ? myPubHex : offererPublicKey,
-          rumorId: exit.value.snapshotId,
+          rumorId: exit.value.rumorId,
           status: "sent",
           wrapId: exit.value.selfCopy.wrapId,
         });
@@ -2694,7 +2694,7 @@ export const useContactsMessagingComposition = ({
         receipt instanceof MessageEditReceipt)
     ) {
       updateLocalNostrMessage(parsedRef.id, {
-        rumorId: receipt.messageId,
+        rumorId: receipt.rumorId,
         status: "sent",
         wrapId: receipt.selfCopy.wrapId,
       });
@@ -2703,7 +2703,7 @@ export const useContactsMessagingComposition = ({
     if (parsedRef.kind === "reaction" && receipt instanceof ReactionReceipt) {
       updateLocalNostrReaction(parsedRef.id, {
         status: "sent",
-        wrapId: receipt.reactionId,
+        wrapId: receipt.rumorId,
       });
     }
   });

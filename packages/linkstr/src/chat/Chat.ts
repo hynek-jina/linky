@@ -18,13 +18,7 @@ import {
 } from "./domain";
 
 const chatReceipt = (outcome: PeerSendOutcome): ChatMessageReceipt =>
-  new ChatMessageReceipt({
-    messageId: outcome.rumorId,
-    clientId: outcome.clientId,
-    sentAt: outcome.sentAt,
-    selfCopy: outcome.selfCopy,
-    recipientCopy: outcome.recipientCopy,
-  });
+  new ChatMessageReceipt(outcome);
 
 export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
   effect: Effect.gen(function* () {
@@ -74,14 +68,7 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
       sendToPeer(context, "chat.edit", draft, {
         encode: encodeEditRumor,
         receipt: (outcome) =>
-          new MessageEditReceipt({
-            messageId: outcome.rumorId,
-            editOf: draft.editOf,
-            clientId: outcome.clientId,
-            sentAt: outcome.sentAt,
-            selfCopy: outcome.selfCopy,
-            recipientCopy: outcome.recipientCopy,
-          }),
+          new MessageEditReceipt({ ...outcome, editOf: draft.editOf }),
       });
 
     return { sendText, sendImage, sendToken, edit } as const;

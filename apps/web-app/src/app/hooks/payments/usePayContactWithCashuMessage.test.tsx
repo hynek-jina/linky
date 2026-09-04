@@ -94,14 +94,14 @@ const enqueueReceipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
   new EnqueueReceipt({
     jobId: OutboxJobId.make("job-1"),
     ref,
-    messageId: RumorId.make("12".repeat(32)),
+    rumorId: RumorId.make("12".repeat(32)),
     clientId,
     sentAt,
   });
 
 const noticeReceipt = (clientId: ClientId): PaymentNoticeReceipt =>
   new PaymentNoticeReceipt({
-    noticeId: RumorId.make("34".repeat(32)),
+    rumorId: RumorId.make("34".repeat(32)),
     clientId,
     sentAt,
     recipientCopy: delivery("cc".repeat(32), true),

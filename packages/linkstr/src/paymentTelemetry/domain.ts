@@ -72,7 +72,7 @@ export class PaymentTelemetryDraft extends Schema.Class<PaymentTelemetryDraft>(
 export class PaymentTelemetryReceipt extends Schema.Class<PaymentTelemetryReceipt>(
   "PaymentTelemetryReceipt",
 )({
-  telemetryId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   recipientCopy: WrapDelivery,

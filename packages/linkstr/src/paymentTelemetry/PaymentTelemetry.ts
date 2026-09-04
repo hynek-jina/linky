@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
-import { PaymentTelemetryNotDelivered } from "../domain/errors";
+import type { WrapNotDelivered } from "../domain/errors";
 import { NostrSecretKey, Pubkey } from "../domain/primitives";
 import { nowSeconds } from "../internal/time";
 import { makeWrapSendContext, sendToRecipient } from "../internal/wrapSend";
@@ -17,7 +17,7 @@ export class PaymentTelemetry extends Effect.Service<PaymentTelemetry>()(
       const publishPaymentTelemetry = (
         draft: PaymentTelemetryDraft,
         recipient: Pubkey,
-      ): Effect.Effect<PaymentTelemetryReceipt, PaymentTelemetryNotDelivered> =>
+      ): Effect.Effect<PaymentTelemetryReceipt, WrapNotDelivered> =>
         Effect.gen(function* () {
           const senderSecretKey = NostrSecretKey.make(generateSecretKey());
           const author = Pubkey.make(getPublicKey(senderSecretKey));
@@ -37,20 +37,7 @@ export class PaymentTelemetry extends Effect.Service<PaymentTelemetry>()(
               clientId: draft.id,
               sentAt,
               senderSecretKey,
-              receipt: (outcome) =>
-                new PaymentTelemetryReceipt({
-                  telemetryId: outcome.rumorId,
-                  clientId: outcome.clientId,
-                  sentAt: outcome.sentAt,
-                  recipientCopy: outcome.recipientCopy,
-                }),
-              notDelivered: (outcome) =>
-                new PaymentTelemetryNotDelivered({
-                  telemetryId: outcome.rumorId,
-                  clientId: outcome.clientId,
-                  sentAt: outcome.sentAt,
-                  recipientCopy: outcome.recipientCopy,
-                }),
+              receipt: (outcome) => new PaymentTelemetryReceipt(outcome),
             },
           );
         });

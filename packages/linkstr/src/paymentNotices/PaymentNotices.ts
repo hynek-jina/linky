@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { PaymentNoticeNotDelivered } from "../domain/errors";
+import type { WrapNotDelivered } from "../domain/errors";
 import { freshClientId } from "../internal/operations";
 import { nowSeconds } from "../internal/time";
 import { makeWrapSendContext, sendToRecipient } from "../internal/wrapSend";
@@ -14,7 +14,7 @@ export class PaymentNotices extends Effect.Service<PaymentNotices>()(
 
       const send = (
         draft: PaymentNoticeDraft,
-      ): Effect.Effect<PaymentNoticeReceipt, PaymentNoticeNotDelivered> =>
+      ): Effect.Effect<PaymentNoticeReceipt, WrapNotDelivered> =>
         Effect.gen(function* () {
           const clientId = draft.clientId ?? (yield* freshClientId);
           const sentAt = yield* nowSeconds;
@@ -29,20 +29,7 @@ export class PaymentNotices extends Effect.Service<PaymentNotices>()(
             clientId,
             sentAt,
             pushMark: true,
-            receipt: (outcome) =>
-              new PaymentNoticeReceipt({
-                noticeId: outcome.rumorId,
-                clientId: outcome.clientId,
-                sentAt: outcome.sentAt,
-                recipientCopy: outcome.recipientCopy,
-              }),
-            notDelivered: (outcome) =>
-              new PaymentNoticeNotDelivered({
-                noticeId: outcome.rumorId,
-                clientId: outcome.clientId,
-                sentAt: outcome.sentAt,
-                recipientCopy: outcome.recipientCopy,
-              }),
+            receipt: (outcome) => new PaymentNoticeReceipt(outcome),
           });
         });
 

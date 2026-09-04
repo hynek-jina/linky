@@ -85,15 +85,13 @@ export class EnqueueReceipt extends Schema.Class<EnqueueReceipt>(
   jobId: OutboxJobId,
   ref: OutboxRef,
   /** Deterministic: every delivery retry publishes this exact rumor id. */
-  messageId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
 }) {}
 
 // MessageEditReceipt before ChatMessageReceipt: the union decodes
 // structurally and the edit receipt is a field superset of the chat one.
-// PaymentTelemetryReceipt is unambiguous anywhere: it is the only member with
-// `telemetryId` and the only one without `selfCopy`.
 export const OutboxReceipt = Schema.Union(
   MessageEditReceipt,
   ChatMessageReceipt,
@@ -101,6 +99,34 @@ export const OutboxReceipt = Schema.Union(
   PaymentTelemetryReceipt,
 );
 export type OutboxReceipt = typeof OutboxReceipt.Type;
+
+const LEGACY_RUMOR_ID_KEYS = ["messageId", "reactionId", "telemetryId"];
+
+const UnknownRecord = Schema.Record({
+  key: Schema.String,
+  value: Schema.Unknown,
+});
+
+const unifyRumorIdKey = (
+  record: Record<string, unknown>,
+): Record<string, unknown> => {
+  if ("rumorId" in record) return record;
+  const legacyKey = LEGACY_RUMOR_ID_KEYS.find((key) => key in record);
+  if (legacyKey === undefined) return record;
+  const { [legacyKey]: rumorId, ...rest } = record;
+  return { ...rest, rumorId };
+};
+
+/** Persisted receipts predating the unified `rumorId` field still decode. */
+const StoredOutboxReceipt = Schema.compose(
+  Schema.transform(UnknownRecord, UnknownRecord, {
+    strict: true,
+    decode: unifyRumorIdKey,
+    encode: (record) => record,
+  }),
+  OutboxReceipt,
+  { strict: false },
+);
 
 export const OutboxFailureReason = Schema.Literal(
   "identity-changed",
@@ -113,7 +139,7 @@ export class OutboxJobSucceeded extends Schema.TaggedClass<OutboxJobSucceeded>()
   {
     jobId: OutboxJobId,
     ref: OutboxRef,
-    receipt: OutboxReceipt,
+    receipt: StoredOutboxReceipt,
   },
 ) {}
 
