@@ -1,12 +1,11 @@
 import {
   ClientId,
-  Emoji,
   NostrSecretKey,
   NostrTransport,
   Pubkey,
-  ReactionDraft,
   RelayPublishResult,
   RelayUrl,
+  RetractionDraft,
   RumorId,
 } from "@linky/linkstr";
 import type { NostrTransportService, RelayHealthState } from "@linky/linkstr";
@@ -15,7 +14,7 @@ import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
 import { Registry, Result } from "./index";
-import { sendReactionAtom } from "./reactions";
+import { retractReactionAtom } from "./reactions";
 import { relayHealthAtom } from "./relayHealth";
 
 const aliceKey = NostrSecretKey.make(generateSecretKey());
@@ -42,12 +41,9 @@ const config: LinkstrConfig = {
   transport: Layer.succeed(NostrTransport, acceptingTransport),
 };
 
-const draft = new ReactionDraft({
+const draft = new RetractionDraft({
   to: bobPubkey,
-  target: RumorId.make("ab".repeat(32)),
-  targetKind: "text",
-  targetAuthor: bobPubkey,
-  emoji: Emoji.make("🔥"),
+  reactionIds: [RumorId.make("ab".repeat(32))],
   clientId: ClientId.make("client-relay-health"),
 });
 
@@ -70,9 +66,9 @@ describe("relayHealthAtom", () => {
       .toBe(true);
     expect(healthOf(registry, relayA)).toBeUndefined();
 
-    registry.set(sendReactionAtom, draft);
+    registry.set(retractReactionAtom, draft);
     const exit = await Effect.runPromiseExit(
-      Registry.getResult(registry, sendReactionAtom, {
+      Registry.getResult(registry, retractReactionAtom, {
         suspendOnWaiting: true,
       }),
     );

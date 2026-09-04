@@ -1,15 +1,14 @@
 import { Registry } from "./index";
 import {
   ClientId,
-  Emoji,
   InboxCursorStore,
   NIP59_BACKDATE_MARGIN_SECONDS,
   NostrSecretKey,
   NostrTransport,
   Pubkey,
-  ReactionDraft,
   RelayPublishResult,
   RelayUrl,
+  RetractionDraft,
   RumorId,
   UnixSeconds,
   WrapId,
@@ -25,7 +24,7 @@ import {
   wrapInboxAtom,
   wrapInboxHandlerAtom,
 } from "./inbox";
-import { sendReactionAtom } from "./reactions";
+import { retractReactionAtom } from "./reactions";
 
 type PublishedWrap = Parameters<NostrTransportService["publish"]>[1];
 
@@ -44,6 +43,9 @@ const bob = makeIdentity();
 
 const relayA = RelayUrl.make("wss://relay-a.test");
 const relayB = RelayUrl.make("wss://relay-b.test");
+
+const firstReaction = RumorId.make("ab".repeat(32));
+const secondReaction = RumorId.make("cd".repeat(32));
 
 const recipientOf = (wrap: PublishedWrap): string | null =>
   wrap.tags.find((tag) => tag[0] === "p")?.[1] ?? null;
@@ -84,7 +86,7 @@ const makeFakeTransport = (
 
 describe("fetchWrapEventAtom", () => {
   it("returns a typed inbox event", async () => {
-    const wrap = await wrapFromBob("🔥");
+    const wrap = await wrapFromBob(firstReaction);
     const registry = Registry.make();
     registry.set(
       linkstrConfigAtom,
@@ -101,9 +103,9 @@ describe("fetchWrapEventAtom", () => {
     expect(exit).toEqual(
       Exit.succeed(
         expect.objectContaining({
-          _tag: "ReactionAdded",
+          _tag: "ReactionRetracted",
           from: bob.pubkey,
-          emoji: "🔥",
+          reactionIds: [firstReaction],
         }),
       ),
     );
@@ -122,7 +124,7 @@ const configWith = (
 });
 
 /** A real inbound wrap for alice, produced through the public send API. */
-const wrapFromBob = async (emoji: string): Promise<NostrToolsEvent> => {
+const wrapFromBob = async (reactionId: RumorId): Promise<NostrToolsEvent> => {
   const registry = Registry.make();
   const published: Array<PublishedWrap> = [];
   registry.set(
@@ -130,18 +132,17 @@ const wrapFromBob = async (emoji: string): Promise<NostrToolsEvent> => {
     configWith(bob, makeFakeTransport(published, [])),
   );
   registry.set(
-    sendReactionAtom,
-    new ReactionDraft({
+    retractReactionAtom,
+    new RetractionDraft({
       to: alice.pubkey,
-      target: RumorId.make("ab".repeat(32)),
-      targetKind: "text",
-      targetAuthor: alice.pubkey,
-      emoji: Emoji.make(emoji),
+      reactionIds: [reactionId],
       clientId: ClientId.make("client-inbox"),
     }),
   );
   const exit = await Effect.runPromiseExit(
-    Registry.getResult(registry, sendReactionAtom, { suspendOnWaiting: true }),
+    Registry.getResult(registry, retractReactionAtom, {
+      suspendOnWaiting: true,
+    }),
   );
   if (Exit.isFailure(exit)) throw new Error("send from bob failed");
   registry.dispose();
@@ -154,7 +155,7 @@ const wrapFromBob = async (emoji: string): Promise<NostrToolsEvent> => {
 
 describe("wrapInboxAtom", () => {
   it("feeds inbound wraps through the handler", async () => {
-    const wrap = await wrapFromBob("🔥");
+    const wrap = await wrapFromBob(firstReaction);
     const registry = Registry.make();
     const subscriptions: Array<FakeSubscription> = [];
     const handled: Array<WrapInboxEvent> = [];
@@ -180,19 +181,22 @@ describe("wrapInboxAtom", () => {
     await expect.poll(() => handled.length).toBe(1);
     expect(handled[0]).toEqual(
       expect.objectContaining({
-        _tag: "ReactionAdded",
+        _tag: "ReactionRetracted",
         from: bob.pubkey,
-        emoji: "🔥",
+        reactionIds: [firstReaction],
       }),
     );
 
     // The same wrap from the second relay is deduped, not re-handled.
     subscriptions[1]?.onEvent(wrap);
-    const second = await wrapFromBob("👍");
+    const second = await wrapFromBob(secondReaction);
     subscriptions[1]?.onEvent(second);
     await expect.poll(() => handled.length).toBe(2);
     expect(handled[1]).toEqual(
-      expect.objectContaining({ _tag: "ReactionAdded", emoji: "👍" }),
+      expect.objectContaining({
+        _tag: "ReactionRetracted",
+        reactionIds: [secondReaction],
+      }),
     );
 
     unmount();
