@@ -1,39 +1,19 @@
 import { Effect } from "effect";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { PaymentTelemetryNotDelivered } from "../domain/errors";
-import { NostrSecretKey, Pubkey, RumorId } from "../domain/primitives";
-import { Inspector } from "../inspector/Inspector";
-import { inspectOperation } from "../internal/operations";
-import type { OperationReceiptSummary } from "../internal/operations";
+import { NostrSecretKey, Pubkey } from "../domain/primitives";
 import { nowSeconds } from "../internal/time";
-import { deliverRumorToRecipient } from "../internal/wrapDelivery";
-import { LinkstrIdentity } from "../services/LinkstrIdentity";
-import { NostrTransport } from "../services/NostrTransport";
-import { RelayPolicy } from "../services/RelayPolicy";
+import { makeWrapSendContext, sendToRecipient } from "../internal/wrapSend";
 import { encodePaymentTelemetryRumor } from "./codec";
 import { PaymentTelemetryReceipt, type PaymentTelemetryDraft } from "./domain";
-
-const summarizeReceipt = (
-  receipt: PaymentTelemetryReceipt,
-): OperationReceiptSummary => ({
-  rumorId: receipt.telemetryId,
-  clientId: receipt.clientId,
-  sentAt: receipt.sentAt,
-  selfCopy: null,
-  recipientCopy: receipt.recipientCopy,
-});
 
 export class PaymentTelemetry extends Effect.Service<PaymentTelemetry>()(
   "linkstr/PaymentTelemetry",
   {
     effect: Effect.gen(function* () {
-      const context = {
-        identity: yield* LinkstrIdentity,
-        transport: yield* NostrTransport,
-        relayPolicy: yield* RelayPolicy,
-      };
-      const inspector = yield* Inspector.orNoop;
+      const context = yield* makeWrapSendContext;
 
+      /** Signed by a fresh ephemeral key per attempt, so nothing links sends. */
       const publishPaymentTelemetry = (
         draft: PaymentTelemetryDraft,
         recipient: Pubkey,
@@ -42,40 +22,38 @@ export class PaymentTelemetry extends Effect.Service<PaymentTelemetry>()(
           const senderSecretKey = NostrSecretKey.make(generateSecretKey());
           const author = Pubkey.make(getPublicKey(senderSecretKey));
           const sentAt = yield* nowSeconds;
-          const rumor = encodePaymentTelemetryRumor(
-            draft,
-            author,
-            recipient,
-            sentAt,
-          );
-          const telemetryId = RumorId.make(rumor.id);
-          const recipientCopy = yield* deliverRumorToRecipient(context, {
-            rumor,
-            recipient,
-            senderSecretKey,
-          });
-          if (!recipientCopy.accepted) {
-            return yield* new PaymentTelemetryNotDelivered({
-              telemetryId,
-              clientId: draft.id,
-              sentAt,
-              recipientCopy,
-            });
-          }
-          return new PaymentTelemetryReceipt({
-            telemetryId,
-            clientId: draft.id,
-            sentAt,
-            recipientCopy,
-          });
-        }).pipe(
-          inspectOperation(
-            inspector,
+          return yield* sendToRecipient(
+            context,
             "paymentTelemetry.publish",
             { draft, recipient },
-            summarizeReceipt,
-          ),
-        );
+            {
+              rumor: encodePaymentTelemetryRumor(
+                draft,
+                author,
+                recipient,
+                sentAt,
+              ),
+              recipient,
+              clientId: draft.id,
+              sentAt,
+              senderSecretKey,
+              receipt: (outcome) =>
+                new PaymentTelemetryReceipt({
+                  telemetryId: outcome.rumorId,
+                  clientId: outcome.clientId,
+                  sentAt: outcome.sentAt,
+                  recipientCopy: outcome.recipientCopy,
+                }),
+              notDelivered: (outcome) =>
+                new PaymentTelemetryNotDelivered({
+                  telemetryId: outcome.rumorId,
+                  clientId: outcome.clientId,
+                  sentAt: outcome.sentAt,
+                  recipientCopy: outcome.recipientCopy,
+                }),
+            },
+          );
+        });
 
       return { publishPaymentTelemetry } as const;
     }),
