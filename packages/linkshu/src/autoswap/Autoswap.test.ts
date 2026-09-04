@@ -38,7 +38,7 @@ import { AutoswapDraft } from "./domain";
 import {
   PENDING_AUTOSWAP_CLAIM_KEY_PREFIX,
   PendingAutoswapClaim,
-  writePendingClaim,
+  pendingClaims,
 } from "./internal/pendingClaim";
 
 const sourceMint = MintUrl.make("https://source.example");
@@ -439,7 +439,7 @@ describe("Autoswap.resumePendingClaims", () => {
     // The row was written but the record never cleared — the one window the
     // claim leaves open. Resuming must find the stored proofs.
     await Effect.runPromise(
-      writePendingClaim(storage.kv, pendingClaimRecord(1)),
+      pendingClaims.write(storage.kv, pendingClaimRecord(1)),
     );
 
     const resuming = makeHarness(
@@ -466,7 +466,7 @@ describe("Autoswap.resumePendingClaims", () => {
   it("keeps an unpaid quote for the next pass", async () => {
     const storage = freshStorage();
     await Effect.runPromise(
-      writePendingClaim(storage.kv, pendingClaimRecord(null)),
+      pendingClaims.write(storage.kv, pendingClaimRecord(null)),
     );
 
     const harness = makeHarness(storage, { states: ["UNPAID"] }, makeMelt([]));
@@ -481,7 +481,7 @@ describe("Autoswap.resumePendingClaims", () => {
   it("keeps a fresh record even when the mint rejects the quote check", async () => {
     const storage = freshStorage();
     await Effect.runPromise(
-      writePendingClaim(storage.kv, pendingClaimRecord(1)),
+      pendingClaims.write(storage.kv, pendingClaimRecord(1)),
     );
 
     const harness = makeHarness(
@@ -506,7 +506,7 @@ describe("Autoswap.resumePendingClaims", () => {
     const storage = freshStorage();
     const dayOld = Math.floor(Date.now() / 1000) - 25 * 3600;
     await Effect.runPromise(
-      writePendingClaim(storage.kv, pendingClaimRecord(1, dayOld)),
+      pendingClaims.write(storage.kv, pendingClaimRecord(1, dayOld)),
     );
 
     const harness = makeHarness(
@@ -527,7 +527,7 @@ describe("Autoswap.resumePendingClaims", () => {
     const storage = freshStorage();
     const dayOld = Math.floor(Date.now() / 1000) - 25 * 3600;
     await Effect.runPromise(
-      writePendingClaim(storage.kv, pendingClaimRecord(null, dayOld)),
+      pendingClaims.write(storage.kv, pendingClaimRecord(null, dayOld)),
     );
 
     const harness = makeHarness(storage, { states: ["UNPAID"] }, makeMelt([]));
@@ -556,7 +556,9 @@ describe("Autoswap.resumePendingClaims", () => {
     // A rejection may be transient (a 4xx classifies the same way), so a
     // fresh record survives it for the next pass.
     const fresh = freshStorage();
-    await Effect.runPromise(writePendingClaim(fresh.kv, pendingClaimRecord(1)));
+    await Effect.runPromise(
+      pendingClaims.write(fresh.kv, pendingClaimRecord(1)),
+    );
     const kept = await rejecting(fresh).run(resume);
     assert(Exit.isSuccess(kept));
     expect(kept.value[0].status).toBe("not-claimable-yet");
@@ -567,7 +569,7 @@ describe("Autoswap.resumePendingClaims", () => {
     const aged = freshStorage();
     const dayOld = Math.floor(Date.now() / 1000) - 25 * 3600;
     await Effect.runPromise(
-      writePendingClaim(aged.kv, pendingClaimRecord(1, dayOld)),
+      pendingClaims.write(aged.kv, pendingClaimRecord(1, dayOld)),
     );
     const exit = await rejecting(aged).run(resume);
     assert(Exit.isSuccess(exit));

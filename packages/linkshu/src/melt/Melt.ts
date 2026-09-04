@@ -3,7 +3,7 @@ import type {
   MeltQuoteBolt11Response,
   Proof as CashuProof,
 } from "@cashu/cashu-ts";
-import { Clock, Duration, Effect, Either, Schema } from "effect";
+import { Duration, Effect, Either, Schema } from "effect";
 import {
   InsufficientFunds,
   MintRejected,
@@ -11,15 +11,8 @@ import {
   QuoteExpired,
 } from "../domain/errors";
 import type { MintUnreachable } from "../domain/errors";
-import {
-  Amount,
-  CurrencyUnit,
-  NonNegativeAmount,
-  QuoteId,
-  UnixSeconds,
-} from "../domain/primitives";
+import { Amount, NonNegativeAmount, UnixSeconds } from "../domain/primitives";
 import type { MintUrl } from "../domain/primitives";
-import { QuoteStateChanged } from "../inspector/events";
 import { Inspector } from "../inspector/Inspector";
 import { cashuAmountToNumber } from "../internal/cashuAmounts";
 import { recoverFromCollision } from "../internal/collisionRecovery";
@@ -32,11 +25,14 @@ import type { CounterScope } from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
 import { isRecoverableOutputCollision } from "../internal/outputCollisions";
 import { checkProofStates, unspentProofs } from "../internal/proofStates";
+import { decodeQuoteId, emitQuoteState } from "../internal/quotes";
 import {
   removeConsumedRows,
   selectSpendableProofs,
   swapProofsForAmount,
 } from "../internal/spend";
+import { nowSeconds } from "../internal/time";
+import { sat } from "../internal/units";
 import {
   boundKeysetId,
   classifyMintError,
@@ -57,8 +53,6 @@ import { MeltQuote, MeltReceipt } from "./domain";
 import type { MeltDraft, MeltError } from "./domain";
 import { blankOutputCount } from "./internal/blankOutputs";
 
-const sat = CurrencyUnit.make("sat");
-
 const MAX_MELT_ATTEMPTS = 5;
 /**
  * Blind advance past a collision the NUT-09 probe cannot locate: orphaned
@@ -70,7 +64,6 @@ const MELT_COLLISION_FALLBACK_BUMP = 64;
 const PENDING_POLLS = 6;
 const PENDING_POLL_INTERVAL = Duration.millis(500);
 
-const decodeQuoteId = Schema.decodeUnknownOption(QuoteId);
 const decodeAmount = Schema.decodeUnknownOption(Amount);
 const decodeReserve = Schema.decodeUnknownOption(NonNegativeAmount);
 const decodeExpiry = Schema.decodeUnknownOption(UnixSeconds);
@@ -120,11 +113,6 @@ const quoteStateOf = (
   return decoded._tag === "Some" ? decoded.value : null;
 };
 
-const nowSeconds: Effect.Effect<number> = Effect.map(
-  Clock.currentTimeMillis,
-  (millis) => Math.floor(millis / 1000),
-);
-
 /** Everything the post-swap melt steps need to settle one payment. */
 interface MeltExecution {
   readonly wallet: LoadedWallet;
@@ -155,21 +143,6 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
     const instances = yield* WalletInstances;
     const inspector = yield* Inspector.orNoop;
 
-    const emitQuoteState = (quote: MeltQuote, state: string): void => {
-      inspector.emit(
-        () =>
-          new QuoteStateChanged(
-            {
-              flow: "melt",
-              quoteId: quote.quoteId,
-              mint: quote.mint,
-              state,
-            },
-            { disableValidation: true },
-          ),
-      );
-    };
-
     const createQuoteAt = (
       wallet: LoadedWallet,
       draft: MeltDraft,
@@ -183,7 +156,7 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
           catch: (error) => classifyMintError(draft.mint, error),
         });
         const quote = yield* toMeltQuote(draft.mint, raw);
-        emitQuoteState(quote, raw.state);
+        emitQuoteState(inspector, "melt", quote, raw.state);
         return { raw, quote };
       });
 
@@ -322,7 +295,7 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
           const state = quoteStateOf(checked.right);
           if (state !== null && state !== lastState) {
             lastState = state;
-            emitQuoteState(exec.quote, state);
+            emitQuoteState(inspector, "melt", exec.quote, state);
           }
           if (state === "PAID") {
             const change = yield* reclaimBlankChange(
@@ -353,7 +326,8 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
     ): Effect.Effect<MeltReceipt, MeltError> =>
       Effect.gen(function* () {
         const state = quoteStateOf(response.quote);
-        if (state !== null) emitQuoteState(exec.quote, state);
+        if (state !== null)
+          emitQuoteState(inspector, "melt", exec.quote, state);
         if (state === "PAID") {
           const change = Array.isArray(response.change)
             ? toDomainProofs(response.change)
@@ -400,7 +374,7 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
           checkQuote(exec.wallet, exec.quote),
         );
         if (Either.isRight(checked) && quoteStateOf(checked.right) === "PAID") {
-          emitQuoteState(exec.quote, "PAID");
+          emitQuoteState(inspector, "melt", exec.quote, "PAID");
           const change = yield* reclaimBlankChange(
             exec.wallet,
             exec.scope,

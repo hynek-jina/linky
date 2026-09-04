@@ -24,7 +24,7 @@ import type { Bip39Seed as Bip39SeedType, StoredTokenRow } from "../../src";
 import {
   PENDING_AUTOSWAP_CLAIM_KEY_PREFIX,
   PendingAutoswapClaim,
-  writePendingClaim,
+  pendingClaims,
 } from "../../src/autoswap/internal/pendingClaim";
 
 // The dev stack runs a single mint, so source and target are the same url: the
@@ -120,7 +120,7 @@ describe("autoswap against the local mint", () => {
     const wallet = await loadWallet();
     const quote = await wallet.createMintQuoteBolt11(64);
     await Effect.runPromise(
-      writePendingClaim(
+      pendingClaims.write(
         kv,
         new PendingAutoswapClaim({
           quoteId: QuoteId.make(quote.quote),

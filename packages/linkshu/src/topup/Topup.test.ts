@@ -38,7 +38,7 @@ import { PaidQuoteDraft, QuoteLockingKey, TopupDraft } from "./domain";
 import {
   PENDING_TOPUP_KEY_PREFIX,
   PendingTopup,
-  writePendingTopup,
+  pendingTopups,
 } from "./internal/pendingTopup";
 import { Topup } from "./Topup";
 
@@ -331,7 +331,7 @@ describe("Topup", () => {
     // `persistMinted` leaves open. Resuming must find the stored proofs
     // rather than import them a second time.
     await Effect.runPromise(
-      writePendingTopup(
+      pendingTopups.write(
         storage.kv,
         new PendingTopup({
           quoteId: QuoteId.make(quoteId),
@@ -423,7 +423,7 @@ describe("Topup", () => {
     // Crash window: the invoice was paid, but the process died before any
     // mint attempt reserved counters — the record must not be pruned on time.
     await Effect.runPromise(
-      writePendingTopup(
+      pendingTopups.write(
         storage.kv,
         new PendingTopup({
           quoteId: QuoteId.make(quoteId),
@@ -455,7 +455,7 @@ describe("Topup", () => {
     const storage = freshStorage();
     const expired = Math.floor(Date.now() / 1000) - 3600;
     await Effect.runPromise(
-      writePendingTopup(
+      pendingTopups.write(
         storage.kv,
         new PendingTopup({
           quoteId: QuoteId.make(quoteId),

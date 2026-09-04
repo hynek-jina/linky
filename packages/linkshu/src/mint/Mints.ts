@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import type { MintRejected, MintUnreachable } from "../domain/errors";
-import { CurrencyUnit } from "../domain/primitives";
 import type { MintUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { inspectOperation } from "../internal/operations";
@@ -11,9 +10,7 @@ import { collectKnownMints } from "./internal/knownMints";
 import { boundKeysetInputFeePpk } from "./internal/keysetFees";
 import { WalletInstances } from "./internal/WalletInstances";
 import type { LoadedWallet } from "./internal/WalletInstances";
-
-/** Linky wallets are sat-denominated today (see README). */
-const sat = CurrencyUnit.make("sat");
+import { sat } from "../internal/units";
 
 const nullableString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
