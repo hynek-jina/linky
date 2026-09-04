@@ -84,6 +84,7 @@
         "prettier": "^3.4.2",
         "typescript": "~5.9.3",
         "vite": "^7.2.4",
+        "vitest": "^4.0.18",
       },
     },
     "apps/web-app": {
