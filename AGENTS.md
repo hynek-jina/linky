@@ -29,9 +29,11 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - `localStorage` goes through `utils/storage.ts` (`safeLocalStorageGet/Set/Remove`, `safeLocalStorageGetJson` with a Schema); raw access is reserved for the one-time linkshu migration and the linkshu `KeyValueStore` port
 - Validate stored and wire JSON with effect `Schema` (shared pieces in `utils/schema.ts`), not hand-rolled `typeof` guards
 - `nowSeconds()` and `sleep()` come from `utils/time.ts`
+- Translation keys are `I18nKey` and translators are `Translate` (both from `src/i18n`); `cs.ts` is the reference locale and `en.ts`/`de.ts` must `satisfies` its key set, so a missing or misspelled key is a type error, never a runtime fallback
 
 
 ### Commenting the code
+
 - If you need to add comment to a code to justify the code being overcomplicated, the code is bad and you should do it differently - unless instructed otherwise or we specifically agree on going with this implementation. Good comments do not excuse unclear code.
 - Comments should not duplicate the code! The code should be self explanatory, use function names, proper code split into logical chunks
 - Explain unidiomatic code in comments - keep the comments brief and to the point if you need to write it!
@@ -76,7 +78,7 @@ The default reporter prints every `[linky]` console line prefixed with the accou
 
 The run is ~20s, so `--headed` mostly shows a blur; `--ui` and the trace viewer are the useful tools. Do not reintroduce a slow-motion knob: a per-action delay pushes the top-up quote and the offer's phase timers past their deadlines, so the test fails for reasons unrelated to the code under test.
 
-Playwright starts *every* `webServer` entry regardless of `--project`, so a Vite dev server also boots on :5174 even when running only `local-stack`; set `E2E_SKIP_WEBSERVER=1` to skip it (CI does).
+Playwright starts _every_ `webServer` entry regardless of `--project`, so a Vite dev server also boots on :5174 even when running only `local-stack`; set `E2E_SKIP_WEBSERVER=1` to skip it (CI does).
 
 `.github/workflows/e2e.yml` runs the `local-stack` project on every push to main and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
 
