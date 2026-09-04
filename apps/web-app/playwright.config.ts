@@ -4,6 +4,7 @@ const LOCAL_STACK_SPECS = [
   "**/chat-recovery.spec.ts",
   "**/proxy-payment.spec.ts",
   "**/linkshu-migration.spec.ts",
+  "**/password-manager-save.spec.ts",
 ];
 
 export default defineConfig({

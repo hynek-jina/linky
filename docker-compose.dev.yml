@@ -41,14 +41,14 @@ services:
       timeout: 2s
       retries: 25
 
-  cashu-mint:
+  cashu-mint: &cashu-mint
     image: docker.io/cashubtc/nutshell:0.20.3
     command: ["poetry", "run", "mint"]
     ports:
       - "3338:3338"
     volumes:
       - cashu-mint-data:/app/data
-    environment:
+    environment: &cashu-mint-environment
       MINT_BACKEND_BOLT11_SAT: FakeWallet
       MINT_LISTEN_HOST: "0.0.0.0"
       MINT_LISTEN_PORT: "3338"
@@ -79,6 +79,17 @@ services:
       retries: 45
       start_period: 10s
 
+  cashu-mint-target:
+    <<: *cashu-mint
+    profiles: ["integration", "e2e"]
+    ports:
+      - "3339:3338"
+    volumes:
+      - cashu-mint-target-data:/app/data
+    environment:
+      <<: *cashu-mint-environment
+      MINT_PRIVATE_KEY: LOCAL_DEV_ONLY_TARGET_MINT_KEY
+
   # Production build of the web app for the `local-stack` Playwright project;
   # not used by `bun run dev`. Endpoints are build args because Vite inlines
   # import.meta.env; the browser runs on the host, so these are host-published
@@ -108,3 +119,4 @@ volumes:
   nostr-relay-data:
   evolu-relay-data:
   cashu-mint-data:
+  cashu-mint-target-data:

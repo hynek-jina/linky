@@ -160,8 +160,8 @@ bun run test
 ```
 
 `@linky/linkshu` additionally has an integration suite against the local
-docker mint (started via `docker compose -f docker-compose.dev.yml up -d
---wait cashu-mint`): `bun run --filter @linky/linkshu test:integration`.
+docker mints (started via `docker compose -f docker-compose.dev.yml up -d
+--wait cashu-mint cashu-mint-target`): `bun run --filter @linky/linkshu test:integration`.
 
 `@linky/linkshu-cli` runs its port and argument-parsing tests under `bun test` (no mint needed);
 they are part of `bun run test`.
@@ -175,7 +175,8 @@ cd apps/web-app && bunx playwright test --project=prod-services
 
 `local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
 Nostr relay and paying each other with the local Cashu mint — plus the linkshu storage-migration
-scenario (legacy wallet keys seeded before first launch, wallet must keep working). It needs the
+scenario, chat/edit/offline-reaction and top-up recovery, and signup with a real password-save
+form submission. Payments use separate local mints on :3338 and :3339. It needs the
 docker stack up first, because the app is served from it as a production build on :5176:
 
 ```bash
