@@ -149,22 +149,13 @@ if (!getGlobalProcess()) {
 const updateSW = registerSW({
   immediate: true,
   onOfflineReady() {
-    console.log("[linky][pwa] offline ready");
     appendPushDebugLog("client", "pwa offline ready");
   },
   onNeedRefresh() {
-    console.log("[linky][pwa] update available");
     appendPushDebugLog("client", "pwa update available");
     void handlePwaUpdateAvailable();
   },
   onRegisteredSW(swUrl, registration) {
-    console.log("[linky][pwa] sw registered", {
-      swUrl,
-      scope: registration?.scope,
-      hasActive: Boolean(registration?.active),
-      hasWaiting: Boolean(registration?.waiting),
-      hasInstalling: Boolean(registration?.installing),
-    });
     appendPushDebugLog("client", "pwa sw registered", {
       hasActive: Boolean(registration?.active),
       hasInstalling: Boolean(registration?.installing),
@@ -189,7 +180,7 @@ const updateSW = registerSW({
         return;
       }
       void registration.update().catch((error) => {
-        console.log("[linky][pwa] sw update check failed", { error });
+        appendPushDebugLog("client", "pwa sw update check failed", { error });
       });
     };
     setInterval(checkForUpdate, 30_000);
@@ -203,12 +194,14 @@ const updateSW = registerSW({
       });
     }
     if (registration.waiting) {
-      console.log("[linky][pwa] waiting worker present at registration");
+      appendPushDebugLog(
+        "client",
+        "pwa waiting worker present at registration",
+      );
       void handlePwaUpdateAvailable();
     }
   },
   onRegisterError(error) {
-    console.log("[linky][pwa] sw register error", { error });
     appendPushDebugLog("client", "pwa sw register error", { error });
   },
 });
@@ -216,15 +209,11 @@ recordPwaRegistered(updateSW);
 
 if ("serviceWorker" in navigator) {
   const hadControllerAtLoad = Boolean(navigator.serviceWorker.controller);
-  console.log("[linky][pwa] controller", {
-    hasController: hadControllerAtLoad,
-  });
   appendPushDebugLog("client", "pwa controller snapshot", {
     hasController: hadControllerAtLoad,
   });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
-    console.log("[linky][pwa] sw message", event.data);
     appendPushDebugLog("client", "pwa sw message", {
       data: event.data,
     });
@@ -232,9 +221,6 @@ if ("serviceWorker" in navigator) {
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     recordPwaControllerChange();
-    console.log("[linky][pwa] controller change", {
-      hasController: Boolean(navigator.serviceWorker.controller),
-    });
     appendPushDebugLog("client", "pwa controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
@@ -249,10 +235,6 @@ if ("serviceWorker" in navigator) {
 
   void navigator.serviceWorker.ready
     .then(async (reg) => {
-      console.log("[linky][pwa] sw ready", {
-        scope: reg.scope,
-        hasActive: Boolean(reg.active),
-      });
       appendPushDebugLog("client", "pwa sw ready", {
         hasActive: Boolean(reg.active),
         scope: reg.scope,
@@ -263,14 +245,12 @@ if ("serviceWorker" in navigator) {
         const relevant = keys.filter(
           (k) => k.includes("workbox") || k.includes("linky"),
         );
-        console.log("[linky][pwa] cache keys", { keys: relevant });
         appendPushDebugLog("client", "pwa cache keys", {
           keys: relevant,
         });
       }
     })
     .catch((error) => {
-      console.log("[linky][pwa] sw ready error", { error });
       appendPushDebugLog("client", "pwa sw ready error", { error });
     });
 }
@@ -471,30 +451,12 @@ const applyEvoluWebCompatPolyfills = () => {
         if (set.size === 0) channelsByName.delete(this.name);
       }
 
-      addEventListener(
-        _type: string,
-        _listener: EventListenerOrEventListenerObject | null,
-        _options?: boolean | AddEventListenerOptions,
-      ) {
-        void _type;
-        void _listener;
-        void _options;
-        // Not used by Evolu.
-      }
+      // Evolu only assigns onmessage, so the EventTarget surface is inert.
+      addEventListener() {}
 
-      removeEventListener(
-        _type: string,
-        _listener: EventListenerOrEventListenerObject | null,
-        _options?: boolean | EventListenerOptions,
-      ) {
-        void _type;
-        void _listener;
-        void _options;
-        // Not used by Evolu.
-      }
+      removeEventListener() {}
 
-      dispatchEvent(_event: Event) {
-        void _event;
+      dispatchEvent() {
         return false;
       }
     }

@@ -127,16 +127,23 @@ import { useLinkshuComposition } from "./useLinkshuComposition";
 import { useResumeOnLaunchAndOnline } from "../useResumeOnLaunchAndOnline";
 import { useProfileComposition } from "./useProfileComposition";
 
+import { reportAppLog } from "../../../devtools/inspector/appLog";
 const isPubkey = Schema.is(Pubkey);
 const CashuTokenIdFromUnknown = Evolu.id("CashuToken");
 const decodeCashuTokenText = Schema.decodeUnknownEither(CashuTokenText);
 
 export const logPayStep = (step: string, data?: PaymentLogData): void => {
-  try {
-    console.log("[linky][pay]", step, data ?? {});
-  } catch {
-    // ignore logging errors
-  }
+  const clientId = data?.clientId;
+  const messageId = data?.messageId;
+  reportAppLog({
+    tag: "pay.step",
+    summary: `Contact payment: ${step}`,
+    links: {
+      ...(typeof clientId === "string" ? { client: clientId } : {}),
+      ...(typeof messageId === "string" ? { message: messageId } : {}),
+    },
+    payload: { step, ...data },
+  });
 };
 
 type IdentityOwnersCompositionResult = ReturnType<

@@ -20,6 +20,7 @@ import {
 } from "../../utils/nostrRelays";
 import { nowSeconds } from "../../utils/time";
 
+import { reportAppLog } from "../../devtools/inspector/appLog";
 interface UseRelayDomainParams {
   currentNpub: string | null;
   currentNsec: string | null;
@@ -155,11 +156,6 @@ export const useRelayDomain = ({
         new Set(urls.map((url) => String(url ?? "").trim())),
       ).filter(isRelayUrl);
 
-      console.log("[linky][nostr] publish relay list", {
-        count: unique.length,
-        urls: unique,
-      });
-
       const exit = await publishRelayLists(
         new RelayListsDraft({
           relays: unique.map(
@@ -203,12 +199,6 @@ export const useRelayDomain = ({
         );
         const inboxRelayUrls = Array.from(new Set(lists.dmRelays ?? []));
         const urls = relayListUrls.length > 0 ? relayListUrls : inboxRelayUrls;
-
-        console.log("[linky][nostr] relay list", {
-          inboxUrls: inboxRelayUrls,
-          relayCreatedAt: lists.relaysUpdatedAt,
-          relayUrls: relayListUrls,
-        });
 
         if (cancelled) return;
 
@@ -267,8 +257,10 @@ export const useRelayDomain = ({
         }
       } catch (e) {
         relayProfileSyncForNpubRef.current = null;
-        console.log("[linky][nostr] relay sync failed", {
-          error: String(e ?? "unknown"),
+        reportAppLog({
+          tag: "relayList.syncFailed",
+          summary: "Relay list sync from relays failed",
+          payload: { error: e },
         });
       }
     };
@@ -310,8 +302,10 @@ export const useRelayDomain = ({
     setRelayUrls(nextUrls);
     persistLocalRelayUrls(nextUrls);
     void publishNostrRelayLists(nextUrls).catch((e) => {
-      console.log("[linky][nostr] publish relay list failed", {
-        error: String(e ?? "unknown"),
+      reportAppLog({
+        tag: "relayList.publishFailed",
+        summary: "Publishing the relay list failed",
+        payload: { error: e, relayCount: nextUrls.length },
       });
     });
 
@@ -347,8 +341,10 @@ export const useRelayDomain = ({
       persistLocalRelayUrls(nextUrls);
       setPendingRelayDeleteUrl(null);
       void publishNostrRelayLists(nextUrls).catch((e) => {
-        console.log("[linky][nostr] publish relay list failed", {
-          error: String(e ?? "unknown"),
+        reportAppLog({
+          tag: "relayList.publishFailed",
+          summary: "Publishing the relay list failed",
+          payload: { error: e, relayCount: nextUrls.length },
         });
       });
       navigateTo({ route: "nostrRelays" });

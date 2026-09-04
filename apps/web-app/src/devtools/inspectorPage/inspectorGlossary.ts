@@ -42,6 +42,16 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "The queued recipients of a staggered proxy payment offer were discarded because the offer stopped being open — someone accepted it, it ended, or it expired.",
   "profiles.searchProfiles":
     "Add-contact text search: a NIP-50 kind-0 query fanned out to the read relays plus the configured search relays; relays without NIP-50 answer with unrelated profiles, so only hits that match the query locally are returned (the params carry the query and limit).",
+  "contacts.dedupeFailed":
+    "The contact dedupe the user started threw before finishing; the payload carries the error. Contacts already merged before the failure stay merged.",
+  "contacts.ownerMigrated":
+    "One-time move of legacy contact rows into the app owner lane after a seed login; the payload counts the rows that were rewritten and those that failed.",
+  "relayList.publishFailed":
+    "Publishing the user's NIP-65 / NIP-17 relay lists after an add or remove failed; the local list was already updated, so the relays are out of sync until the next successful publish.",
+  "relayList.syncFailed":
+    "Fetching the user's relay lists from the relays at startup failed; the app keeps using its cached list.",
+  "pay.step":
+    "One step of paying a contact with a cashu token sent as a chat message (start, mint-selected, swap-ok, plan-send-token, publish-pending, publish-ok, publish-failed, payment-notice-publish, message-ack, queued-offline). The client and message links tie the steps to the gift wraps they produced.",
   "contacts.addToGroup":
     "User assigned the contacts just saved from a chat message to a group; the payload lists the contact ids and the group name.",
   ChatImageShareFailed:
