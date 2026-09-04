@@ -465,11 +465,19 @@ export const useEvoluContactsOwnerRotation = ({
   const [contactsOwnerIndex, setContactsOwnerIndex] = React.useState<number>(
     () => initialContactsOwnerIndex,
   );
-  const [cashuOwnerIndex, setCashuOwnerIndex] = React.useState<number>(
+  const initialCashuOwnerIndex = React.useMemo(
     () =>
       getStoredOptionalIndex(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY) ??
       initialContactsOwnerIndex,
+    [initialContactsOwnerIndex],
   );
+  const [cashuOwnerIndex, setCashuOwnerIndex] = React.useState<number>(
+    initialCashuOwnerIndex,
+  );
+  const cashuBootstrapRecoveryPending = React.useRef(true);
+  const pendingRotationTargets = React.useRef<
+    Partial<Record<RotatingOwnerRole, number>>
+  >({});
   const [messagesOwnerIndex, setMessagesOwnerIndex] = React.useState<number>(
     () => readStoredNonNegativeInt(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY),
   );
@@ -641,14 +649,22 @@ export const useEvoluContactsOwnerRotation = ({
     [metaOwnerIdText, ownerMetaRows],
   );
 
-  const resolvedContactsOwnerIndex =
-    rotationSnapshots.contacts?.index ?? contactsOwnerIndex;
-  const resolvedCashuOwnerIndex =
-    rotationSnapshots.cashu?.index ?? cashuOwnerIndex;
-  const resolvedMessagesOwnerIndex =
-    rotationSnapshots.messages?.index ?? messagesOwnerIndex;
-  const resolvedTransactionsOwnerIndex =
-    rotationSnapshots.transactions?.index ?? transactionsOwnerIndex;
+  const resolvedContactsOwnerIndex = Math.max(
+    rotationSnapshots.contacts?.index ?? contactsOwnerIndex,
+    pendingRotationTargets.current.contacts ?? 0,
+  );
+  const resolvedCashuOwnerIndex = Math.max(
+    rotationSnapshots.cashu?.index ?? cashuOwnerIndex,
+    pendingRotationTargets.current.cashu ?? 0,
+  );
+  const resolvedMessagesOwnerIndex = Math.max(
+    rotationSnapshots.messages?.index ?? messagesOwnerIndex,
+    pendingRotationTargets.current.messages ?? 0,
+  );
+  const resolvedTransactionsOwnerIndex = Math.max(
+    rotationSnapshots.transactions?.index ?? transactionsOwnerIndex,
+    pendingRotationTargets.current.transactions ?? 0,
+  );
 
   const contactsRotationSnapshot = readSnapshotForCurrentIndex(
     rotationSnapshots.contacts,
@@ -744,12 +760,12 @@ export const useEvoluContactsOwnerRotation = ({
         tables: ["transaction"],
       },
     ].flatMap((request) =>
-      request.ownerId && request.rotatedAtMs !== null
+      isSeedLogin && request.ownerId
         ? [
             {
               key: request.key,
               ownerId: request.ownerId,
-              rotatedAtMs: request.rotatedAtMs,
+              rotatedAtMs: request.rotatedAtMs ?? 0,
               tables: request.tables,
             },
           ]
@@ -780,6 +796,7 @@ export const useEvoluContactsOwnerRotation = ({
     contactsActiveOwnerId,
     contactsRotationSnapshot?.rotatedAtMs,
     historyMutationVersion,
+    isSeedLogin,
     messagesActiveOwnerId,
     messagesRotationSnapshot?.rotatedAtMs,
     transactionsActiveOwnerId,
@@ -826,29 +843,21 @@ export const useEvoluContactsOwnerRotation = ({
   }, [allTransactionsRows, transactionsActiveOwnerId]);
 
   const contactsOwnerEditCount =
-    contactsRotationSnapshot?.rotatedAtMs !== null &&
-    contactsRotationSnapshot?.rotatedAtMs !== undefined &&
     historyMutationCounts.contacts !== undefined
       ? historyMutationCounts.contacts
       : Math.max(0, contactsOwnerWriteCount - contactsOwnerBaselineCount);
 
   const cashuOwnerWriteDelta =
-    cashuRotationSnapshot?.rotatedAtMs !== null &&
-    cashuRotationSnapshot?.rotatedAtMs !== undefined &&
     historyMutationCounts.cashu !== undefined
       ? historyMutationCounts.cashu
       : Math.max(0, cashuOwnerWriteCount - cashuOwnerBaselineCount);
 
   const messagesOwnerWriteDelta =
-    messagesRotationSnapshot?.rotatedAtMs !== null &&
-    messagesRotationSnapshot?.rotatedAtMs !== undefined &&
     historyMutationCounts.messages !== undefined
       ? historyMutationCounts.messages
       : Math.max(0, messagesOwnerWriteCount - messagesOwnerBaselineCount);
 
   const transactionsOwnerWriteDelta =
-    transactionsRotationSnapshot?.rotatedAtMs !== null &&
-    transactionsRotationSnapshot?.rotatedAtMs !== undefined &&
     historyMutationCounts.transactions !== undefined
       ? historyMutationCounts.transactions
       : Math.max(
@@ -1067,6 +1076,7 @@ export const useEvoluContactsOwnerRotation = ({
     // the cooldown with `now`, which matches the existing behaviour and is
     // the best we can do without a baseline hint from the rotator.
     const adoptIndex = (params: {
+      scope: RotatingOwnerRole;
       indexStorageKey: string;
       baselineStorageKey: string;
       lastRotatedStorageKey: string;
@@ -1078,6 +1088,7 @@ export const useEvoluContactsOwnerRotation = ({
       extra?: () => void;
     }) => {
       const {
+        scope,
         indexStorageKey,
         baselineStorageKey,
         lastRotatedStorageKey,
@@ -1088,6 +1099,11 @@ export const useEvoluContactsOwnerRotation = ({
         setCurrentIndex,
         extra,
       } = params;
+      const pendingTarget = pendingRotationTargets.current[scope];
+      if (pendingTarget !== undefined) {
+        if (nextIndex < pendingTarget) return;
+        delete pendingRotationTargets.current[scope];
+      }
       if (nextIndex === currentIndex) return;
       writeStoredNonNegativeInt(indexStorageKey, nextIndex);
       setCounterValue(baselineStorageKey, nextIndex, baseline ?? 0);
@@ -1099,8 +1115,9 @@ export const useEvoluContactsOwnerRotation = ({
       extra?.();
     };
 
-    if (cashuSnap && cashuSnap.index !== cashuOwnerIndex) {
+    if (cashuSnap) {
       adoptIndex({
+        scope: "cashu",
         indexStorageKey: EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
         lastRotatedStorageKey: EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
@@ -1112,9 +1129,10 @@ export const useEvoluContactsOwnerRotation = ({
       });
     }
 
-    if (contactsSnap && contactsSnap.index !== contactsOwnerIndex) {
+    if (contactsSnap) {
       const snap = contactsSnap;
       adoptIndex({
+        scope: "contacts",
         indexStorageKey: EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
         lastRotatedStorageKey:
@@ -1127,8 +1145,9 @@ export const useEvoluContactsOwnerRotation = ({
       });
     }
 
-    if (messagesSnap && messagesSnap.index !== messagesOwnerIndex) {
+    if (messagesSnap) {
       adoptIndex({
+        scope: "messages",
         indexStorageKey: EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
         lastRotatedStorageKey:
@@ -1141,8 +1160,9 @@ export const useEvoluContactsOwnerRotation = ({
       });
     }
 
-    if (transactionsSnap && transactionsSnap.index !== transactionsOwnerIndex) {
+    if (transactionsSnap) {
       adoptIndex({
+        scope: "transactions",
         indexStorageKey: EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY,
         lastRotatedStorageKey:
@@ -1165,10 +1185,17 @@ export const useEvoluContactsOwnerRotation = ({
   ]);
 
   React.useEffect(() => {
+    if (!cashuBootstrapRecoveryPending.current) return;
     if (!isSeedLogin) return;
+    if (rotationSnapshots.cashu || cashuOwnerIndex !== initialCashuOwnerIndex) {
+      cashuBootstrapRecoveryPending.current = false;
+      return;
+    }
+    if (!allowMissingOwnerMetaBootstrap) return;
     if (!fixedOwnerSyncData) return;
     if (!ownerSyncData) return;
-    if (rotationSnapshots.cashu) return;
+    if (rotateCashuOwnerIsBusy) return;
+    cashuBootstrapRecoveryPending.current = false;
     if (cashuOwnerIndex <= 0) return;
     if (cashuOwnerWriteCount > 0) return;
 
@@ -1180,11 +1207,14 @@ export const useEvoluContactsOwnerRotation = ({
     );
     setCashuOwnerIndex(0);
   }, [
+    allowMissingOwnerMetaBootstrap,
     cashuOwnerIndex,
     cashuOwnerWriteCount,
     fixedOwnerSyncData,
+    initialCashuOwnerIndex,
     isSeedLogin,
     ownerSyncData,
+    rotateCashuOwnerIsBusy,
     rotationSnapshots.cashu,
   ]);
 
@@ -1382,6 +1412,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
+      pendingRotationTargets.current.contacts = nextIndex;
       writeStoredNonNegativeInt(
         EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
         nextIndex,
@@ -1472,6 +1503,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
+      pendingRotationTargets.current.cashu = nextIndex;
       writeStoredNonNegativeInt(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, nextIndex);
       const nextOwnerCashuRows = allCashuTokensRows.reduce(
         (count, row) =>
@@ -1622,6 +1654,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
+      pendingRotationTargets.current.messages = nextIndex;
       writeStoredNonNegativeInt(
         EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
         nextIndex,
@@ -1756,6 +1789,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
+      pendingRotationTargets.current.transactions = nextIndex;
       writeStoredNonNegativeInt(
         EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
         nextIndex,

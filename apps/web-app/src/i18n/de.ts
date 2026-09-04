@@ -176,7 +176,11 @@ export const de = {
   relayPublishAccepted: "Angenommen",
   relayPublishRejected: "Abgelehnt",
   evoluSyncLabel: "Synchronisierung",
-  evoluSyncOk: "Synchronisiert",
+  evoluSyncOk: "Verbunden",
+  evoluQuotaExceeded:
+    "Speicherlimit für die Synchronisierung erreicht. Einige Änderungen bleiben möglicherweise nur auf diesem Gerät. Behalte die lokalen Daten, bis die Synchronisierung wieder funktioniert.",
+  evoluSyncError:
+    "Evolu hat einen Fehler gemeldet. Einige Änderungen haben deine anderen Geräte möglicherweise nicht erreicht.",
   evoluSyncing: "Wird synchronisiert…",
   evoluNotSynced: "Nicht synchronisiert",
   evoluCapacityMeasuring: "Wird gemessen…",

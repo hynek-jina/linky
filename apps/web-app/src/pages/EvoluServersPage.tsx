@@ -1,4 +1,5 @@
 import React from "react";
+import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
@@ -20,14 +21,15 @@ export function EvoluServersPage(): React.ReactElement {
   const { t } = useAppShellCore();
   const navigateTo = useNavigation();
 
-  const totalCurrentRows = Object.values(evoluTableCounts).reduce<number>(
-    (sum, count) => sum + (count ?? 0),
-    0,
+  const counts = Object.values(evoluTableCounts);
+  const totalCurrentRows = counts.reduce<number | null>(
+    (sum, count) => (sum === null || count === null ? null : sum + count),
+    counts.length ? 0 : null,
   );
-  const historyRows = evoluHistoryCount ?? 0;
 
   return (
     <section className="panel">
+      <EvoluSyncErrorNotice />
       {/* Server list */}
       {evoluServerUrls.length === 0 ? (
         <p className="muted" style={{ marginTop: 0 }}>
@@ -104,7 +106,11 @@ export function EvoluServersPage(): React.ReactElement {
           <span className="settings-label">{t("evoluData")}</span>
         </div>
         <div className="settings-right">
-          <span className="muted">{totalCurrentRows} rows</span>
+          <span className="muted">
+            {totalCurrentRows === null
+              ? t("unknown")
+              : `${totalCurrentRows} rows`}
+          </span>
           <span className="settings-chevron" aria-hidden="true">
             &gt;
           </span>
@@ -120,7 +126,11 @@ export function EvoluServersPage(): React.ReactElement {
           <span className="settings-label">{t("evoluHistory")}</span>
         </div>
         <div className="settings-right">
-          <span className="muted">{historyRows} rows</span>
+          <span className="muted">
+            {evoluHistoryCount === null
+              ? t("unknown")
+              : `${evoluHistoryCount} rows`}
+          </span>
           <span className="settings-chevron" aria-hidden="true">
             &gt;
           </span>

@@ -172,7 +172,11 @@ export const cs = {
   relayPublishAccepted: "Přijato",
   relayPublishRejected: "Odmítnuto",
   evoluSyncLabel: "Synchronizace",
-  evoluSyncOk: "Synchronizováno",
+  evoluSyncOk: "Připojeno",
+  evoluQuotaExceeded:
+    "Dosažen limit úložiště synchronizace. Některé změny mohou zůstat pouze na tomto zařízení. Do obnovení synchronizace nemažte jeho místní data.",
+  evoluSyncError:
+    "Evolu nahlásilo chybu. Některé změny se nemusely dostat na vaše ostatní zařízení.",
   evoluSyncing: "Synchronizuji…",
   evoluNotSynced: "Nesynchronizuje se",
   evoluCapacityMeasuring: "Měřím…",

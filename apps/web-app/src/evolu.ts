@@ -3,7 +3,7 @@ import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDeferredOnlineReady } from "./hooks/useDeferredOnlineReady";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import { shouldUseInMemoryEvoluStorage } from "./platform/evoluWebStorage";
@@ -16,6 +16,8 @@ import {
   safeLocalStorageSetJson,
 } from "./utils/storage";
 import { isRecord } from "./utils/unknown";
+import { getInspectorEmissionEnabled } from "./devtools/inspector/inspectorEnabled";
+import { reportInspectorRows } from "./devtools/inspector/reportInspectorRows";
 
 const isEvoluLoggingEnabled = (): boolean => {
   if (!import.meta.env.DEV) return false;
@@ -101,10 +103,11 @@ const toJsonValue = (value: unknown): JsonValue => {
 
 type EvoluQueryRow = Record<string, unknown>;
 
-const readCount = (rows: ReadonlyArray<EvoluQueryRow>): number => {
-  const first = rows[0];
-  if (!first) return 0;
-  return Number(first.count ?? 0);
+const readCount = (rows: ReadonlyArray<EvoluQueryRow>): number | null => {
+  const count = rows[0]?.count;
+  return typeof count === "number" && Number.isFinite(count) && count >= 0
+    ? count
+    : null;
 };
 
 const toByteArray = (value: unknown): number[] => {
@@ -593,26 +596,33 @@ export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
   return enabled ? syncOwner : null;
 };
 
-type EvoluLastError = Error | string | null;
-
-const toEvoluLastError = (value: unknown): EvoluLastError => {
-  if (value === null || value === undefined) return null;
-  if (value instanceof Error) return value;
-  return String(value);
-};
-
 export const useEvoluLastError = (opts?: {
   logToConsole?: boolean;
-}): EvoluLastError => {
+}): Evolu.EvoluError | null => {
   const logToConsole = opts?.logToConsole ?? false;
-  const [lastError, setLastError] = useState<EvoluLastError>(null);
+  const [lastError, setLastError] = useState<Evolu.EvoluError | null>(() =>
+    getEvolu().getError(),
+  );
 
   useEffect(() => {
     const instance = getEvolu();
     const unsub = instance.subscribeError(() => {
-      const err = toEvoluLastError(instance.getError());
+      const err = instance.getError();
       setLastError(err);
-      if (logToConsole && err) console.log("[linky][evolu] error", err);
+      if (!err) return;
+      if (logToConsole) console.log("[linky][evolu] error", err.type);
+      if (getInspectorEmissionEnabled()) {
+        reportInspectorRows([
+          {
+            at: Date.now(),
+            channel: "evolu.sync",
+            tag: "EvoluError",
+            summary: `Evolu reported ${err.type}`,
+            links: "ownerId" in err ? { owner: err.ownerId } : {},
+            payload: { type: err.type },
+          },
+        ]);
+      }
     });
 
     return () => {
@@ -627,7 +637,9 @@ export const useEvoluLastError = (opts?: {
   return lastError;
 };
 
-const getEvoluDatabaseInfo = async (): Promise<{
+const getEvoluDatabaseInfo = async (
+  isCurrent: () => boolean,
+): Promise<{
   bytes: number;
   tableCounts: Record<string, number | null>;
   historyCount: number | null;
@@ -685,6 +697,7 @@ const getEvoluDatabaseInfo = async (): Promise<{
   const tableCountsPromise = (async () => {
     const out: Record<string, number | null> = {};
     for (const table of tables) {
+      if (!isCurrent()) break;
       try {
         const q = createUntypedQuery(instance, (db) =>
           db.selectFrom(table).select((eb) => eb.fn.countAll().as("count")),
@@ -929,30 +942,73 @@ export const useEvoluDatabaseInfoState = (opts?: {
     updatedAtMs: null,
   }));
   const [isBusy, setIsBusy] = useState(false);
+  const refreshing = useRef(false);
+  const refreshRequested = useRef(false);
+  const refreshGeneration = useRef(0);
+  const queryFailed = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (isBusy) return;
+    if (!enabled || queryFailed.current) return;
+    refreshRequested.current = true;
+    if (refreshing.current) return;
+    refreshing.current = true;
+    const generation = ++refreshGeneration.current;
     setIsBusy(true);
     try {
-      const next = await getEvoluDatabaseInfo();
-      setInfo({
-        bytes: next.bytes,
-        tableCounts: next.tableCounts,
-        historyCount: next.historyCount,
-        updatedAtMs: Date.now(),
-      });
+      do {
+        refreshRequested.current = false;
+        const next = await getEvoluDatabaseInfo(
+          () => generation === refreshGeneration.current,
+        );
+        if (generation !== refreshGeneration.current) return;
+        setInfo({ ...next, updatedAtMs: Date.now() });
+      } while (refreshRequested.current);
     } catch (err) {
-      onError?.(err);
+      if (generation === refreshGeneration.current) onError?.(err);
     } finally {
-      setIsBusy(false);
+      if (generation === refreshGeneration.current) {
+        refreshing.current = false;
+        setIsBusy(false);
+      }
     }
-  }, [isBusy, onError]);
+  }, [enabled, onError]);
 
   useEffect(() => {
     if (!enabled) return;
-    if (info.bytes !== null) return;
+    if (queryFailed.current) return;
+    const cancelRefresh = () => {
+      refreshGeneration.current += 1;
+      refreshing.current = false;
+      refreshRequested.current = false;
+      setIsBusy(false);
+    };
+    const instance = getEvolu();
+    let unsubscribe = () => {};
+    const unsubscribeError = instance.subscribeError(() => {
+      const error = instance.getError();
+      if (error?.type !== "SqliteError") return;
+      // Evolu leaves a failed loadQuery promise cached and unresolved until reload.
+      queryFailed.current = true;
+      unsubscribe();
+      cancelRefresh();
+      setInfo({
+        bytes: null,
+        tableCounts: {},
+        historyCount: null,
+        updatedAtMs: null,
+      });
+      onError?.(error);
+    });
+    unsubscribe = subscribeEvoluHistoryMutationVersion(() => {
+      void refresh();
+    });
     void refresh();
-  }, [enabled, info.bytes, refresh]);
+    return () => {
+      unsubscribe();
+      unsubscribeError();
+      cancelRefresh();
+    };
+  }, [enabled, onError, refresh]);
 
   return {
     info,

@@ -23,8 +23,7 @@ export function deriveEvoluServerState({
     | "evoluSyncing"
     | "evoluSyncOk";
 } {
-  const resolvedState =
-    isOffline || evoluHasError ? "disconnected" : (state ?? "checking");
+  const resolvedState = isOffline ? "disconnected" : (state ?? "checking");
   const isSynced =
     Boolean(syncOwner) &&
     !evoluHasError &&

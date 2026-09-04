@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import type { OwnerId, SyncOwner } from "@evolu/common";
+import type { EvoluError, OwnerId, SyncOwner } from "@evolu/common";
 import React from "react";
 import type { EvoluServerStatus } from "../../evolu";
 import type { PasswordManagerSaveResult } from "../../platform/passwordManager";
@@ -47,6 +47,7 @@ export interface EvoluSettingsContextValue {
   evoluContactsOwnerPointer: string;
   evoluDatabaseBytes: number | null;
   evoluHasError: boolean;
+  evoluErrorType: EvoluError["type"] | null;
   evoluHistoryAllowedOwnerIds: readonly string[];
   evoluHistoryCount: number | null;
   evoluMessagesOwnerEditsUntilRotation: number;

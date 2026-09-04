@@ -169,7 +169,11 @@ export const en = {
   relayPublishAccepted: "Accepted",
   relayPublishRejected: "Rejected",
   evoluSyncLabel: "Sync",
-  evoluSyncOk: "Synced",
+  evoluSyncOk: "Connected",
+  evoluQuotaExceeded:
+    "Sync storage limit reached. Some changes may remain only on this device. Keep its local data until sync is restored.",
+  evoluSyncError:
+    "Evolu reported an error. Some changes may not have reached your other devices.",
   evoluSyncing: "Syncing…",
   evoluNotSynced: "Not synced",
   evoluCapacityMeasuring: "Measuring…",
