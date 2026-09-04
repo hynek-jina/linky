@@ -1,6 +1,6 @@
 import { bech32 } from "@scure/base";
 import { describe, expect, it } from "vitest";
-import { getLightningInvoicePreview } from "../src/utils/lightningInvoice";
+import { getLightningInvoicePreview } from "./lightningInvoice";
 
 const BOLT11_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 const DESCRIPTION_TAG = BOLT11_CHARSET.indexOf("d");

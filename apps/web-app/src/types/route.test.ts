@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { parseRouteFromHash } from "../src/types/route";
-import { parseNativeDeepLinkUrl } from "../src/utils/deepLinks";
+import { parseRouteFromHash } from "./route";
+import { parseNativeDeepLinkUrl } from "../utils/deepLinks";
 
 const replaceHash = (hash: string) => {
   window.history.replaceState(

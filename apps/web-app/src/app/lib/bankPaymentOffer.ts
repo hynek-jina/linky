@@ -1,7 +1,5 @@
 import type { LocalNostrMessage } from "../types/appTypes";
 
-export const LINKY_BANK_PAYMENT_OFFER_KIND = 24135;
-export const LINKY_BANK_PAYMENT_OFFER_VALUE = "bank_payment_offer";
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
 export const LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT = 1;

@@ -1,5 +1,7 @@
+import { getPublicKey } from "nostr-tools";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLinkyBankPaymentOfferEvent } from "../../testUtils/bankPaymentOfferEvent";
+import { createSecretKey } from "../../testUtils/nostrKeys";
 import type { LocalNostrMessage } from "../types/appTypes";
 import {
   forgetLinkyBankPaymentOfferSpdPayload,
@@ -20,13 +22,16 @@ import {
   type LinkyBankPaymentOfferStatus,
 } from "./bankPaymentOffer";
 
+const SENDER_PUBKEY = getPublicKey(createSecretKey(1));
+const RECIPIENT_PUBKEY = getPublicKey(createSecretKey(2));
+
 const createOffer = (status: LinkyBankPaymentOfferStatus) =>
   createLinkyBankPaymentOfferEvent({
     amountText: "250 Kč",
     clientId: "client-1",
     createdAt: 1_700_000_000,
-    recipientPublicKey: "recipient",
-    senderPublicKey: "sender",
+    recipientPublicKey: RECIPIENT_PUBKEY,
+    senderPublicKey: SENDER_PUBKEY,
     status,
   });
 
@@ -41,8 +46,8 @@ const createOfferMessage = (args: {
     clientId: `${args.offerId}-${args.contactId}-${args.status}`,
     createdAt: args.createdAtSec,
     offerId: args.offerId,
-    recipientPublicKey: "recipient",
-    senderPublicKey: "sender",
+    recipientPublicKey: RECIPIENT_PUBKEY,
+    senderPublicKey: SENDER_PUBKEY,
     status: args.status,
   });
   return {
@@ -51,7 +56,7 @@ const createOfferMessage = (args: {
     createdAtSec: args.createdAtSec,
     direction: "out",
     id: `${args.offerId}-${args.contactId}-${args.status}`,
-    pubkey: "sender",
+    pubkey: SENDER_PUBKEY,
     rumorId: null,
     wrapId: `wrap-${args.offerId}-${args.contactId}-${args.status}`,
   };
@@ -136,7 +141,7 @@ describe("bank payment offer notifications", () => {
       createdAtSec: 1_700_000_100,
       direction: "in",
       id: "message-1",
-      pubkey: "sender",
+      pubkey: SENDER_PUBKEY,
       rumorId: "rumor-1",
       wrapId: "wrap-1",
     };
@@ -176,8 +181,8 @@ describe("bank payment offer notifications", () => {
       expiresAtSec: 1_700_000_360,
       extensionSec: 60,
       offerId: "offer-extended",
-      recipientPublicKey: "recipient",
-      senderPublicKey: "sender",
+      recipientPublicKey: RECIPIENT_PUBKEY,
+      senderPublicKey: SENDER_PUBKEY,
       status: "bank_details_sent",
     });
     const info = getLinkyBankPaymentOfferInfo(event.content);
@@ -215,8 +220,8 @@ describe("bank payment offer notifications", () => {
       createdAt: 1_700_000_150,
       initiatedAtSec: 1_700_000_000,
       offerId: "offer-settled",
-      recipientPublicKey: "recipient",
-      senderPublicKey: "sender",
+      recipientPublicKey: RECIPIENT_PUBKEY,
+      senderPublicKey: SENDER_PUBKEY,
       status: "settled",
     });
     const info = getLinkyBankPaymentOfferInfo(event.content);
@@ -242,8 +247,8 @@ describe("bank payment offer notifications", () => {
         clientId: `${args.contactId}-${args.bankPaidAtSec}`,
         createdAt: args.bankPaidAtSec + 10,
         initiatedAtSec,
-        recipientPublicKey: "recipient",
-        senderPublicKey: "sender",
+        recipientPublicKey: RECIPIENT_PUBKEY,
+        senderPublicKey: SENDER_PUBKEY,
         status: "settled",
       });
       return {

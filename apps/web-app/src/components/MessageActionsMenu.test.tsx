@@ -1,13 +1,7 @@
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 import { MessageActionsMenu } from "./MessageActionsMenu";
-
-Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-  configurable: true,
-  value: true,
-  writable: true,
-});
 
 const defaultLabels = {
   copy: "Copy",
@@ -21,28 +15,22 @@ const defaultLabels = {
 type MenuProps = Parameters<typeof MessageActionsMenu>[0];
 
 const renderMenu = async (overrides: Partial<MenuProps> = {}) => {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  const root = createRoot(container);
-
-  await act(async () => {
-    root.render(
-      <MessageActionsMenu
-        canCopy={true}
-        canEdit={false}
-        canReplyOrReact={true}
-        imageActions={null}
-        isOpen={true}
-        labels={defaultLabels}
-        onClose={vi.fn()}
-        onCopy={vi.fn()}
-        onEdit={vi.fn()}
-        onReact={vi.fn()}
-        onReply={vi.fn()}
-        {...overrides}
-      />,
-    );
-  });
+  const { root } = await renderIntoDocument(
+    <MessageActionsMenu
+      canCopy={true}
+      canEdit={false}
+      canReplyOrReact={true}
+      imageActions={null}
+      isOpen={true}
+      labels={defaultLabels}
+      onClose={vi.fn()}
+      onCopy={vi.fn()}
+      onEdit={vi.fn()}
+      onReact={vi.fn()}
+      onReply={vi.fn()}
+      {...overrides}
+    />,
+  );
 
   return root;
 };

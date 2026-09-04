@@ -1,5 +1,5 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import type { Root } from "react-dom/client";
 import {
   afterEach,
   beforeAll,
@@ -9,6 +9,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { renderIntoDocument } from "../../testUtils/renderIntoDocument";
 import { usePushRegistrationLifecycle } from "./usePushRegistrationLifecycle";
 
 const platformMocks = vi.hoisted(() => ({
@@ -22,11 +23,6 @@ const pushMocks = vi.hoisted(() => ({
 
 vi.mock("../../platform/runtime", () => platformMocks);
 vi.mock("../../utils/pushNotifications", () => pushMocks);
-
-Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-  configurable: true,
-  value: true,
-});
 
 interface HarnessProps {
   currentNsec: string | null;
@@ -81,11 +77,10 @@ const renderLifecycle = async ({
   currentNsec = "nsec-test",
   enabled = true,
 }: Partial<HarnessProps> = {}): Promise<Root> => {
-  const root = createRoot(document.createElement("div"));
+  const { root } = await renderIntoDocument(
+    <Harness currentNsec={currentNsec} enabled={enabled} />,
+  );
   mountedRoots.add(root);
-  await act(async () => {
-    root.render(<Harness currentNsec={currentNsec} enabled={enabled} />);
-  });
   return root;
 };
 

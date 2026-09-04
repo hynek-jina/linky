@@ -1,5 +1,6 @@
 import { getPublicKey, nip19 } from "nostr-tools";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSecretKey } from "../testUtils/nostrKeys";
 import {
   registerPushNotifications,
   unregisterPushNotifications,
@@ -29,7 +30,7 @@ vi.mock("./pushDebugLog", () => ({
   appendPushDebugLog: vi.fn().mockResolvedValue(undefined),
 }));
 
-const SECRET_KEY = new Uint8Array(32).fill(7);
+const SECRET_KEY = createSecretKey(7);
 const NSEC = nip19.nsecEncode(SECRET_KEY);
 const PUBKEY = getPublicKey(SECRET_KEY);
 const VAPID_KEY = "AQID";

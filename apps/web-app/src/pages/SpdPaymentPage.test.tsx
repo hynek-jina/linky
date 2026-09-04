@@ -1,6 +1,6 @@
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 import { SpdPaymentPage } from "./SpdPaymentPage";
 
 const { navigateTo } = vi.hoisted(() => ({ navigateTo: vi.fn() }));
@@ -29,12 +29,6 @@ vi.mock("../app/hooks/useFiatRates", () => ({
     usdPerBtc: 1_000_000,
   }),
 }));
-
-Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-  configurable: true,
-  value: true,
-  writable: true,
-});
 
 const setInputValue = (input: HTMLInputElement, value: string) => {
   const setter = Object.getOwnPropertyDescriptor(
@@ -65,28 +59,23 @@ describe("SpdPaymentPage offer recipients", () => {
 
   it("selects the first configured contacts and sends manual changes", async () => {
     const onRequestReimbursement = vi.fn(async () => null);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <SpdPaymentPage
-          cashuBalanceAfterMelt={100_000}
-          initialOfferContactCount={2}
-          initialOfferDelaySec={0}
-          isEditing={false}
-          offerContacts={[
-            { id: "a", name: "Alice", npub: "npub1alice" },
-            { id: "b", name: "Bob", npub: "npub1bob" },
-            { id: "c", name: "Carol", npub: "npub1carol" },
-          ]}
-          onRequestReimbursement={onRequestReimbursement}
-          spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-          t={t}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <SpdPaymentPage
+        cashuBalanceAfterMelt={100_000}
+        initialOfferContactCount={2}
+        initialOfferDelaySec={0}
+        isEditing={false}
+        offerContacts={[
+          { id: "a", name: "Alice", npub: "npub1alice" },
+          { id: "b", name: "Bob", npub: "npub1bob" },
+          { id: "c", name: "Carol", npub: "npub1carol" },
+        ]}
+        onRequestReimbursement={onRequestReimbursement}
+        spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
+        t={t}
+      />,
+    );
 
     const contactButtons = Array.from(
       container.querySelectorAll<HTMLButtonElement>(
@@ -139,28 +128,22 @@ describe("SpdPaymentPage offer recipients", () => {
   });
 
   it("numbers selected recipients and re-adds a removed contact at the end", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <SpdPaymentPage
-          cashuBalanceAfterMelt={100_000}
-          initialOfferContactCount={3}
-          initialOfferDelaySec={5}
-          isEditing={false}
-          offerContacts={[
-            { id: "a", name: "Alice", npub: "npub1alice" },
-            { id: "b", name: "Bob", npub: "npub1bob" },
-            { id: "c", name: "Carol", npub: "npub1carol" },
-          ]}
-          onRequestReimbursement={async () => null}
-          spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-          t={t}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <SpdPaymentPage
+        cashuBalanceAfterMelt={100_000}
+        initialOfferContactCount={3}
+        initialOfferDelaySec={5}
+        isEditing={false}
+        offerContacts={[
+          { id: "a", name: "Alice", npub: "npub1alice" },
+          { id: "b", name: "Bob", npub: "npub1bob" },
+          { id: "c", name: "Carol", npub: "npub1carol" },
+        ]}
+        onRequestReimbursement={async () => null}
+        spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
+        t={t}
+      />,
+    );
 
     const readOrders = () =>
       Array.from(
@@ -202,26 +185,19 @@ describe("SpdPaymentPage offer recipients", () => {
       chatId: "contact-a",
       offerId: "offer-1",
     }));
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <SpdPaymentPage
-          cashuBalanceAfterMelt={100_000}
-          initialOfferContactCount={1}
-          initialOfferDelaySec={0}
-          isEditing={false}
-          offerContacts={[
-            { id: "contact-a", name: "Alice", npub: "npub1alice" },
-          ]}
-          onRequestReimbursement={onRequestReimbursement}
-          spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-          t={t}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <SpdPaymentPage
+        cashuBalanceAfterMelt={100_000}
+        initialOfferContactCount={1}
+        initialOfferDelaySec={0}
+        isEditing={false}
+        offerContacts={[{ id: "contact-a", name: "Alice", npub: "npub1alice" }]}
+        onRequestReimbursement={onRequestReimbursement}
+        spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
+        t={t}
+      />,
+    );
 
     await act(async () => {
       container
@@ -237,32 +213,26 @@ describe("SpdPaymentPage offer recipients", () => {
   });
 
   it("shows each candidate's last payment response in minutes and seconds", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <SpdPaymentPage
-          cashuBalanceAfterMelt={100_000}
-          initialOfferContactCount={1}
-          initialOfferDelaySec={0}
-          isEditing={false}
-          offerContacts={[
-            {
-              id: "contact-a",
-              lastBankPaymentResponseSec: 125,
-              name: "Alice",
-              npub: "npub1alice",
-            },
-            { id: "contact-b", name: "Bob", npub: "npub1bob" },
-          ]}
-          onRequestReimbursement={async () => null}
-          spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-          t={t}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <SpdPaymentPage
+        cashuBalanceAfterMelt={100_000}
+        initialOfferContactCount={1}
+        initialOfferDelaySec={0}
+        isEditing={false}
+        offerContacts={[
+          {
+            id: "contact-a",
+            lastBankPaymentResponseSec: 125,
+            name: "Alice",
+            npub: "npub1alice",
+          },
+          { id: "contact-b", name: "Bob", npub: "npub1bob" },
+        ]}
+        onRequestReimbursement={async () => null}
+        spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
+        t={t}
+      />,
+    );
 
     const candidates = container.querySelectorAll(
       ".bank-payment-offer-contact",

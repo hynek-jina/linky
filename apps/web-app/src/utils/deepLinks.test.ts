@@ -1,23 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCashuDeepLink, buildCashuShareUrl } from "../src/utils/deepLinks";
-
-const buildCashuToken = (): string => {
-  const payload = JSON.stringify({
-    token: [
-      {
-        mint: "https://mint.example",
-        proofs: [{ amount: 21, secret: "secret", C: "c", id: "keyset" }],
-      },
-    ],
-  });
-
-  const base64Url = btoa(payload)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-
-  return `cashuA${base64Url}`;
-};
+import { buildCashuToken } from "../testUtils/cashuToken";
+import { buildCashuDeepLink, buildCashuShareUrl } from "./deepLinks";
 
 describe("buildCashuShareUrl", () => {
   it("builds a public cashu landing page URL with the token in the hash", () => {

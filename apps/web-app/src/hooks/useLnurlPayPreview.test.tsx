@@ -5,8 +5,8 @@ import {
   getLnurlPayAmountRangeError,
   useLnurlPayPreview,
   type LnurlPayPreviewResult,
-} from "../src/hooks/useLnurlPayPreview";
-import type { LnurlPayPreview } from "../src/lnurlPay";
+} from "./useLnurlPayPreview";
+import type { LnurlPayPreview } from "../lnurlPay";
 
 const renderPreviewHook = (target: string) => {
   const results: LnurlPayPreviewResult[] = [];

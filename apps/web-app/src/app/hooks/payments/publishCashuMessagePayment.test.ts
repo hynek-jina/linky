@@ -17,6 +17,8 @@ import {
 import { Exit } from "effect";
 import { getPublicKey, nip19 } from "nostr-tools";
 import { describe, expect, it, vi } from "vitest";
+import { createSecretKey } from "../../../testUtils/nostrKeys";
+import { buildCashuToken } from "../../../testUtils/cashuToken";
 import type { LocalNostrMessage } from "../../types/appTypes";
 import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
 import type {
@@ -24,28 +26,15 @@ import type {
   SendPaymentNotice,
 } from "./publishCashuMessagePayment";
 
-const privateKey = new Uint8Array(32).fill(1);
-const contactPrivateKey = new Uint8Array(32).fill(2);
+const privateKey = createSecretKey(1);
+const contactPrivateKey = createSecretKey(2);
 const myPublicKey = getPublicKey(privateKey);
 const currentNpub = nip19.npubEncode(myPublicKey);
 const contactPublicKey = getPublicKey(contactPrivateKey);
 const contactNpub = nip19.npubEncode(contactPublicKey);
 const contactId = Evolu.createIdFromString<"Contact">("contact");
 
-const tokenText = `cashuA${btoa(
-  JSON.stringify({
-    token: [
-      {
-        mint: "https://mint.example",
-        proofs: [{ amount: 100, C: "c", id: "i", secret: "s" }],
-      },
-    ],
-    unit: "sat",
-  }),
-)
-  .replace(/\+/g, "-")
-  .replace(/\//g, "_")
-  .replace(/=+$/g, "")}`;
+const tokenText = buildCashuToken({ amounts: [100], unit: "sat" });
 
 const rootId = "ab".repeat(32);
 const replyId = "cd".repeat(32);
