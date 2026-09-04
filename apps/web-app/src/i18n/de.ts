@@ -1,14 +1,14 @@
-import { en } from "./en";
+import type { cs } from "./cs";
 
 export const de = {
-  ...en,
-
+  appTitle: "Linky",
   settings: "Einstellungen",
   detail: "Details",
   settingsGeneral: "Allgemein",
   settingsPayments: "Zahlungen",
   settingsNetwork: "Netzwerk",
   settingsSecurity: "Sicherheit",
+  settingsDebug: "Debug",
   nostrInspector: "Inspektor",
   nostrInspectorLogs: "Inspektorprotokolle sammeln",
   nostrInspectorLogsStats: "{count} Zeilen · {size} · älteste Zeile {age} alt",
@@ -21,11 +21,13 @@ export const de = {
     "Auf die Inspektorprotokolle konnte nicht zugegriffen werden.",
   openNostrInspector: "Inspektor öffnen",
   back: "Zurück",
+  menu: "Menü",
   advanced: "Erweitert",
   transactionsTitle: "Transaktionen",
   showTransactions: "Transaktionen anzeigen",
   feedback: "Feedback",
   donate: "Spenden",
+  data: "Daten",
   exportData: "Daten exportieren",
   importData: "Daten importieren",
   dedupeContacts: "Doppelte Kontakte zusammenführen",
@@ -54,9 +56,11 @@ export const de = {
   notificationsDisableError:
     "Benachrichtigungen konnten nicht deaktiviert werden",
   notificationsDenied: "Abgelehnt",
+  notificationsError: "Fehler",
   notificationReceivedMoney: "Du hast Geld erhalten",
   notificationReceivedBankPaymentReimbursement:
     "Deine Sats für die Bankzahlung sind angekommen",
+  onboardingTitle: "Linky",
 
   onboardingSubtitle: "Baue dein Bitcoin-Netzwerk auf.",
   onboardingCreate: "Profil erstellen",
@@ -69,6 +73,7 @@ export const de = {
     "Gib deine 20 SLIP-39-Wörter ein. Du kannst sie eintippen oder hier einfügen.",
   onboardingReturnHint:
     "Verwende 20 durch Leerzeichen oder Kommas getrennte SLIP-39-Wörter.",
+  onboardingReturnPlaceholder: "academic acid acne ...",
   onboardingReturnPasteButton: "Aus Zwischenablage einfügen",
   onboardingReturnConfirm: "Weiter",
   onboardingReturnWordCount: "{count}/{total} Wörter",
@@ -112,8 +117,10 @@ export const de = {
     "Sensible Aktion. Klicke zum Bestätigen noch einmal.",
   derive: "Ableiten",
   nostrKeysCopied: "Nostr-Schlüssel in die Zwischenablage kopiert.",
+  seed: "Schlüssel",
   seedCopied: "Schlüssel in die Zwischenablage kopiert.",
   seedMissing: "Schlüssel fehlen. Melde dich erneut mit deinen Schlüsseln an.",
+  tokens: "Tokens",
   preferCashu: "Cashu bevorzugen",
   payWithCashuDisabled:
     "Cashu-Zahlungen sind in den erweiterten Einstellungen deaktiviert.",
@@ -236,6 +243,7 @@ export const de = {
   evoluHistoryDataJson: "Änderungsverlauf",
   evoluTable: "Tabelle",
   evoluColumn: "Spalte",
+  evoluId: "ID",
   evoluValue: "Wert",
   evoluTimestamp: "Zeitstempel",
   loading: "Wird geladen",
@@ -255,6 +263,7 @@ export const de = {
   transactionCashuRestored: "Cashu-Token wiederhergestellt",
   transactionCashuIssued: "Cashu-Token ausgestellt",
   transactionCashuSwap: "Cashu-Mint-Wechsel",
+  transactionDetailError: "Fehler",
   transactionDetailMint: "Mint",
   transactionDetailUsedToken: "Verwendete Token",
   transactionDetailGainedToken: "Erhaltener Token",
@@ -263,6 +272,7 @@ export const de = {
   transactionDetailLightningPreimage: "Lightning-Preimage",
   transactionDetailLnurlSuccessMessage: "Nachricht des Empfängers",
   transactionDetailLnurlSuccessUrl: "Link des Empfängers",
+  mints: "Mints",
 
   defaultMint: "Standard-Mint",
   testMintBadge: "Test",
@@ -277,14 +287,17 @@ export const de = {
   mintUpdating: "Mint wird aktualisiert…",
   unknown: "Unbekannt",
   mintNotFound: "Mint nicht gefunden.",
+  mintUrl: "URL",
   mintFees: "Gebühren",
   mintRefresh: "Informationen aktualisieren",
   mintDelete: "Mint löschen",
   mintLastChecked: "Zuletzt geprüft",
+  chat: "Chat",
 
   sendMessage: "Nachrichten",
   unknownContactTitle: "Unbekannter Kontakt",
   unknownContactNamePrefix: "[Unbekannt]",
+  chatIncomingMessageToast: "{name}: {message}",
   chatEmpty: "Noch keine Nachrichten.",
   chatIdentityChangedNotice: "Meine Identität hat sich geändert.",
   chatPlaceholder: "Nachricht",
@@ -327,6 +340,7 @@ export const de = {
   send: "Senden",
 
   profile: "Profil",
+  status: "Status",
   profileNoName: "Nostr-Profil",
   profileExchangeStatusLabel: "Für Menschen, die ich kenne, biete ich:",
   contactStatusProvides: "Bietet",
@@ -379,6 +393,7 @@ export const de = {
   guideMessageStep3Body: "Schreibe eine Nachricht in das Eingabefeld.",
   guideMessageStep4Title: "Senden",
   guideMessageStep4Body: "Tippe auf Senden.",
+  guideBackupKeysStep1Title: "Menü",
   guideBackupKeysStep1Body:
     "Öffne das Menü, um die erweiterten Einstellungen aufzurufen.",
   guideBackupKeysStep2Title: "Erweitert",
@@ -480,6 +495,7 @@ export const de = {
   pasteNotAvailable: "Einfügen aus der Zwischenablage ist nicht verfügbar.",
   pasteEmpty: "Die Zwischenablage ist leer.",
   errorPrefix: "Fehler",
+  wallet: "Wallet",
 
   walletEarlyWarningTitle: "Glückwunsch",
   walletEarlyWarningBody:
@@ -497,7 +513,9 @@ export const de = {
   topupFetchingInvoice: "Rechnung wird abgerufen…",
   topupInvoiceFailed: "Rechnung konnte nicht abgerufen werden",
   topupQrModeLabel: "QR-Typ für den Empfang",
+  topupQrModeCashu: "Cashu",
   topupQrModeUniversal: "Universell",
+  topupQrModeLightning: "Lightning",
   walletReceive: "Empfangen",
   walletSend: "Senden",
   manualPayTitle: "Senden",
@@ -568,6 +586,8 @@ export const de = {
   bankPaymentOfferProgressBankPayment: "Fiat-Zahlung",
   bankPaymentOfferProgressSats: "Bitcoin-Ausgleich",
   bankPaymentOfferTimeRemainingClock: "noch {minutes}:{seconds}",
+  bankPaymentOfferNeedMoreTime: "Ich brauche mehr Zeit (+1 Minute)",
+  bankPaymentOfferExtendOneMinute: "+1 Min.",
   bankPaymentOfferDescriptionOffered: "Zahlung über {amount} angeboten",
   bankPaymentOfferDescriptionAccepted:
     "Der Empfänger interessiert sich für die Zahlung über {amount}",
@@ -669,6 +689,7 @@ export const de = {
   cashuDeleted: "Token gelöscht.",
   cashuEmpty: "Noch keine Cashu-Token.",
   cashuIssuedEmpty: "Noch keine ausgestellten Token.",
+  cashuToken: "Token",
   cashuOnNfc: "Dieser Token ist auf einen NFC-Tag geschrieben.",
   cashuPendingHint: "Dieser Token wartet auf Annahme oder Bestätigung.",
   cashuMarkReserved: "Als reserviert markieren",
@@ -742,6 +763,7 @@ export const de = {
   lnurlPayAmountTooLow: "Der Betrag liegt unter dem Minimum von {min} sat.",
   lnurlPayAmountTooHigh: "Der Betrag liegt über dem Maximum von {max} sat.",
   lnurlSuccessActionMessage: "Nachricht des Empfängers: {message}",
+  lnurlSuccessActionUrl: "{description} {url}",
   payMissingLn: "Lightning-Adresse fehlt.",
   payInvalidAmount: "Ungültiger Betrag",
   payInsufficient: "Nicht genügend Cashu-Token.",
@@ -769,4 +791,4 @@ export const de = {
   yesterday: "Gestern",
   evoluWipeStorageFailed:
     "Gespeicherte Mnemonik fehlt (Evolu-Speicher kann nicht geleert werden).",
-} satisfies Record<keyof typeof en, string>;
+} satisfies Record<keyof typeof cs, string>;
