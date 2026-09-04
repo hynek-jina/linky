@@ -1,3 +1,5 @@
+import type { SafeFetchResult } from "./_safeFetch.js";
+
 interface ApiRequest {
   query?: Record<string, string | string[] | undefined>;
   headers?: Record<string, string | string[] | undefined>;
@@ -11,14 +13,7 @@ interface ApiResponse {
   setHeader: (name: string, value: string) => void;
 }
 
-interface ProxyResult {
-  status: number;
-  text: string;
-  contentType: string | null;
-}
-
 const defaultNpubcashBaseUrl = "https://npub.linky.fit";
-const proxyFetchTimeoutMs = 12_000;
 
 export const getFirstQueryValue = (
   value: string | string[] | undefined,
@@ -63,25 +58,9 @@ export const getPublicOrigin = (req: ApiRequest): string => {
   return `${protocol}://${host}`;
 };
 
-export const proxyFixedUrl = async (targetUrl: URL): Promise<ProxyResult> => {
-  const response = await fetch(targetUrl, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(proxyFetchTimeoutMs),
-  });
-
-  return {
-    status: response.status,
-    text: await response.text(),
-    contentType: response.headers.get("content-type"),
-  };
-};
-
 export const sendProxyResult = (
   res: ApiResponse,
-  result: ProxyResult,
+  result: SafeFetchResult,
 ): void => {
   res.setHeader("Cache-Control", "no-store");
   if (result.contentType) {
@@ -92,7 +71,7 @@ export const sendProxyResult = (
 
 export const sendPublicProxyResult = (
   res: ApiResponse,
-  result: ProxyResult,
+  result: SafeFetchResult,
 ): void => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   sendProxyResult(res, result);
@@ -105,4 +84,4 @@ export const sendProxyFailure = (res: ApiResponse, error: unknown): void => {
   });
 };
 
-export type { ApiRequest, ApiResponse, ProxyResult };
+export type { ApiRequest, ApiResponse };
