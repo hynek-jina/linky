@@ -50,11 +50,11 @@ import { checkProofStates, unspentProofs } from "./proofStates";
  * Deterministic slots reserved per mint attempt, and therefore the NUT-09
  * window a reclaim scans: the outputs of one claim always fall inside it.
  */
-export const QUOTE_OUTPUT_BLOCK = 64;
+const QUOTE_OUTPUT_BLOCK = 64;
 const MAX_MINT_ATTEMPTS = 5;
 
 export const QUOTE_UNPAID = "UNPAID";
-export const QUOTE_ISSUED = "ISSUED";
+const QUOTE_ISSUED = "ISSUED";
 
 /** The durable record's claim-relevant slice; flows carry their own extras. */
 export interface ClaimableQuote {
@@ -95,7 +95,7 @@ export interface QuoteClaimContext<R extends ClaimableQuote> {
   readonly clear: (record: R) => Effect.Effect<void>;
 }
 
-export const counterScopeOf = (record: ClaimableQuote): CounterScope => ({
+const counterScopeOf = (record: ClaimableQuote): CounterScope => ({
   mint: record.mint,
   unit: record.unit,
   keysetId: record.keysetId,

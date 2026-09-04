@@ -16,7 +16,7 @@ import type { KeyValueStoreService } from "../../ports/KeyValueStore";
  */
 
 export const RESTORE_CURSOR_KEY_PREFIX = "linkshu.restoreCursor.";
-export const SEEN_KEYSETS_KEY_PREFIX = "linkshu.seenKeysets.";
+const SEEN_KEYSETS_KEY_PREFIX = "linkshu.seenKeysets.";
 
 export const restoreCursorKey = (scope: CounterScope): string =>
   RESTORE_CURSOR_KEY_PREFIX + scopeSuffix(scope);

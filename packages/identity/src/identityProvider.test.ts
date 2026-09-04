@@ -39,7 +39,7 @@ const EXPECTED = {
 
 const testLayer = Layer.provideMerge(
   IdentityProvider.Live,
-  MasterSecretProvider.make(TEST_SEED),
+  Layer.succeed(MasterSecretProvider, TEST_SEED),
 );
 
 const runTest = <A>(
@@ -188,7 +188,7 @@ describe("IdentityProvider", () => {
     );
     const differentLayer = Layer.provideMerge(
       IdentityProvider.Live,
-      MasterSecretProvider.make(differentSeed),
+      Layer.succeed(MasterSecretProvider, differentSeed),
     );
 
     const original = await runTest(IdentityProvider);

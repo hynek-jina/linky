@@ -57,7 +57,7 @@ import {
 
 const sat = CurrencyUnit.make("sat");
 
-/** Mirrors the web app's claim poll; bolt11 mint quotes settle in seconds. */
+/** Bolt11 mint quotes settle in seconds. */
 const POLL_INTERVAL = Duration.seconds(5);
 /** Transient poll failures are expected offline; a run of them is not. */
 const MAX_CONSECUTIVE_POLL_FAILURES = 10;

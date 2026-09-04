@@ -46,17 +46,11 @@ const toSecretBytes = (value: unknown): Uint8Array | null => {
   return Uint8Array.from(out);
 };
 
-export const normalizeSlip39Share = (rawText: string): string =>
+const normalizeSlip39Share = (rawText: string): string =>
   toWordList(rawText).join(" ");
 
 export const looksLikeSlip39Share = (rawText: string): boolean =>
   toWordList(rawText).length === 20;
-
-export const validateSlip39Share = (rawText: string): boolean => {
-  const normalized = normalizeSlip39Share(rawText);
-  if (!looksLikeSlip39Share(normalized)) return false;
-  return Slip39.validateMnemonic(normalized);
-};
 
 export const parseSlip39Share = (
   input: string,
@@ -68,11 +62,6 @@ export const parseSlip39Share = (
     "Invalid SLIP-39 share (expected a valid 20-word share)",
   );
 };
-
-export const parseSlip39Passphrase = (
-  input: unknown,
-): Effect.Effect<Slip39Passphrase, IdentityDerivationError> =>
-  decodeUnknown(Slip39Passphrase, input, "Invalid SLIP-39 passphrase");
 
 export const recoverMasterSecretFromSlip39Share = (
   share: Slip39Share,

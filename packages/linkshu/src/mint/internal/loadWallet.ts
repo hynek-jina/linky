@@ -8,11 +8,10 @@ import type {
 } from "@cashu/cashu-ts";
 
 /**
- * Port of the web app's `createLoadedCashuWallet` (`utils/cashuWallet.ts`)
- * with the cashu-ts classes injected as parameters. The narrow structural
- * types below describe exactly what the loader consumes; the real cashu-ts
- * `Mint`/`Wallet` classes satisfy them, and tests can substitute fakes
- * without casting.
+ * Wallet loading with the cashu-ts classes injected as parameters. The narrow
+ * structural types below describe exactly what the loader consumes; the real
+ * cashu-ts `Mint`/`Wallet` classes satisfy them, and tests can substitute
+ * fakes without casting.
  */
 
 export interface CashuWalletOptions {
