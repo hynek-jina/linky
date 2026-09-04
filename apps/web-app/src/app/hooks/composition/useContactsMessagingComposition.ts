@@ -28,6 +28,7 @@ import {
   deriveDefaultProfile,
   omitSyntheticContactLightningAddress,
 } from "../../../derivedProfile";
+import { reportAppLog } from "../../../devtools/inspector/appLog";
 import { reportInspectorRows } from "../../../devtools/inspector/reportInspectorRows";
 import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
 import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
@@ -334,18 +335,13 @@ const reportContactsAddedToGroup = (
   pending: PendingContactsGroupAssignment,
   group: string,
 ): void => {
-  if (!getInspectorEmissionEnabled()) return;
   const contactIds = pending.savedContacts.map(({ id }) => String(id));
-  reportInspectorRows([
-    {
-      at: Date.now(),
-      channel: "app.log",
-      tag: "contacts.addToGroup",
-      summary: `${contactIds.length} contacts from a chat message added to group "${group}"`,
-      links: { contact: contactIds, message: pending.messageId },
-      payload: { contactIds, group, messageId: pending.messageId },
-    },
-  ]);
+  reportAppLog({
+    tag: "contacts.addToGroup",
+    summary: `${contactIds.length} contacts from a chat message added to group "${group}"`,
+    links: { contact: contactIds, message: pending.messageId },
+    payload: { contactIds, group, messageId: pending.messageId },
+  });
 };
 type NostrBootstrapParams = Parameters<typeof useEvoluNostrBootstrapReady>[0];
 

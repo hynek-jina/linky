@@ -1,16 +1,9 @@
 // Cross-device propagation of independent, pointer-only owner-lane rotations.
 // Each scope writes one synced `ownerMeta` row so adopters converge on the
 // active index and its rotation boundary without copying historical rows.
-//
-// Historically the `value` column was a plain `"contacts-N"` string carrying
-// only the index. Adopters then defaulted baseline / editCount / rotatedAt
-// to zero, which made `delta = currentRowCount` after Evolu sync pulled in
-// the migrated rows — large enough to fire the auto-rotation threshold a
-// second time on the adopting device, cascading rotations across the fleet.
-//
-// The structured snapshot below fixes that. Legacy `"contacts-N"` values
-// still parse (with the missing fields nulled), so old clients keep working
-// while new clients reap the full benefit.
+// Legacy plain `"<scope>-N"` values still decode, with the fields they lack
+// nulled rather than zeroed, so an adopter never mistakes them for a fresh
+// baseline.
 
 type RotationScope = "cashu" | "contacts" | "messages" | "transactions";
 

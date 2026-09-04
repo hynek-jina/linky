@@ -20,6 +20,7 @@ import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
 
+import { reportAppLog } from "../../devtools/inspector/appLog";
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseContactsDomainParams {
@@ -399,7 +400,11 @@ export const useContactsDomain = ({
         }),
       );
     } catch (e) {
-      console.log("[linky] dedupe contacts failed", e);
+      reportAppLog({
+        tag: "contacts.dedupeFailed",
+        summary: "Contact dedupe failed",
+        payload: { error: e },
+      });
       pushToast(t("dedupeContactsFailed"));
     } finally {
       setDedupeContactsIsBusy(false);
@@ -474,10 +479,11 @@ export const useContactsDomain = ({
 
     safeLocalStorageSet(migrationKey, "1");
 
-    console.log("[linky][evolu] migrated contacts to appOwner", {
-      ownerId: ownerKey.length > 10 ? `${ownerKey.slice(0, 10)}…` : ownerKey,
-      ok: okCount,
-      failed: failCount,
+    reportAppLog({
+      tag: "contacts.ownerMigrated",
+      summary: `Contacts migrated to the app owner lane: ${okCount} ok, ${failCount} failed`,
+      links: { owner: ownerKey },
+      payload: { failed: failCount, ok: okCount, ownerId: ownerKey },
     });
   }, [appOwnerId, contacts, currentNsec, isSeedLogin, upsert]);
 

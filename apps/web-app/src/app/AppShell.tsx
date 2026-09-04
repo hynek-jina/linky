@@ -168,7 +168,6 @@ const UnauthenticatedAppShell = () => {
 };
 
 const AppShell = () => {
-  if (import.meta.env.DEV) console.log("[linky][render] AppShell");
   const { currentNsec, isResolved, setCurrentNsec } = useCurrentNsec();
   usePersistentInspectorLogStartup();
 

@@ -73,18 +73,6 @@ const readNativeScanViewport = (): NativeScanViewport | null => {
   };
 };
 
-const formatScanDebugDetails = (details?: Record<string, unknown>) => {
-  if (!details) {
-    return null;
-  }
-
-  try {
-    return JSON.stringify(details);
-  } catch {
-    return "[unserializable scan details]";
-  }
-};
-
 const readCameraPermissionState = async (): Promise<string | null> => {
   const permissions = Reflect.get(navigator, "permissions");
   if (typeof permissions !== "object" || permissions === null) return null;
@@ -145,7 +133,6 @@ export const useGuideScannerDomain = ({
 
   const logScanDebug = React.useCallback(
     (message: string, details?: Record<string, unknown>) => {
-      console.log("[linky][scan]", message, formatScanDebugDetails(details));
       appendPushDebugLog("client", `scan ${message}`, details);
     },
     [],

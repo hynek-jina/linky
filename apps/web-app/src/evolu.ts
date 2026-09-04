@@ -362,35 +362,27 @@ const probeWebSocketConnection = (
   });
 };
 
-// Primary key pro Contact tabulku
 const ContactId = Evolu.id("Contact");
 export type ContactId = typeof ContactId.Type;
 
-// Primary key pro CashuToken tabulku
 const CashuTokenId = Evolu.id("CashuToken");
 export type CashuTokenId = typeof CashuTokenId.Type;
 
-// Primary key pro NostrIdentity tabulku
 const NostrIdentityId = Evolu.id("NostrIdentity");
 type NostrIdentityId = typeof NostrIdentityId.Type;
 
-// Primary key pro NostrMessage tabulku
 const NostrMessageId = Evolu.id("NostrMessage");
 type NostrMessageId = typeof NostrMessageId.Type;
 
-// Primary key pro NostrReaction tabulku
 const NostrReactionId = Evolu.id("NostrReaction");
 type NostrReactionId = typeof NostrReactionId.Type;
 
-// Primary key pro OwnerMeta tabulku (metadata pro owner lane routing)
 const OwnerMetaId = Evolu.id("OwnerMeta");
 type OwnerMetaId = typeof OwnerMetaId.Type;
 
-// Primary key pro Transaction tabulku
 const TransactionId = Evolu.id("Transaction");
 export type TransactionId = typeof TransactionId.Type;
 
-// Schema pro Linky app
 export const Schema = {
   contact: {
     id: ContactId,
@@ -521,13 +513,10 @@ export const Schema = {
   },
 };
 
-// Create Evolu instance for a specific user (mnemonic)
-// Each user gets their own SQLite database file based on their mnemonic
 const createEvoluForUser = (mnemonic: string | null) => {
   const dbName = mnemonic ? generateDbNameFromMnemonic(mnemonic) : "linky-anon";
 
   const validatedName = SimpleName.from(dbName);
-  // Fallback to a safe name if generation fails
   const finalName = validatedName.ok
     ? validatedName.value
     : SimpleName.orThrow("linky-default");
@@ -549,21 +538,16 @@ const createEvoluForUser = (mnemonic: string | null) => {
   });
 };
 
-// Type for the Evolu instance
 type EvoluInstance = ReturnType<typeof createEvoluForUser>;
 
-// Global evolu instance - will be set when user is determined
 let globalEvoluInstance: EvoluInstance | null = null;
 
-// Initialize or get the Evolu instance for current user
 const getEvolu = (mnemonic?: string | null): EvoluInstance => {
   if (mnemonic !== undefined) {
-    // Create new instance for this specific mnemonic
     globalEvoluInstance = createEvoluForUser(mnemonic);
   }
 
   if (!globalEvoluInstance) {
-    // Try to get mnemonic from storage on first call
     globalEvoluInstance = createEvoluForUser(
       safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY),
     );
@@ -572,7 +556,6 @@ const getEvolu = (mnemonic?: string | null): EvoluInstance => {
   return globalEvoluInstance;
 };
 
-// Legacy export for backward compatibility - gets the current global instance
 export const evolu = getEvolu();
 
 export const createCashuTokensAllQuery = () =>
@@ -661,13 +644,11 @@ const getEvoluDatabaseInfo = async (): Promise<{
 
   const instance = getEvolu();
 
-  // Get SQLite file size from OPFS for current user only
   const dbBytesPromise = (async () => {
     try {
       const root = await navigator.storage?.getDirectory?.();
       if (!root) return 0;
 
-      // Get current user's mnemonic
       const mnemonic = safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY);
 
       const expectedDir = mnemonic
@@ -859,7 +840,6 @@ export const subscribeEvoluHistoryMutationVersion = (
   return typeof unsubscribe === "function" ? unsubscribe : () => {};
 };
 
-// Load history data from evolu_history table with pagination support
 export const loadEvoluHistoryData = async (
   limit = 100,
   offset = 0,
@@ -892,7 +872,6 @@ export const loadEvoluHistoryData = async (
   }
 };
 
-// Load current data from all tables
 export const loadEvoluCurrentData = async (): Promise<
   Record<string, Record<string, JsonValue>[]>
 > => {
@@ -1109,8 +1088,6 @@ export const useEvoluServersManager = (opts?: {
   } as const;
 };
 
-// Export EvoluProvider pro použití v main.tsx
 export { EvoluProvider };
 
-// Vytvoř typovaný React Hook - now using getEvolu() to ensure we get the right instance
 export const useEvolu = createUseEvolu(getEvolu());
