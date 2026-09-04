@@ -1,3 +1,5 @@
+import type { cs } from "./cs";
+
 export const en = {
   appTitle: "Linky",
 
@@ -788,4 +790,4 @@ export const en = {
   // Error and UI strings
   evoluWipeStorageFailed:
     "Missing stored mnemonic (cannot clear Evolu storage).",
-} as const;
+} satisfies Record<keyof typeof cs, string>;
