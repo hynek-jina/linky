@@ -26,6 +26,9 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first
 - Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
+- `localStorage` goes through `utils/storage.ts` (`safeLocalStorageGet/Set/Remove`, `safeLocalStorageGetJson` with a Schema); raw access is reserved for the one-time linkshu migration and the linkshu `KeyValueStore` port
+- Validate stored and wire JSON with effect `Schema` (shared pieces in `utils/schema.ts`), not hand-rolled `typeof` guards
+- `nowSeconds()` and `sleep()` come from `utils/time.ts`
 
 
 ### Commenting the code
