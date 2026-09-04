@@ -191,6 +191,9 @@ export const en = {
   evoluAddServerSaved: "Server saved. Reload to apply.",
   evoluServersReloadHint:
     "Evolu needs a reload to start syncing via the updated server list.",
+  evoluQuotaRecoveryHint:
+    "After your server’s storage limit is increased, retry sync from this device. You can also add a server with enough storage on every device. Retrying keeps local data; clearing it can lose unsynced changes.",
+  evoluRetrySync: "Retry sync",
   evoluServersReloadButton: "Reload now",
   evoluServerRemove: "Remove server",
   evoluDefaultServerCannotRemove: "Default server cannot be removed.",

@@ -369,6 +369,10 @@ export const useAppShellComposition = ({
     useState<boolean>(false);
 
   const wipeEvoluStorage = React.useCallback(async () => {
+    if (evoluLastError?.type === "ProtocolQuotaError") {
+      pushToast(t("evoluQuotaRecoveryHint"));
+      return;
+    }
     if (evoluWipeStorageIsBusy) return;
     setEvoluWipeStorageIsBusy(true);
 
@@ -379,7 +383,7 @@ export const useAppShellComposition = ({
     } finally {
       setEvoluWipeStorageIsBusy(false);
     }
-  }, [evoluWipeStorageIsBusy, pushToast, t]);
+  }, [evoluLastError, evoluWipeStorageIsBusy, pushToast, t]);
 
   const [contactPaymentIntent, setContactPaymentIntent] = useState<
     "pay" | "request"

@@ -18,6 +18,8 @@ const NOSTR_KIND_EXPLANATIONS: Record<number, string> = {
 };
 
 const TAG_DESCRIPTIONS: Record<string, string> = {
+  EvoluSyncRetry:
+    "The user reloads the app to retry Evolu sync after a quota or server configuration change. Local history is preserved.",
   EvoluError:
     "Evolu reported a database or sync error. The owner link identifies the affected sync account when available; relay reachability alone does not confirm its data synced.",
   WirePublished:

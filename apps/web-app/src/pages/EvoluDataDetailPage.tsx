@@ -24,6 +24,7 @@ export function EvoluDataDetailPage(): React.ReactElement {
     evoluContactsOwnerNewContactsCount,
     evoluContactsOwnerPointer,
     evoluDatabaseBytes,
+    evoluErrorType,
     evoluHistoryCount,
     evoluTableCounts,
     evoluTransactionsOwnerId,
@@ -251,7 +252,10 @@ export function EvoluDataDetailPage(): React.ReactElement {
                   : "btn-wide secondary"
               }
               onClick={requestClearDatabase}
-              disabled={evoluWipeStorageIsBusy}
+              disabled={
+                evoluWipeStorageIsBusy ||
+                evoluErrorType === "ProtocolQuotaError"
+              }
             >
               {t("evoluClearDatabase")}
             </button>
