@@ -231,7 +231,10 @@ export function EvoluDataDetailPage(): React.ReactElement {
               style={{ marginTop: 4, textAlign: "center", fontSize: 12 }}
               className="muted"
             >
-              {percentage.toFixed(1)}% z 1 MiB limitu
+              {t("evoluUsageOfLimit").replace(
+                "{percent}",
+                percentage.toFixed(1),
+              )}
             </div>
           </div>
 
