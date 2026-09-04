@@ -1,8 +1,8 @@
 import { Context, Effect, Either, Layer, Schema } from "effect";
 import { stringStorageSlot } from "../internal/stringStorage";
 import type { StringStorage } from "../internal/stringStorage";
-import { StoredOutboxJob } from "./domain";
-import type { OutboxJobId } from "./domain";
+import { PersistedOutboxJob } from "./domain";
+import type { OutboxJobId, StoredOutboxJob } from "./domain";
 
 export interface OutboxStoreService {
   readonly insert: (job: StoredOutboxJob) => Effect.Effect<void>;
@@ -12,7 +12,7 @@ export interface OutboxStoreService {
   readonly loadAll: Effect.Effect<ReadonlyArray<StoredOutboxJob>>;
 }
 
-const StoredJobsJson = Schema.parseJson(Schema.Array(StoredOutboxJob));
+const StoredJobsJson = Schema.parseJson(Schema.Array(PersistedOutboxJob));
 const decodeJobs = Schema.decodeUnknownEither(StoredJobsJson);
 const encodeJobs = Schema.encodeSync(StoredJobsJson);
 

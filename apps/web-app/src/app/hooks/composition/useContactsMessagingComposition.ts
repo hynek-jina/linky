@@ -3,16 +3,11 @@ import type { ProfileMetadata } from "@linky/linkstr";
 import {
   BankOfferDraft,
   BankOfferId,
-  ChatMessageReceipt,
   ClientId,
   decodeNpub,
   encodeNpub,
   identityFromNsec,
-  MessageEditReceipt,
-  OutboxJobFailed,
-  OutboxJobSucceeded,
   Pubkey,
-  ReactionReceipt,
   UnixSeconds,
 } from "@linky/linkstr";
 import {
@@ -65,7 +60,6 @@ import {
 import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { setStoredPushContactNames } from "../../../utils/pushContactNamesStorage";
-import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
 import {
   forgetLinkyBankPaymentOfferSpdPayload,
@@ -119,6 +113,7 @@ import {
 } from "../messages/contactIdentity";
 import type { PeerSeenWindow } from "../messages/seenReceiptInbox";
 import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
+import { applyOutboxResult } from "../messages/outboxResults";
 import { useChatSeenReceiptSync } from "../messages/useChatSeenReceiptSync";
 import {
   useEditChatMessage,
@@ -163,20 +158,6 @@ const isBankOfferId = Schema.is(BankOfferId);
 const isNonEmptyTrimmedString = Schema.is(Schema.NonEmptyTrimmedString);
 const isPositiveInt = Schema.is(Schema.Int.pipe(Schema.positive()));
 const isUnixSeconds = Schema.is(UnixSeconds);
-
-type ParsedOutboxRef =
-  | { id: string; kind: "message" }
-  | { id: string; kind: "reaction" };
-
-const parseOutboxRef = (ref: string): ParsedOutboxRef | null => {
-  for (const kind of ["message", "reaction"] as const) {
-    const prefix = `${kind}:`;
-    if (!ref.startsWith(prefix)) continue;
-    const id = ref.slice(prefix.length).trim();
-    return id ? { id, kind } : null;
-  }
-  return null;
-};
 
 const positiveInt = (value: unknown): number | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
@@ -2671,39 +2652,10 @@ export const useContactsMessagingComposition = ({
   }, [bankPaymentOfferExpiryGroups, respondToBankPaymentOffer]);
 
   useOutboxResults(async (result) => {
-    const ref = String(result.ref);
-    const parsedRef = parseOutboxRef(ref);
-    if (!parsedRef) return;
-
-    if (result instanceof OutboxJobFailed) {
-      appendPushDebugLog("client", "outbox job failed", {
-        detail: result.detail,
-        reason: result.reason,
-        ref,
-      });
-      return;
-    }
-    if (!(result instanceof OutboxJobSucceeded)) return;
-
-    const receipt = result.receipt;
-    if (
-      parsedRef.kind === "message" &&
-      (receipt instanceof ChatMessageReceipt ||
-        receipt instanceof MessageEditReceipt)
-    ) {
-      updateLocalNostrMessage(parsedRef.id, {
-        rumorId: receipt.rumorId,
-        status: "sent",
-        wrapId: receipt.selfCopy.wrapId,
-      });
-      return;
-    }
-    if (parsedRef.kind === "reaction" && receipt instanceof ReactionReceipt) {
-      updateLocalNostrReaction(parsedRef.id, {
-        status: "sent",
-        wrapId: receipt.rumorId,
-      });
-    }
+    applyOutboxResult(result, {
+      updateLocalNostrMessage,
+      updateLocalNostrReaction,
+    });
   });
 
   const contactsOnboardingHasSentMessage = useMemo(() => {
