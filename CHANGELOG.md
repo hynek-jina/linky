@@ -16,6 +16,18 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### cs-CZ
 
+## [26.9.7] - 2026-09-04
+
+### en-US
+
+- Payments sent to your `<npub>@npub.cash` address are now collected automatically alongside `<npub>@linky.fit` payments.
+- Fixed changing the default mint when your profile uses another Lightning address.
+
+### cs-CZ
+
+- Platby poslané na vaši adresu `<npub>@npub.cash` se nyní automaticky přijmou stejně jako platby na `<npub>@linky.fit`.
+- Opravena změna výchozího mintu, když profil používá jinou Lightning adresu.
+
 ## [26.9.6] - 2026-09-03
 
 ### en-US
