@@ -1,4 +1,5 @@
 import React from "react";
+import { EvoluReloadNotice } from "./EvoluReloadNotice";
 import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
@@ -9,7 +10,6 @@ export function EvoluServerPage(): React.ReactElement {
   const {
     evoluHasError,
     evoluServerStatusByUrl,
-    evoluServersReloadRequired,
     evoluServerUrls,
     isEvoluServerOffline,
     pendingEvoluServerDeleteUrl,
@@ -25,22 +25,7 @@ export function EvoluServerPage(): React.ReactElement {
   return (
     <section className="panel">
       <EvoluSyncErrorNotice />
-      {evoluServersReloadRequired ? (
-        <>
-          <p className="muted" style={{ marginTop: 2 }}>
-            {t("evoluServersReloadHint")}
-          </p>
-          <div className="settings-row">
-            <button
-              type="button"
-              className="btn-wide secondary"
-              onClick={() => window.location.reload()}
-            >
-              {t("evoluServersReloadButton")}
-            </button>
-          </div>
-        </>
-      ) : null}
+      <EvoluReloadNotice />
 
       {selectedEvoluServerUrl ? (
         <>

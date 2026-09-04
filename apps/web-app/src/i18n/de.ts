@@ -198,6 +198,9 @@ export const de = {
   evoluAddServerSaved: "Server gespeichert. Zum Anwenden neu laden.",
   evoluServersReloadHint:
     "Evolu muss neu geladen werden, um über die aktualisierte Serverliste zu synchronisieren.",
+  evoluQuotaRecoveryHint:
+    "Nachdem das Speicherlimit Ihres Servers erhöht wurde, versuchen Sie die Synchronisierung auf diesem Gerät erneut. Sie können auch auf allen Geräten einen Server mit genügend Speicher hinzufügen. Der erneute Versuch behält lokale Daten; beim Löschen können nicht synchronisierte Änderungen verloren gehen.",
+  evoluRetrySync: "Synchronisierung erneut versuchen",
   evoluServersReloadButton: "Jetzt neu laden",
   evoluServerRemove: "Server entfernen",
   evoluDefaultServerCannotRemove:

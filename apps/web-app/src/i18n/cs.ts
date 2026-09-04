@@ -194,6 +194,9 @@ export const cs = {
   evoluAddServerSaved: "Server uložen. Pro použití obnovte stránku.",
   evoluServersReloadHint:
     "Aby se změny projevily (sync přes nové servery), je potřeba obnovit stránku.",
+  evoluQuotaRecoveryHint:
+    "Po zvýšení limitu úložiště serveru zkuste synchronizaci z tohoto zařízení znovu. Můžete také přidat server s dostatečným úložištěm na všech zařízeních. Opakování zachová místní data; jejich smazáním můžete ztratit nesynchronizované změny.",
+  evoluRetrySync: "Zkusit synchronizaci znovu",
   evoluServersReloadButton: "Obnovit teď",
   evoluServerRemove: "Odebrat server",
   evoluDefaultServerCannotRemove: "Výchozí server nejde odebrat.",

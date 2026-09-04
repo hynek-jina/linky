@@ -9,7 +9,8 @@ const counts = vi.hoisted(() => {
     tables: Record<string, number | null>;
     history: number | null;
     errorType: EvoluError["type"] | null;
-  } = { tables: {}, history: null, errorType: null };
+    reloadRequired: boolean;
+  } = { tables: {}, history: null, errorType: null, reloadRequired: false };
   return state;
 });
 
@@ -21,6 +22,7 @@ vi.mock("../app/context/SystemSettingsContexts", () => ({
   useEvoluSettingsContext: () => ({
     evoluTableCounts: counts.tables,
     evoluErrorType: counts.errorType,
+    evoluServersReloadRequired: counts.reloadRequired,
     evoluHistoryCount: counts.history,
     evoluDatabaseBytes: 4096,
     evoluServerUrls: [],
@@ -49,9 +51,22 @@ beforeEach(() => {
   counts.tables = {};
   counts.history = null;
   counts.errorType = null;
+  counts.reloadRequired = false;
 });
 
 describe("Evolu row counts", () => {
+  it("shows a normal reload on the server list after server settings change", async () => {
+    counts.reloadRequired = true;
+    const view = await renderIntoDocument(<EvoluServersPage />);
+    expect(view.container.textContent).toContain("evoluServersReloadHint");
+    expect(
+      Array.from(view.container.querySelectorAll("button")).some(
+        (button) => button.textContent === "evoluServersReloadButton",
+      ),
+    ).toBe(true);
+    await view.unmount();
+  });
+
   it("explains quota failures without claiming the database is empty", async () => {
     counts.errorType = "ProtocolQuotaError";
     counts.tables = { cashuToken: 4 };
@@ -60,6 +75,16 @@ describe("Evolu row counts", () => {
       "evoluQuotaExceeded",
     );
     expect(rowValue(view.container, "evoluData")).toContain("4 rows");
+    const buttons = Array.from(view.container.querySelectorAll("button"));
+    expect(
+      buttons.find((button) => button.textContent === "evoluClearDatabase")
+        ?.disabled,
+    ).toBe(true);
+    expect(
+      buttons.some((button) => button.textContent === "evoluRetrySync"),
+    ).toBe(true);
+    expect(view.container.textContent).toContain("evoluQuotaRecoveryHint");
+    await view.unmount();
   });
 
   it("distinguishes pending counts from a confirmed empty database", async () => {

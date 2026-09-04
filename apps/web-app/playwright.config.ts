@@ -4,6 +4,7 @@ const LOCAL_STACK_SPECS = [
   "**/chat-payment-request.spec.ts",
   "**/chat-recovery.spec.ts",
   "**/evolu-sync.spec.ts",
+  "**/evolu-quota-recovery.spec.ts",
   "**/cashu-sync.spec.ts",
   "**/proxy-payment.spec.ts",
   "**/linkshu-migration.spec.ts",

@@ -1,4 +1,5 @@
 import React from "react";
+import { EvoluReloadNotice } from "./EvoluReloadNotice";
 import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
@@ -9,6 +10,7 @@ export function EvoluServersPage(): React.ReactElement {
   const {
     clearDatabaseArmed,
     evoluHasError,
+    evoluErrorType,
     evoluHistoryCount,
     evoluServerStatusByUrl,
     evoluServerUrls,
@@ -30,6 +32,7 @@ export function EvoluServersPage(): React.ReactElement {
   return (
     <section className="panel">
       <EvoluSyncErrorNotice />
+      <EvoluReloadNotice />
       {/* Server list */}
       {evoluServerUrls.length === 0 ? (
         <p className="muted" style={{ marginTop: 0 }}>
@@ -89,7 +92,9 @@ export function EvoluServersPage(): React.ReactElement {
               : "btn-wide secondary"
           }
           onClick={requestClearDatabase}
-          disabled={evoluWipeStorageIsBusy}
+          disabled={
+            evoluWipeStorageIsBusy || evoluErrorType === "ProtocolQuotaError"
+          }
         >
           {t("evoluClearDatabase")}
         </button>
