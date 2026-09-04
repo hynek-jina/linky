@@ -1,3 +1,4 @@
+import { decodeBase64Url, encodeBase64Url } from "./base64";
 import { isRecord } from "./unknown";
 import {
   PushNotifications,
@@ -19,6 +20,7 @@ import {
 } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
 import { appendPushDebugLog } from "./pushDebugLog";
+import { base64 } from "@scure/base";
 
 const PUSH_SERVER_URL =
   import.meta.env.VITE_PUSH_SERVER_URL ||
@@ -80,7 +82,7 @@ function getOrCreatePushInstallationId(): string {
   const nextId =
     typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
-      : uint8ArrayToUrlBase64(crypto.getRandomValues(new Uint8Array(16)));
+      : encodeBase64Url(crypto.getRandomValues(new Uint8Array(16)));
   localStorage.setItem(PUSH_INSTALLATION_ID_STORAGE_KEY, nextId);
   return nextId;
 }
@@ -221,36 +223,12 @@ function hashStoredIdentifier(value: string | null): string | null {
   return value.slice(-24);
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
-
-function uint8ArrayToUrlBase64(bytes: Uint8Array): string {
-  let raw = "";
-  for (const value of bytes) {
-    raw += String.fromCharCode(value);
-  }
-  return window
-    .btoa(raw)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return new Uint8Array(bytes).buffer;
 }
 
 function encodeKey(value: ArrayBuffer | null): string {
-  if (!value) return "";
-  return btoa(String.fromCharCode(...new Uint8Array(value)));
+  return value ? base64.encode(new Uint8Array(value)) : "";
 }
 
 function readChallengeResponse(value: unknown): ChallengeResponse {
@@ -383,7 +361,7 @@ function readApplicationServerKey(
     return null;
   }
 
-  return uint8ArrayToUrlBase64(new Uint8Array(applicationServerKey));
+  return encodeBase64Url(new Uint8Array(applicationServerKey));
 }
 
 function toPushSubscriptionData(
@@ -766,11 +744,13 @@ export async function registerPushNotifications(
 
     if (!subscription) {
       try {
+        const applicationServerKey = decodeBase64Url(vapidPublicKey);
+        if (!applicationServerKey) {
+          throw new Error("Invalid VAPID public key");
+        }
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: toArrayBuffer(
-            urlBase64ToUint8Array(vapidPublicKey),
-          ),
+          applicationServerKey: toArrayBuffer(applicationServerKey),
         });
         storeVapidKey(vapidPublicKey);
         await appendPushDebugLog("client", "push subscribe created", {

@@ -1,4 +1,3 @@
-import { bech32 } from "@scure/base";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { isNativePlatform } from "./platform/runtime";
 import type { JsonValue } from "./types/json";
@@ -7,6 +6,8 @@ import {
   getLightningInvoiceDescriptionHashHex,
   parseBolt11AmountMsat,
 } from "./utils/lightningInvoice";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { bech32 } from "@scure/base";
 import { isRecord } from "./utils/unknown";
 import { asNonEmptyString } from "./utils/validation";
 
@@ -455,12 +456,8 @@ const parseLnurlPayMetadata = (
   }
 };
 
-const sha256HexFromString = (input: string): string => {
-  const bytes = sha256(new TextEncoder().encode(input));
-  let hex = "";
-  for (const byte of bytes) hex += byte.toString(16).padStart(2, "0");
-  return hex;
-};
+const sha256HexFromString = (input: string): string =>
+  bytesToHex(sha256(new TextEncoder().encode(input)));
 
 const fetchValidatedLnurlPayRequest = async (
   paymentTarget: string,

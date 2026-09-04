@@ -1,3 +1,4 @@
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 
 const BOLT11_PREFIX_RE = /^(lnbc|lntb|lnbcrt)/i;
@@ -137,14 +138,6 @@ export const getLightningInvoicePreview = (
   return preview;
 };
 
-const toHex = (bytes: Uint8Array): string => {
-  let result = "";
-  for (const byte of bytes) {
-    result += byte.toString(16).padStart(2, "0");
-  }
-  return result;
-};
-
 export const getLightningInvoiceDescriptionHashHex = (
   rawInvoice: string,
 ): string | null => {
@@ -183,7 +176,7 @@ export const getLightningInvoiceDescriptionHashHex = (
       if (tag === DESCRIPTION_HASH_TAG && dataLength === 52) {
         const data = payloadWords.slice(start, end);
         const bytes = bech32.fromWords(data);
-        if (bytes.length === 32) return toHex(bytes);
+        if (bytes.length === 32) return bytesToHex(bytes);
       }
 
       offset = end;
