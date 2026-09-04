@@ -352,43 +352,29 @@ describe("usePushRegistrationLifecycle", () => {
     expect(pushMocks.registerPushNotifications).not.toHaveBeenCalled();
   });
 
-  it("removes foreground and service-worker listeners on unmount", async () => {
-    const windowAdd = vi.spyOn(window, "addEventListener");
-    const windowRemove = vi.spyOn(window, "removeEventListener");
-    const documentAdd = vi.spyOn(document, "addEventListener");
-    const documentRemove = vi.spyOn(document, "removeEventListener");
-    const serviceWorkerAdd = vi.spyOn(serviceWorkerTarget, "addEventListener");
-    const serviceWorkerRemove = vi.spyOn(
-      serviceWorkerTarget,
-      "removeEventListener",
-    );
+  it("stops registering on foreground and service-worker events after unmount", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     const root = await renderLifecycle();
     await flushLifecycle();
+    pushMocks.registerPushNotifications.mockClear();
 
     await act(async () => {
       root.unmount();
     });
     mountedRoots.delete(root);
 
-    expect(windowAdd).toHaveBeenCalledWith("focus", expect.any(Function));
-    expect(windowAdd).toHaveBeenCalledWith("online", expect.any(Function));
-    expect(documentAdd).toHaveBeenCalledWith(
-      "visibilitychange",
-      expect.any(Function),
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("online"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    serviceWorkerTarget.dispatchEvent(
+      new MessageEvent("message", {
+        data: { type: "push-subscription-change" },
+      }),
     );
-    expect(serviceWorkerAdd).toHaveBeenCalledWith(
-      "message",
-      expect.any(Function),
-    );
-    expect(windowRemove).toHaveBeenCalledWith("focus", expect.any(Function));
-    expect(windowRemove).toHaveBeenCalledWith("online", expect.any(Function));
-    expect(documentRemove).toHaveBeenCalledWith(
-      "visibilitychange",
-      expect.any(Function),
-    );
-    expect(serviceWorkerRemove).toHaveBeenCalledWith(
-      "message",
-      expect.any(Function),
-    );
+    await flushLifecycle();
+
+    expect(pushMocks.registerPushNotifications).not.toHaveBeenCalled();
   });
 });

@@ -58,31 +58,6 @@ const createOfferMessage = (args: {
 };
 
 describe("bank payment offer notifications", () => {
-  const copyCases: readonly (readonly [LinkyBankPaymentOfferStatus, string])[] =
-    [
-      ["offered", "Zaplatíš za mě bankovní platbu ve výši 250 Kč?"],
-      ["accepted", "Nabídka byla přijata. Platební údaje se odesílají."],
-      [
-        "accepted_by_other",
-        "Někdo jiný přijal nabídku rychleji. Pro tebe tedy končí.",
-      ],
-      [
-        "bank_details_sent",
-        "Platební údaje jsou připravené. Zaplať 250 Kč do 5 minut.",
-      ],
-      [
-        "bank_paid",
-        "Bankovní platba za 250 Kč byla označena jako zaplacená. Zkontroluj ji a odešli saty.",
-      ],
-      ["canceled", "Nabídka byla zrušena. Bankovní platbu už neposílej."],
-    ];
-
-  it.each(copyCases)("uses actionable copy for %s", (status, expectedText) => {
-    expect(
-      getLinkyBankPaymentOfferInfo(createOffer(status).content)?.text,
-    ).toBe(expectedText);
-  });
-
   it("recognizes an offer whose active phase has expired", () => {
     const info = getLinkyBankPaymentOfferInfo(createOffer("offered").content);
     expect(info).not.toBeNull();

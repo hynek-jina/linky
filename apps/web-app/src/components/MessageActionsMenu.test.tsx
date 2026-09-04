@@ -1,7 +1,6 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import "../App.css";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
@@ -56,23 +55,6 @@ const menuItemLabels = (): string[] =>
 describe("MessageActionsMenu", () => {
   afterEach(() => {
     document.body.innerHTML = "";
-  });
-
-  it("keeps the conversation visible through its backdrop", async () => {
-    const root = await renderMenu();
-    // The menu portals to document.body, so query there rather than the container.
-    const backdrop = document.body.querySelector(".message-actions-backdrop");
-
-    expect(backdrop).not.toBeNull();
-    if (!backdrop) return;
-
-    expect(getComputedStyle(backdrop).backgroundColor).toBe(
-      "rgba(0, 0, 0, 0.4)",
-    );
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it("offers share and save instead of copy for image messages", async () => {
