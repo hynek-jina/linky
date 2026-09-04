@@ -10,12 +10,13 @@ import {
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
 import { ShareIcon } from "./icons";
+import type { Translate } from "../i18n";
 
 interface PrivateImageBubbleProps {
   onBlobChange: (blob: Blob | null) => void;
   payload: PrivateImageMessagePayload;
   rumorId: string | null;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function PrivateImageBubble({

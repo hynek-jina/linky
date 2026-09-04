@@ -19,6 +19,7 @@ import {
   saveCachedRelayLists,
 } from "../../utils/nostrRelays";
 import { nowSeconds } from "../../utils/time";
+import type { Translate } from "../../i18n";
 
 import { reportAppLog } from "../../devtools/inspector/appLog";
 interface UseRelayDomainParams {
@@ -27,7 +28,7 @@ interface UseRelayDomainParams {
   networkEnabled: boolean;
   route: Route;
   setStatus: (value: string | null) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface UseRelayDomainResult {

@@ -14,6 +14,7 @@ import { formatShortLightningAddress, getInitials } from "../utils/formatting";
 import { getContactGroups } from "../utils/contactGroups";
 import { resolveVerifiedNip05Identifier } from "../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import type { Translate } from "../i18n";
 
 interface Contact {
   archivedAtSec?: number | string | null;
@@ -36,7 +37,7 @@ interface ContactPageProps {
   restoreArchivedContact: () => void;
   selectedContact: Contact | null;
   statusText: string | null;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface ContactActionButtonProps {

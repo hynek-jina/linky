@@ -29,6 +29,7 @@ import type {
 import type { InsertedChatMessage } from "./chatInbox";
 import { trimString } from "../../../utils/validation";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
 
@@ -55,7 +56,7 @@ export interface InboxNotificationsContext {
   }) => void;
   pushToast: (message: string, options?: PushToastOptions) => void;
   route: RouteWithOptionalId;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const senderLabel = (

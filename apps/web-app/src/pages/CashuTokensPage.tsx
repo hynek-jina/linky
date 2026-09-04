@@ -7,6 +7,7 @@ import type { MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 
 const CashuTokenIdType = Evolu.id("CashuToken");
 
@@ -34,7 +35,7 @@ interface CashuTokensPageProps {
   meltLargestForeignMintToMainMint: () => Promise<void>;
   restoreMissingTokens: () => Promise<void>;
   setMintIconUrlByMint: Dispatch<SetStateAction<Record<string, string | null>>>;
-  t: (key: string) => string;
+  t: Translate;
   tokensRestoreIsBusy: boolean;
 }
 

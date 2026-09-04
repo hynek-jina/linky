@@ -6,6 +6,7 @@ import type { Route } from "../types/route";
 import { formatShortNpub, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { EditIcon } from "./icons";
+import type { Translate } from "../i18n";
 
 interface TopbarButton {
   icon: string;
@@ -28,7 +29,7 @@ interface TopbarProps {
   nostrPictureByNpub: Record<string, string | null>;
   openProfileQr: () => void;
   route: Route;
-  t: (key: string) => string;
+  t: Translate;
   topbar: TopbarButton | null;
   topbarRight: TopbarButton | null;
   topbarTitle: string | null;

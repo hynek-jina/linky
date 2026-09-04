@@ -5,12 +5,13 @@ import { NoAmountIcon, PasteIcon } from "../components/icons";
 import { Keypad } from "../components/Keypad";
 import { useAmountInputKeypad } from "../components/useAmountInputKeypad";
 import { useNavigation } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 
 interface TopupPageProps {
   currentNpub: string | null;
   displayUnit: string;
   setTopupAmount: (value: string | ((prev: string) => string)) => void;
-  t: (key: string) => string;
+  t: Translate;
   topupAmount: string;
   topupInvoiceIsBusy: boolean;
 }

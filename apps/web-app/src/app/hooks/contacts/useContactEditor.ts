@@ -42,6 +42,7 @@ import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import { useContactSuggestions } from "./useContactSuggestions";
 import { asNonEmptyString } from "../../../utils/validation";
+import type { Translate } from "../../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -116,7 +117,7 @@ interface UseContactEditorParams {
     React.SetStateAction<ContactId | null>
   >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
   transactionsOwnerId: Evolu.OwnerId | null;
   update: EvoluMutations["update"];
   upsert: EvoluMutations["upsert"];

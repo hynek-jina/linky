@@ -3,6 +3,7 @@ import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { formatMiddleDots, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import type { Translate } from "../i18n";
 
 interface ManualPayContact {
   id: ContactId;
@@ -15,7 +16,7 @@ interface ManualPayPageProps {
   contacts: readonly ManualPayContact[];
   nostrPictureByNpub: Record<string, string | null>;
   onSubmitText: (text: string) => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const scanLikePrefix =

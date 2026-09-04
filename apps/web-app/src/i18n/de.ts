@@ -241,6 +241,7 @@ export const de = {
   evoluHideHistoryData: "Verlauf ausblenden",
   evoluCurrentDataJson: "Aktuelle Daten",
   evoluHistoryDataJson: "Änderungsverlauf",
+  evoluTotalRows: "Zeilen gesamt",
   evoluTable: "Tabelle",
   evoluColumn: "Spalte",
   evoluId: "ID",

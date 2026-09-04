@@ -2,6 +2,7 @@ import { Archive, RefreshCcw, Save } from "lucide-react";
 import type { FC } from "react";
 import type { ContactId } from "../evolu";
 import { ContactFields, type ContactFormData } from "./ContactNewPage";
+import type { Translate } from "../i18n";
 
 interface Contact {
   archivedAtSec?: number | string | null;
@@ -25,7 +26,7 @@ interface ContactEditPageProps {
   resetEditedContactFieldFromNostr: (field: "name" | "lnAddress") => void;
   selectedContact: Contact | null;
   setForm: (value: ContactFormData) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const ContactEditPage: FC<ContactEditPageProps> = ({

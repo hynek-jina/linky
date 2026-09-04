@@ -72,6 +72,7 @@ import {
   safeLocalStorageSet,
 } from "../../utils/storage";
 import { nowSeconds } from "../../utils/time";
+import type { I18nKey, Translate } from "../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -129,7 +130,7 @@ interface UseProfileAuthDomainParams {
   lang: Lang;
   myProfileMetadataRef: React.MutableRefObject<ProfileMetadata | null>;
   pushToast: (message: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   upsert: EvoluMutations["upsert"];
 }
 
@@ -479,7 +480,7 @@ export const useProfileAuthDomain = ({
       sourceSlip39Seed: string,
       options?: {
         identitySource?: NostrIdentitySource;
-        invalidMessageKey?: string;
+        invalidMessageKey?: I18nKey;
         persistSyncedIdentity?: boolean;
         recordChatNotice?: boolean;
         switchedAtSec?: number | null;

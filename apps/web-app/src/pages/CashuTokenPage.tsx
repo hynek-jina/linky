@@ -18,6 +18,7 @@ import type { CashuTokenId, CashuTokenRow } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
 import { getMintDisplay } from "../app/lib/tokenMessageInfo";
+import type { Translate } from "../i18n";
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
@@ -37,7 +38,7 @@ interface CashuTokenPageProps {
   shareTokenText: (id: CashuTokenId, text: string) => Promise<void>;
   showPaidOverlay: (title?: string) => void;
   startSendCashuTokenToContact: (id: CashuTokenId) => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
   writeToNfc: (id: CashuTokenId, tokenText: string) => Promise<void>;
 }
 

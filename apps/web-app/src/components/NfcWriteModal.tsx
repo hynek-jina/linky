@@ -1,10 +1,11 @@
 import React from "react";
 import { NfcIcon } from "./icons";
+import type { Translate } from "../i18n";
 
 interface NfcWriteModalProps {
   kind: "profile" | "token";
   onCancel: () => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function NfcWriteModal({

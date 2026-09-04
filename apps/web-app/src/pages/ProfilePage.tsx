@@ -20,6 +20,7 @@ import {
   purchaseOwnLightningAddressClaim,
   requestOwnLightningAddressClaimPreview,
 } from "../utils/npubCashUsernameClaim";
+import type { Translate } from "../i18n";
 
 interface DerivedProfile {
   lnAddress: string;
@@ -66,7 +67,7 @@ interface ProfilePageProps {
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   setProfileEditStatus: (value: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,
   ) => Promise<void>;

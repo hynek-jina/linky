@@ -17,6 +17,7 @@ import {
 } from "../../lib/nostrIdentitySync";
 import { useEvoluContactsOwnerRotation } from "../useEvoluContactsOwnerRotation";
 import { useProfileAuthComposition } from "./useProfileAuthComposition";
+import type { Translate } from "../../../i18n";
 
 interface IdentityOwnersNavigation {
   reload: () => void;
@@ -29,7 +30,7 @@ interface UseIdentityOwnersCompositionParams {
   navigation: IdentityOwnersNavigation;
   pushToast: (message: string) => void;
   setCurrentNsec: (currentNsec: string | null) => void;
-  t: (key: string) => string;
+  t: Translate;
   upsert: ReturnType<typeof useEvolu>["upsert"];
 }
 

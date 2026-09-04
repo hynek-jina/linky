@@ -15,6 +15,7 @@ import type {
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+import type { Translate } from "../../../i18n";
 
 const isPubkey = Schema.is(Pubkey);
 const isRumorId = Schema.is(RumorId);
@@ -40,7 +41,7 @@ interface UseEditChatMessageParams<
   setChatSendIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setEditContext: React.Dispatch<React.SetStateAction<EditChatContext | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 

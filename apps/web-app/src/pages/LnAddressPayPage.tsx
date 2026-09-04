@@ -11,6 +11,7 @@ import {
   inferLightningAddressFromLnurlTarget,
 } from "../lnurlPay";
 import { formatMiddleDots, getInitials } from "../utils/formatting";
+import type { Translate } from "../i18n";
 
 interface LnAddressPayKnownContact {
   lnAddress?: string | null;
@@ -32,7 +33,7 @@ interface LnAddressPayPageProps {
     amountSat: number,
   ) => Promise<void>;
   setLnAddressPayAmount: (value: string | ((prev: string) => string)) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({

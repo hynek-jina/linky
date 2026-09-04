@@ -10,6 +10,7 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
+import type { Translate } from "../i18n";
 
 export interface ContactFormData {
   name: string;
@@ -30,7 +31,7 @@ interface ContactFieldsProps {
   namePlaceholder?: string;
   namePublicValue?: string;
   setForm: (value: ContactFormData) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function ContactFields({
@@ -218,7 +219,7 @@ interface ContactNewPageProps {
     onProgress?: (result: ContactSearchResult) => void,
   ) => Promise<ContactSearchResult>;
   setForm: (value: ContactFormData) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const ContactNewPage: FC<ContactNewPageProps> = ({

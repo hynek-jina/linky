@@ -36,6 +36,7 @@ import type { ReplyContext } from "../messages/useSendChatMessage";
 import type { CashuMessagePaymentHookResult } from "./cashuMessagePaymentTypes";
 import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
@@ -65,7 +66,7 @@ interface UsePayContactWithCashuMessageParams {
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
   /** Per-mint spendable balances from the linkshu read model. */
   walletMintBalances: readonly SendMintBalance[];

@@ -3,6 +3,7 @@ import { navigateTo, returnFromBankPaymentOffer } from "../../hooks/useRouting";
 import type { Route } from "../../types/route";
 import { setLinkyBankPaymentOfferMinimized } from "./bankPaymentOffer";
 import type { TopbarButton } from "../types/appTypes";
+import type { I18nKey, Translate } from "../../i18n";
 
 export interface BackActionContext {
   closeContactDetail: () => void;
@@ -12,7 +13,7 @@ export interface BackActionContext {
 
 interface BuildTopbarArgs extends BackActionContext {
   route: Route;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface BuildTopbarRightArgs {
@@ -21,7 +22,7 @@ interface BuildTopbarRightArgs {
   openReceiveScan: () => void;
   openScan: () => void;
   route: Route;
-  t: (key: string) => string;
+  t: Translate;
   toggleMenu: () => void;
 }
 
@@ -307,7 +308,7 @@ export const buildTopbarRight = ({
 
 const TOPBAR_TITLE_KEY: Record<
   Exclude<Route["kind"], "advancedPushDebug">,
-  string
+  I18nKey
 > = {
   advanced: "settings",
   advancedAutoPayLimit: "lightningInvoiceAutoPayLimit",
@@ -351,10 +352,7 @@ const TOPBAR_TITLE_KEY: Record<
   wallet: "wallet",
 };
 
-export const buildTopbarTitle = (
-  route: Route,
-  t: (key: string) => string,
-): string => {
+export const buildTopbarTitle = (route: Route, t: Translate): string => {
   if (route.kind === "advancedPushDebug") return "Push Debug";
   return t(TOPBAR_TITLE_KEY[route.kind]);
 };

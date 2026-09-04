@@ -1,5 +1,6 @@
 import React from "react";
 import { createSquareAvatarDataUrl } from "../utils/image";
+import type { Translate } from "../i18n";
 
 interface PendingPhoto {
   file: File;
@@ -12,7 +13,7 @@ interface AvatarPhotoInputProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
   onError: (error: unknown) => void;
   onSelected: (dataUrl: string) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const loadPhoto = async (file: File): Promise<PendingPhoto> => {

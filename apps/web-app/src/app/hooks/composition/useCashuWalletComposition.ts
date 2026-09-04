@@ -126,6 +126,7 @@ import { seedLinkshuSeenMintsFromTokenRows } from "../../migrations/linkshuStora
 import { useLinkshuComposition } from "./useLinkshuComposition";
 import { useResumeOnLaunchAndOnline } from "../useResumeOnLaunchAndOnline";
 import { useProfileComposition } from "./useProfileComposition";
+import type { Translate } from "../../../i18n";
 
 import { reportAppLog } from "../../../devtools/inspector/appLog";
 const isPubkey = Schema.is(Pubkey);
@@ -234,7 +235,7 @@ interface UseCashuWalletCompositionParams {
   >;
   setPayAmount: React.Dispatch<React.SetStateAction<string>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
   update: EvoluMutations["update"];
   upsert: EvoluMutations["upsert"];
 }

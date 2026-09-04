@@ -3,6 +3,7 @@ import type {
   ContactIdentityRowLike,
   LocalPendingPayment,
 } from "../types/appTypes";
+import type { Translate } from "../../i18n";
 
 interface PayResult {
   error?: string;
@@ -25,7 +26,7 @@ interface UsePaymentsDomainParams<TContact extends ContactIdentityRowLike> {
   pushToast: (message: string) => void;
   removePendingPayment: (id: string) => void;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const usePaymentsDomain = <TContact extends ContactIdentityRowLike>({

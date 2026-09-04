@@ -1,6 +1,7 @@
 import React from "react";
 import { WalletBalance } from "../components/WalletBalance";
 import type { LightningInvoicePreview } from "../utils/lightningInvoice";
+import type { Translate } from "../i18n";
 
 interface LightningInvoiceConfirmModalProps {
   cashuBalance: number;
@@ -8,7 +9,7 @@ interface LightningInvoiceConfirmModalProps {
   confirmation: LightningInvoicePreview;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const formatRemainingLifetime = (

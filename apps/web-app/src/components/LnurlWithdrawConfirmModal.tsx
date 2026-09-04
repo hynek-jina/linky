@@ -1,13 +1,14 @@
 import React from "react";
 import type { LnurlWithdrawPreview } from "../lnurlPay";
 import { WalletBalance } from "./WalletBalance";
+import type { Translate } from "../i18n";
 
 interface LnurlWithdrawConfirmModalProps {
   confirmation: LnurlWithdrawPreview;
   isBusy: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function LnurlWithdrawConfirmModal({

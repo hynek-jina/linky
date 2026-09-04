@@ -2,12 +2,13 @@ import React, { type FC } from "react";
 import { Copy } from "lucide-react";
 import { WalletBalance } from "../components/WalletBalance";
 import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
+import type { Translate } from "../i18n";
 
 type TopupInvoiceQrMode = "cashu" | "universal" | "lightning";
 
 interface TopupInvoicePageProps {
   copyText: (text: string) => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
   topupAmount: string;
   topupInvoice: string | null;
   topupInvoiceCashuRequest: string | null;
@@ -23,7 +24,7 @@ interface TopupInvoiceQrModeSwitchProps {
   lightningDisabled: boolean;
   mode: TopupInvoiceQrMode;
   onChange: (mode: TopupInvoiceQrMode) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const TopupInvoiceQrModeSwitch: FC<TopupInvoiceQrModeSwitchProps> = ({

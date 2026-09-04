@@ -35,6 +35,7 @@ import { SettingsLinkRow, SettingsToggleRow } from "../components/SettingsRows";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
+import type { I18nKey } from "../i18n";
 
 export function AdvancedPage(): React.ReactElement {
   const {
@@ -116,7 +117,7 @@ export function AdvancedPage(): React.ReactElement {
     (
       action: "copyNostr" | "pasteNostr",
       run: () => void | Promise<void>,
-      hintKey = "sensitiveActionArmedHint",
+      hintKey: I18nKey = "sensitiveActionArmedHint",
     ) => {
       if (armedSecurityAction === action) {
         clearArmTimeout();

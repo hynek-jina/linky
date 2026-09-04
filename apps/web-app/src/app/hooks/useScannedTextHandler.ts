@@ -24,6 +24,7 @@ import {
   type CashuPaymentRequestMessageInfo,
 } from "../lib/paymentRequestMessage";
 import type { ContactRowLike } from "../types/appTypes";
+import type { Translate } from "../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -54,7 +55,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   scanAcceptsBankPayment: boolean;
   scanEntryPoint: "contacts" | "receive" | "send" | null;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const useScannedTextHandler = <TContact extends ContactRowLike>({

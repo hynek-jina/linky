@@ -14,6 +14,7 @@ import {
   configureQrCameraTrack,
 } from "../lib/qrCamera";
 import { useContactsGuide } from "./guide/useContactsGuide";
+import type { Translate } from "../../i18n";
 
 interface UseGuideScannerDomainParams {
   cashuBalance: number;
@@ -25,7 +26,7 @@ interface UseGuideScannerDomainParams {
   onScannedText: (rawValue: string) => Promise<void>;
   pushToast: (message: string) => void;
   route: Route;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 type ScanEntryPoint = "contacts" | "receive" | "send";

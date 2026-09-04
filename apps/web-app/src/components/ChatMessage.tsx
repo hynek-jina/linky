@@ -41,6 +41,7 @@ import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
 import { PrivateFileBubble } from "./PrivateFileBubble";
 import { PrivateImageBubble } from "./PrivateImageBubble";
+import type { I18nKey, Translate } from "../i18n";
 
 interface MintIcon {
   failed: boolean;
@@ -134,33 +135,39 @@ const getChatTimeFormatter = (locale: string): Intl.DateTimeFormat => {
   return formatter;
 };
 
+const getBankPaymentOfferDescriptionKey = (
+  status: LinkyBankPaymentOfferStatus,
+  isOut: boolean,
+): I18nKey | null => {
+  switch (status) {
+    case "accepted":
+      return isOut
+        ? "bankPaymentOfferDescriptionAccepted"
+        : "bankPaymentOfferDescriptionAcceptedIncoming";
+    case "accepted_by_other":
+      return "bankPaymentOfferAcceptedByOther";
+    case "bank_paid":
+      return isOut
+        ? "bankPaymentOfferDescriptionBankPaid"
+        : "bankPaymentOfferDescriptionBankPaidIncoming";
+    case "declined":
+      return "bankPaymentOfferDescriptionDeclined";
+    case "offered":
+      return "bankPaymentOfferDescriptionOffered";
+    case "bank_details_sent":
+    case "canceled":
+    case "settled":
+      return null;
+  }
+};
+
 const getBankPaymentOfferDescription = (
   status: LinkyBankPaymentOfferStatus,
   amountText: string,
   isOut: boolean,
-  t: (key: string) => string,
+  t: Translate,
 ): string => {
-  const key =
-    status === "accepted"
-      ? isOut
-        ? "bankPaymentOfferDescriptionAccepted"
-        : "bankPaymentOfferDescriptionAcceptedIncoming"
-      : status === "accepted_by_other"
-        ? "bankPaymentOfferAcceptedByOther"
-        : status === "bank_details_sent"
-          ? ""
-          : status === "bank_paid"
-            ? isOut
-              ? "bankPaymentOfferDescriptionBankPaid"
-              : "bankPaymentOfferDescriptionBankPaidIncoming"
-            : status === "canceled"
-              ? ""
-              : status === "declined"
-                ? "bankPaymentOfferDescriptionDeclined"
-                : status === "settled"
-                  ? ""
-                  : "bankPaymentOfferDescriptionOffered";
-
+  const key = getBankPaymentOfferDescriptionKey(status, isOut);
   return key ? t(key).replace("{amount}", amountText) : "";
 };
 
@@ -1058,7 +1065,7 @@ function MessageContactsGroupPicker({
   t,
 }: {
   assignment: MessageContactsGroupAssignment;
-  t: (key: string) => string;
+  t: Translate;
 }): React.ReactElement {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [groupInput, setGroupInput] = React.useState("");

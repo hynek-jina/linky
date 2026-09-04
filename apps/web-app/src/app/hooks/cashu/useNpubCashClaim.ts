@@ -47,6 +47,7 @@ import type {
 } from "../composition/useLinkshuComposition";
 
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 interface UseNpubCashClaimParams {
   /** Null until the linkshu runtime is composed (seed + owners resolved). */
@@ -80,7 +81,7 @@ interface UseNpubCashClaimParams {
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title?: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   touchMintInfo: (mintUrl: string, nowSec: number) => void;
 }
 

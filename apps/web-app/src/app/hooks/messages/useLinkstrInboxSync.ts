@@ -55,6 +55,7 @@ import {
 } from "../../../utils/storage";
 import { trimString } from "../../../utils/validation";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 // Fallback backfill window for a first session without a persisted cursor.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
@@ -129,7 +130,7 @@ interface UseLinkstrInboxSyncParams {
   recordSentSeenReceipt: (peerPubkey: string, seenUpToSec: number) => void;
   route: RouteWithOptionalId;
   softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
-  t: (key: string) => string;
+  t: Translate;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
   updateLocalNostrReaction: UpdateLocalNostrReaction;
 }

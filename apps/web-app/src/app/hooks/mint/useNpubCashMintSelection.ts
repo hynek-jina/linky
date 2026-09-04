@@ -14,6 +14,7 @@ import {
 } from "../../../utils/npubCashServer";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 interface UseNpubCashMintSelectionParams {
   currentNpub: string | null;
@@ -27,7 +28,7 @@ interface UseNpubCashMintSelectionParams {
   setDefaultMintUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setDefaultMintUrlDraft: React.Dispatch<React.SetStateAction<string>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const useNpubCashMintSelection = ({

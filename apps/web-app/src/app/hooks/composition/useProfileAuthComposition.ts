@@ -3,6 +3,7 @@ import type { useEvolu } from "../../../evolu";
 import type { Lang } from "../../../i18n";
 import type { IdentityChangeMessageSource } from "../../lib/identityChangeMessage";
 import { useProfileAuthDomain } from "../useProfileAuthDomain";
+import type { Translate } from "../../../i18n";
 
 interface UseProfileAuthCompositionParams {
   appendIdentityChangeNoticesRef: React.MutableRefObject<
@@ -16,7 +17,7 @@ interface UseProfileAuthCompositionParams {
   lang: Lang;
   myProfileMetadataRef: React.MutableRefObject<ProfileMetadata | null>;
   pushToast: (message: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   upsert: ReturnType<typeof useEvolu>["upsert"];
 }
 

@@ -19,6 +19,7 @@ import type {
 import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
+import type { Translate } from "../../i18n";
 
 import { reportAppLog } from "../../devtools/inspector/appLog";
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -34,7 +35,7 @@ interface UseContactsDomainParams {
     toContactId: string,
   ) => number;
   route: Route;
-  t: (key: string) => string;
+  t: Translate;
   update: EvoluMutations["update"];
   upsert: EvoluMutations["upsert"];
   visibleOwnerIds: readonly Evolu.OwnerId[];

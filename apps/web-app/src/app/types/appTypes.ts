@@ -1,4 +1,5 @@
 import type { ContactId } from "../../evolu";
+import type { I18nKey } from "../../i18n";
 import type {
   TelemetryAppRuntime,
   TelemetryDevicePlatform,
@@ -213,11 +214,11 @@ export type ContactsGuideKey =
   | "backup_keys";
 
 export type ContactsGuideStep = {
-  bodyKey: string;
+  bodyKey: I18nKey;
   ensure?: () => void;
   id: string;
   selector: string;
-  titleKey: string;
+  titleKey: I18nKey;
 };
 
 export type ContactFormState = {

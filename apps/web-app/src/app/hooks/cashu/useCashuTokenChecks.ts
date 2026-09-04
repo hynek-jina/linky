@@ -6,6 +6,7 @@ import type {
   CheckAllCashuTokens,
   CheckCashuTokenRow,
 } from "../composition/useLinkshuComposition";
+import type { Translate } from "../../../i18n";
 
 interface UseCashuTokenChecksParams {
   cashuBulkCheckIsBusy: boolean;
@@ -23,7 +24,7 @@ interface UseCashuTokenChecksParams {
     React.SetStateAction<CashuTokenId | null>
   >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 /**
