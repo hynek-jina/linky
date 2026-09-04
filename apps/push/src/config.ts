@@ -84,67 +84,48 @@ function readBuildCommitSha(env: Record<string, string | undefined>): string {
   return /^[a-f0-9]+$/.test(shortSha) ? shortSha : "unknown";
 }
 
-function readRelayList(env: Record<string, string | undefined>): string[] {
-  const raw = env.PUSH_DEFAULT_RELAYS;
-  const source = raw && raw.trim().length > 0 ? raw : DEFAULT_RELAYS.join(",");
+function readListEnv(
+  env: Record<string, string | undefined>,
+  key: string,
+  fallback: string,
+): string[] {
+  const raw = env[key];
+  const source = raw && raw.trim().length > 0 ? raw : fallback;
   const values = source
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 
   if (values.length === 0) {
-    throw new ConfigError(
-      "PUSH_DEFAULT_RELAYS must contain at least one relay URL",
-    );
+    throw new ConfigError(`${key} must contain at least one value`);
   }
 
-  const unique = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    const normalized = normalizeRelayUrl(value);
-    if (unique.has(normalized)) {
-      continue;
-    }
-    unique.add(normalized);
-    out.push(normalized);
-  }
-  return out;
+  return values;
+}
+
+function readRelayList(env: Record<string, string | undefined>): string[] {
+  const relays = readListEnv(
+    env,
+    "PUSH_DEFAULT_RELAYS",
+    DEFAULT_RELAYS.join(","),
+  );
+  return [...new Set(relays.map(normalizeRelayUrl))];
 }
 
 function readCorsOrigins(env: Record<string, string | undefined>): string[] {
-  const raw = env.PUSH_CORS_ORIGIN;
-  const source = raw && raw.trim().length > 0 ? raw : "*";
-  const values = source
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-
-  if (values.length === 0) {
-    throw new ConfigError("PUSH_CORS_ORIGIN must contain at least one origin");
-  }
-
+  const values = readListEnv(env, "PUSH_CORS_ORIGIN", "*");
   if (values.includes("*")) {
     return ["*"];
   }
+  return [...new Set(values.map(normalizeCorsOrigin))];
+}
 
-  const unique = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    let normalized: string;
-    try {
-      normalized = new URL(value).origin;
-    } catch {
-      throw new ConfigError(
-        `PUSH_CORS_ORIGIN contains invalid origin ${value}`,
-      );
-    }
-    if (unique.has(normalized)) {
-      continue;
-    }
-    unique.add(normalized);
-    out.push(normalized);
+function normalizeCorsOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    throw new ConfigError(`PUSH_CORS_ORIGIN contains invalid origin ${value}`);
   }
-  return out;
 }
 
 function normalizeRelayUrl(value: string): string {
