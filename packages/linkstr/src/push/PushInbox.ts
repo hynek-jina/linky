@@ -82,7 +82,6 @@ export class PushInbox extends Effect.Service<PushInbox>()(
           const resubscribeDelay =
             options.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
-          // WrapInbox's sibling loop intentionally diverges on cursor behavior versus these refreshes/status callbacks.
           const subscribe = (relay: RelayUrl) =>
             Effect.gen(function* () {
               const nowSeconds = Math.floor(

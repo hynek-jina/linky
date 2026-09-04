@@ -202,7 +202,6 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                 }),
           });
 
-          // PushInbox's sibling loop intentionally diverges on refreshes/status callbacks versus this cursor.
           // The phase is scoped to one subscription attempt: after a
           // reconnect the relay replays its stored window, which is backfill
           // again until its next EOSE.

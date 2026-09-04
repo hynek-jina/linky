@@ -46,11 +46,11 @@ export class ProfileFetchEntry extends Schema.Class<ProfileFetchEntry>(
   status: Schema.NullOr(StatusUpdated),
 }) {}
 
-export const DISCOVERY_ACTIVITY_KINDS: ReadonlyArray<number> = [
+const DISCOVERY_ACTIVITY_KINDS: ReadonlyArray<number> = [
   0, 1, 6, 7, 9735, 30315,
 ];
-export const DISCOVERY_ACTIVE_WINDOW_SECONDS = 45 * 24 * 60 * 60;
-export const DISCOVERY_AUTHOR_SCAN_LIMIT = 64;
+const DISCOVERY_ACTIVE_WINDOW_SECONDS = 45 * 24 * 60 * 60;
+const DISCOVERY_AUTHOR_SCAN_LIMIT = 64;
 
 export interface DiscoverActiveProfilesOptions {
   readonly activityKinds?: ReadonlyArray<number>;

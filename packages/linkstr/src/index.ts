@@ -3,7 +3,6 @@ export {
   BANK_OFFER_VALUE,
   encodeBankOfferContent,
 } from "./bankOffers/codec";
-export type { BankOfferContent } from "./bankOffers/codec";
 export * from "./bankOffers/domain";
 export * from "./bankOffers/events";
 export * from "./bankOffers/BankOffers";
@@ -18,9 +17,6 @@ export * from "./domain/primitives";
 export * from "./headless";
 export * from "./identity/codec";
 export {
-  BLOSSOM_AUTH_EXPIRATION_SECONDS,
-  BLOSSOM_AUTH_KIND,
-  HTTP_AUTH_KIND,
   makeBlossomUploadAuthHeader,
   makeNip98AuthHeader,
   makePushOwnershipProof,
@@ -31,26 +27,17 @@ export type {
   VerifiedPushOwnershipProof,
 } from "./httpAuth/codec";
 export * from "./httpAuth/domain";
-export * from "./inbox/authenticateWrap";
 export * from "./inbox/events";
 export * from "./inbox/InboxCursorStore";
 export * from "./inbox/WrapInbox";
 export * from "./inspector/events";
 export * from "./inspector/Inspector";
 export * from "./inspector/inspectTransport";
-export {
-  LINKY_PUSH_MARKER_TAG,
-  LINKY_PUSH_MARKER_VALUE,
-} from "./internal/giftWrap";
 export { SignedPlainEvent } from "./internal/nostrEvent";
 export * from "./muteList/MuteList";
 export * from "./outbox/domain";
 export * from "./outbox/Outbox";
 export * from "./outbox/OutboxStore";
-export {
-  PAYMENT_NOTICE_KIND,
-  PAYMENT_NOTICE_VALUE,
-} from "./paymentNotices/codec";
 export * from "./paymentNotices/domain";
 export * from "./paymentNotices/events";
 export * from "./paymentNotices/PaymentNotices";
@@ -71,7 +58,6 @@ export * from "./push/PushInbox";
 export * from "./reactions/domain";
 export * from "./reactions/events";
 export * from "./reactions/Reactions";
-export { SEEN_RECEIPT_KIND, SEEN_RECEIPT_VALUE } from "./seenReceipts/codec";
 export * from "./seenReceipts/domain";
 export * from "./seenReceipts/events";
 export * from "./seenReceipts/SeenReceipts";

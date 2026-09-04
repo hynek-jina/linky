@@ -3,11 +3,9 @@ import { Registry } from "./index";
 import type { Atom, Result } from "./index";
 import {
   ClientId,
-  Emoji,
   NostrSecretKey,
   NostrTransport,
   Pubkey,
-  ReactionDraft,
   RelayPublishResult,
   RelayUrl,
   RetractionDraft,
@@ -18,7 +16,7 @@ import { Effect, Exit, Layer } from "effect";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
-import { retractReactionAtom, sendReactionAtom } from "./reactions";
+import { retractReactionAtom } from "./reactions";
 
 type PublishedWrap = Parameters<NostrTransportService["publish"]>[1];
 
@@ -39,12 +37,9 @@ const carol = makeIdentity();
 const relayA = RelayUrl.make("wss://relay-a.test");
 const relayB = RelayUrl.make("wss://relay-b.test");
 
-const draft = new ReactionDraft({
+const draft = new RetractionDraft({
   to: carol.pubkey,
-  target: RumorId.make("ab".repeat(32)),
-  targetKind: "image",
-  targetAuthor: carol.pubkey,
-  emoji: Emoji.make("🔥"),
+  reactionIds: [RumorId.make("ab".repeat(32))],
   clientId: ClientId.make("client-42"),
 });
 
@@ -104,12 +99,12 @@ const settle = <A, E>(
     Registry.getResult(registry, atom, { suspendOnWaiting: true }),
   );
 
-const sendReaction = (registry: Registry.Registry, reaction: ReactionDraft) => {
-  registry.set(sendReactionAtom, reaction);
-  return settle(registry, sendReactionAtom);
+const retract = (registry: Registry.Registry, retraction: RetractionDraft) => {
+  registry.set(retractReactionAtom, retraction);
+  return settle(registry, retractReactionAtom);
 };
 
-describe("sendReactionAtom", () => {
+describe("retractReactionAtom", () => {
   it("delivers via the configured transport and returns a receipt", async () => {
     const registry = Registry.make();
     const published: Array<PublishedWrap> = [];
@@ -121,12 +116,12 @@ describe("sendReactionAtom", () => {
       ),
     );
 
-    const exit = await sendReaction(registry, draft);
+    const exit = await retract(registry, draft);
 
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.clientId).toBe("client-42");
-    expect(exit.value.reactionId).toMatch(/^[0-9a-f]{64}$/);
+    expect(exit.value.retractionId).toMatch(/^[0-9a-f]{64}$/);
 
     expect(published).toHaveLength(2);
     const recipients = published.map(recipientOf);
@@ -137,39 +132,16 @@ describe("sendReactionAtom", () => {
   it("fails with LinkstrNotConfigured while logged out", async () => {
     const registry = Registry.make();
 
-    registry.set(sendReactionAtom, draft);
-    const exit = await settle(registry, sendReactionAtom);
+    const exit = await retract(registry, draft);
 
     expect(exit).toEqual(
       Exit.fail(expect.objectContaining({ _tag: "LinkstrNotConfigured" })),
     );
   });
 
-  it("fails with RecipientNotReached when only the self copy lands", async () => {
-    const registry = Registry.make();
-    registry.set(
-      linkstrConfigAtom,
-      configWith(
-        alice,
-        stubTransport([], (recipient) => recipient === alice.pubkey),
-      ),
-    );
-
-    const exit = await sendReaction(registry, draft);
-
-    expect(exit).toEqual(
-      Exit.fail(
-        expect.objectContaining({
-          _tag: "RecipientNotReached",
-          clientId: "client-42",
-        }),
-      ),
-    );
-  });
-
   it("rebuilds the runtime on config change and disposes the old one", async () => {
     const registry = Registry.make();
-    const unmount = registry.mount(sendReactionAtom);
+    const unmount = registry.mount(retractReactionAtom);
     const disposed: Array<string> = [];
     const publishedAsAlice: Array<PublishedWrap> = [];
     const publishedAsBob: Array<PublishedWrap> = [];
@@ -185,7 +157,7 @@ describe("sendReactionAtom", () => {
         ),
       ),
     );
-    await sendReaction(registry, draft);
+    await retract(registry, draft);
     expect(publishedAsAlice.map(recipientOf)).toContain(alice.pubkey);
 
     registry.set(
@@ -199,7 +171,7 @@ describe("sendReactionAtom", () => {
         ),
       ),
     );
-    const exit = await sendReaction(registry, draft);
+    const exit = await retract(registry, draft);
 
     expect(Exit.isSuccess(exit)).toBe(true);
     // The self copy now seals to bob: the new identity signed the send.
@@ -208,33 +180,5 @@ describe("sendReactionAtom", () => {
     await expect.poll(() => disposed).toEqual(["alice"]);
 
     unmount();
-  });
-});
-
-describe("retractReactionAtom", () => {
-  it("delivers a retraction through the same runtime", async () => {
-    const registry = Registry.make();
-    const published: Array<PublishedWrap> = [];
-    registry.set(
-      linkstrConfigAtom,
-      configWith(
-        alice,
-        stubTransport(published, () => true),
-      ),
-    );
-
-    registry.set(
-      retractReactionAtom,
-      new RetractionDraft({
-        to: carol.pubkey,
-        reactionIds: [RumorId.make("cd".repeat(32))],
-      }),
-    );
-    const exit = await settle(registry, retractReactionAtom);
-
-    expect(Exit.isSuccess(exit)).toBe(true);
-    if (!Exit.isSuccess(exit)) return;
-    expect(exit.value.retractionId).toMatch(/^[0-9a-f]{64}$/);
-    expect(published).toHaveLength(2);
   });
 });

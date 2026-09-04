@@ -26,12 +26,6 @@ export class RecipientNotReached extends Schema.TaggedError<RecipientNotReached>
   deliveryFailureFields,
 ) {}
 
-export const WrapSendError = Schema.Union(
-  RecipientNotReached,
-  NoRelayReachable,
-);
-export type WrapSendError = typeof WrapSendError.Type;
-
 export class PaymentNoticeNotDelivered extends Schema.TaggedError<PaymentNoticeNotDelivered>()(
   "PaymentNoticeNotDelivered",
   {

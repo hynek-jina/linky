@@ -1,12 +1,11 @@
 import {
   ClientId,
-  Emoji,
   NostrSecretKey,
   NostrTransport,
   Pubkey,
-  ReactionDraft,
   RelayPublishResult,
   RelayUrl,
+  RetractionDraft,
   RumorId,
 } from "@linky/linkstr";
 import type { InspectorEvent, NostrTransportService } from "@linky/linkstr";
@@ -16,7 +15,7 @@ import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
 import { Registry } from "./index";
 import { inspectorEventsAtom, inspectorHandlerAtom } from "./inspector";
-import { sendReactionAtom } from "./reactions";
+import { retractReactionAtom } from "./reactions";
 
 const aliceKey = NostrSecretKey.make(generateSecretKey());
 const bobPubkey = Pubkey.make(getPublicKey(generateSecretKey()));
@@ -43,19 +42,18 @@ const configWith = (inspector: boolean): LinkstrConfig => ({
   inspector,
 });
 
-const draft = new ReactionDraft({
+const draft = new RetractionDraft({
   to: bobPubkey,
-  target: RumorId.make("ab".repeat(32)),
-  targetKind: "text",
-  targetAuthor: bobPubkey,
-  emoji: Emoji.make("🔥"),
+  reactionIds: [RumorId.make("ab".repeat(32))],
   clientId: ClientId.make("client-inspector"),
 });
 
-const sendReaction = async (registry: ReturnType<typeof Registry.make>) => {
-  registry.set(sendReactionAtom, draft);
+const retract = async (registry: ReturnType<typeof Registry.make>) => {
+  registry.set(retractReactionAtom, draft);
   const exit = await Effect.runPromiseExit(
-    Registry.getResult(registry, sendReactionAtom, { suspendOnWaiting: true }),
+    Registry.getResult(registry, retractReactionAtom, {
+      suspendOnWaiting: true,
+    }),
   );
   if (Exit.isFailure(exit)) throw new Error("send failed");
 };
@@ -73,7 +71,7 @@ describe("inspectorEventsAtom", () => {
     });
     const unmount = registry.mount(inspectorEventsAtom);
 
-    await sendReaction(registry);
+    await retract(registry);
     await expect.poll(() => seen.length).toBe(3);
 
     const wires = seen.filter((event) => event._tag === "WirePublished");
@@ -81,7 +79,7 @@ describe("inspectorEventsAtom", () => {
     if (operation?._tag !== "OperationSucceeded") {
       throw new Error("no OperationSucceeded observed");
     }
-    expect(operation.name).toBe("reactions.react");
+    expect(operation.name).toBe("reactions.retract");
     expect(operation.clientId).toBe(draft.clientId);
     if (operation.selfCopy === null) {
       throw new Error("reaction operation lost its self copy");
@@ -106,7 +104,7 @@ describe("inspectorEventsAtom", () => {
     });
     const unmount = registry.mount(inspectorEventsAtom);
 
-    await sendReaction(registry);
+    await retract(registry);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(seen).toHaveLength(0);
 
