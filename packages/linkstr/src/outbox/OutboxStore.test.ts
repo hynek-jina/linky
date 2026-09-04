@@ -28,6 +28,7 @@ import {
   StoredOutboxJob,
 } from "./domain";
 import type { OutboxJobState, OutboxReceipt } from "./domain";
+import { stubStorage } from "../testing";
 import { OutboxStore } from "./OutboxStore";
 import type { OutboxStoreService } from "./OutboxStore";
 
@@ -90,23 +91,6 @@ const succeededWith = (id: string, receipt: OutboxReceipt): OutboxJobState => ({
     receipt,
   }),
 });
-
-interface StubStorage {
-  readonly map: Map<string, string>;
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
-
-const stubStorage = (): StubStorage => {
-  const map = new Map<string, string>();
-  return {
-    map,
-    getItem: (key) => map.get(key) ?? null,
-    setItem: (key, value) => {
-      map.set(key, value);
-    },
-  };
-};
 
 const buildStore = (layer: Layer.Layer<OutboxStore>): OutboxStoreService =>
   Effect.runSync(OutboxStore.pipe(Effect.provide(layer)));
