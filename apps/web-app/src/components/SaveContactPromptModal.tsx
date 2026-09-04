@@ -3,7 +3,6 @@ import { flushSync } from "react-dom";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { parseDefaultLightningAddressNpub } from "../derivedProfile";
 import { useNavigation } from "../hooks/useRouting";
-import type { Translate } from "../i18n";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
@@ -14,7 +13,6 @@ interface SaveContactPromptModalProps {
     npub: string | null;
     suggestedName: string | null;
   }) => void;
-  t: Translate;
 }
 
 export function SaveContactPromptModal({
@@ -22,9 +20,8 @@ export function SaveContactPromptModal({
   lnAddress,
   onClose,
   setContactNewPrefill,
-  t,
 }: SaveContactPromptModalProps): React.ReactElement {
-  const { formatDisplayedAmountParts } = useAppShellCore();
+  const { formatDisplayedAmountParts, t } = useAppShellCore();
   const navigateTo = useNavigation();
   const displayAmount = formatDisplayedAmountParts(amountSat);
 

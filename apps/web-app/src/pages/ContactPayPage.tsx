@@ -11,7 +11,6 @@ import {
 } from "../hooks/useLnurlPayPreview";
 import { getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import type { Translate } from "../i18n";
 
 interface Contact {
   id: ContactId;
@@ -37,7 +36,6 @@ interface ContactPayPageProps {
     React.SetStateAction<"lightning" | "cashu" | null>
   >;
   setPayAmount: (value: string | ((prev: string) => string)) => void;
-  t: Translate;
 }
 
 export const ContactPayPage: FC<ContactPayPageProps> = ({
@@ -55,9 +53,8 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   selectedContact,
   setContactPayMethod,
   setPayAmount,
-  t,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
 
   const ln = String(selectedContact?.lnAddress ?? "").trim();
   const npub = normalizeNpubIdentifier(selectedContact?.npub);

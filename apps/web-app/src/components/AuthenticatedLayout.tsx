@@ -64,7 +64,6 @@ export function AuthenticatedLayout({
           lnAddress={state.postPaySaveContact.lnAddress}
           onClose={() => actions.setPostPaySaveContact(null)}
           setContactNewPrefill={actions.setContactNewPrefill}
-          t={state.t}
         />
       ) : null}
 

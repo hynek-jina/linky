@@ -20,7 +20,6 @@ import {
   purchaseOwnLightningAddressClaim,
   requestOwnLightningAddressClaimPreview,
 } from "../utils/npubCashUsernameClaim";
-import type { Translate } from "../i18n";
 
 interface DerivedProfile {
   lnAddress: string;
@@ -67,7 +66,6 @@ interface ProfilePageProps {
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   setProfileEditStatus: (value: string) => void;
-  t: Translate;
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,
   ) => Promise<void>;
@@ -113,11 +111,10 @@ export function ProfilePage({
   setProfileEditLnAddress,
   setProfileEditName,
   setProfileEditStatus,
-  t,
   toggleProfileStatusCurrency,
   writeCurrentNpubToNfc,
 }: ProfilePageProps): React.ReactElement {
-  const { formatDisplayedAmountParts } = useAppShellCore();
+  const { formatDisplayedAmountParts, t } = useAppShellCore();
   const [inlineClaimError, setInlineClaimError] = React.useState<string | null>(
     null,
   );

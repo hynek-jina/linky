@@ -1,3 +1,4 @@
+import type { Translate } from "../../../i18n";
 import type { Route } from "../../../types/route";
 import { NPUB_CASH_SERVER_BASE_URL } from "../../../utils/npubCashServer";
 import type { PeopleRoutesProps } from "../AppRouteContent";
@@ -115,7 +116,7 @@ interface BuildPeopleRoutePropsParams {
   setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
   setProfileEditStatus: PeopleRoutesProps["profileProps"]["setProfileEditStatus"];
-  t: PeopleRoutesProps["chatProps"]["t"];
+  t: Translate;
   toggleProfileStatusCurrency: PeopleRoutesProps["profileProps"]["toggleProfileStatusCurrency"];
   writeCurrentNpubToNfc: PeopleRoutesProps["profileProps"]["writeCurrentNpubToNfc"];
 }
@@ -247,7 +248,6 @@ export const buildPeopleRouteProps = ({
         onRespondBankPaymentOffer,
         onSendChatImage: sendChatImage,
         onSettleBankPaymentOffer,
-        t,
       };
     },
     chatProps: {
@@ -291,7 +291,6 @@ export const buildPeopleRouteProps = ({
       onPayPaymentRequest,
       onDeclinePaymentRequest,
       onSettleBankPaymentOffer,
-      t,
     },
     contactEditProps: {
       selectedContact,
@@ -337,7 +336,6 @@ export const buildPeopleRouteProps = ({
       displayUnit,
       paySelectedContact,
       requestSelectedContact,
-      t,
     },
     contactProps: {
       selectedContact,
@@ -391,7 +389,6 @@ export const buildPeopleRouteProps = ({
       ownedLightningAddresses,
       saveProfileEdits,
       copyText,
-      t,
       toggleProfileStatusCurrency,
       writeCurrentNpubToNfc,
     },

@@ -1,4 +1,5 @@
 import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 import { SpdPaymentPage } from "./SpdPaymentPage";
@@ -17,7 +18,7 @@ vi.mock("../app/context/AppShellContexts", () => ({
     displayUnit: "sat",
     formatDisplayedAmountText: (amountSat: number) => `${amountSat} sat`,
     lang: "en",
-    t: (key: string) => key,
+    t: (key: string) => translate(key),
   }),
 }));
 
@@ -42,7 +43,7 @@ const setInputValue = (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 };
 
-const t = (key: string): string => {
+const translate = (key: string): string => {
   if (key === "spdPaymentRequestReimbursementCountOther") {
     return "Ask {count} contacts to pay";
   }
@@ -73,7 +74,6 @@ describe("SpdPaymentPage offer recipients", () => {
         ]}
         onRequestReimbursement={onRequestReimbursement}
         spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-        t={t}
       />,
     );
 
@@ -141,7 +141,6 @@ describe("SpdPaymentPage offer recipients", () => {
         ]}
         onRequestReimbursement={async () => null}
         spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-        t={t}
       />,
     );
 
@@ -195,7 +194,6 @@ describe("SpdPaymentPage offer recipients", () => {
         offerContacts={[{ id: "contact-a", name: "Alice", npub: "npub1alice" }]}
         onRequestReimbursement={onRequestReimbursement}
         spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-        t={t}
       />,
     );
 
@@ -230,7 +228,6 @@ describe("SpdPaymentPage offer recipients", () => {
         ]}
         onRequestReimbursement={async () => null}
         spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
-        t={t}
       />,
     );
 
@@ -263,7 +260,6 @@ describe("SpdPaymentPage offer recipients", () => {
             ]}
             onRequestReimbursement={onRequestReimbursement}
             spdPayload={spdPayload}
-            t={t}
           />,
         );
       });

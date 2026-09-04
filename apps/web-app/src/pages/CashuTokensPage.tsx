@@ -7,7 +7,6 @@ import type { MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
-import type { Translate } from "../i18n";
 
 const CashuTokenIdType = Evolu.id("CashuToken");
 
@@ -35,7 +34,6 @@ interface CashuTokensPageProps {
   meltLargestForeignMintToMainMint: () => Promise<void>;
   restoreMissingTokens: () => Promise<void>;
   setMintIconUrlByMint: Dispatch<SetStateAction<Record<string, string | null>>>;
-  t: Translate;
   tokensRestoreIsBusy: boolean;
 }
 
@@ -56,10 +54,9 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   meltLargestForeignMintToMainMint,
   restoreMissingTokens,
   setMintIconUrlByMint,
-  t,
   tokensRestoreIsBusy,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
   const navigateTo = useNavigation();
   const issuedBalance = cashuIssuedTokens.reduce(
     (sum, token) => sum + token.amount,

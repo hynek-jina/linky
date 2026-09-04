@@ -45,7 +45,6 @@ interface SpdPaymentPageProps {
     staggerDelaySec: number;
   }) => Promise<{ chatId: string; offerId: string } | null>;
   spdPayload: string;
-  t: Translate;
 }
 
 interface SpdPaymentFieldRow {
@@ -230,9 +229,8 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   offerContacts,
   onRequestReimbursement,
   spdPayload,
-  t,
 }) => {
-  const { displayCurrency, displayUnit, formatDisplayedAmountText, lang } =
+  const { displayCurrency, displayUnit, formatDisplayedAmountText, lang, t } =
     useAppShellCore();
   const fiatRates = useFiatRates();
   const [isRequestingOffer, setIsRequestingOffer] = React.useState(false);

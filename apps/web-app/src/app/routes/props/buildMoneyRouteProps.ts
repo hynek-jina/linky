@@ -1,3 +1,4 @@
+import type { Translate } from "../../../i18n";
 import type { Route } from "../../../types/route";
 import type { MoneyRoutesProps } from "../AppRouteContent";
 
@@ -82,7 +83,7 @@ interface BuildMoneyRoutePropsParams {
       : never
     : never;
   setTopupAmount: MoneyRoutesProps["topupProps"]["setTopupAmount"];
-  t: MoneyRoutesProps["cashuTokensProps"]["t"];
+  t: Translate;
   topupAmount: MoneyRoutesProps["topupProps"]["topupAmount"];
   topupInvoice: MoneyRoutesProps["topupInvoiceProps"]["topupInvoice"];
   topupInvoiceCashuRequest: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceCashuRequest"];
@@ -180,7 +181,6 @@ export const buildMoneyRouteProps = ({
       emitCashuToken,
       meltLargestForeignMintToMainMint,
       setCashuEmitAmount,
-      t,
     },
     cashuTokenNewProps: {
       cashuDraft,
@@ -207,7 +207,6 @@ export const buildMoneyRouteProps = ({
       meltLargestForeignMintToMainMint,
       restoreMissingTokens,
       setMintIconUrlByMint,
-      t,
       tokensRestoreIsBusy,
     },
     cashuTokenProps: () => {
@@ -230,7 +229,6 @@ export const buildMoneyRouteProps = ({
         returnCashuTokenToWallet,
         startSendCashuTokenToContact,
         shareTokenText: shareCashuTokenText,
-        t,
         writeToNfc: writeCashuTokenToNfc,
       };
     },
@@ -246,7 +244,6 @@ export const buildMoneyRouteProps = ({
       setLnAddressPayAmount,
       displayUnit,
       payLightningAddressWithCashu,
-      t,
     },
     manualPayProps: {
       contacts: manualPayContacts,
@@ -262,7 +259,6 @@ export const buildMoneyRouteProps = ({
       offerContacts: bankPaymentOfferContacts,
       onRequestReimbursement: onRequestBankPaymentOffer,
       spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",
-      t,
     },
     topupInvoiceProps: {
       topupAmount,
