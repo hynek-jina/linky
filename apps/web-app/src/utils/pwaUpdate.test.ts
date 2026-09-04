@@ -8,6 +8,7 @@ const loadPwaUpdate = async () => {
 describe("pwaUpdate", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.stubEnv("DEV", false);
     vi.stubGlobal("location", { reload: vi.fn() });
   });
 
@@ -15,6 +16,7 @@ describe("pwaUpdate", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -142,6 +144,24 @@ describe("pwaUpdate", () => {
 
     expect(updateSW).not.toHaveBeenCalled();
     expect(values).toEqual([false, true]);
+  });
+
+  it("silently applies development updates after interaction with multiple tabs", async () => {
+    vi.stubEnv("DEV", true);
+    stubSwController(2);
+    const pwaUpdate = await loadPwaUpdate();
+    const values: boolean[] = [];
+    const updateSW = vi.fn(() => Promise.resolve());
+    pwaUpdate.subscribePwaNeedRefresh((value) => values.push(value));
+    pwaUpdate.recordPwaRegistered(updateSW);
+    window.dispatchEvent(new Event("pointerdown"));
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 60_000);
+
+    await pwaUpdate.handlePwaUpdateAvailable();
+
+    expect(updateSW).toHaveBeenCalledWith(true);
+    expect(values).toEqual([false]);
   });
 
   it("keeps the prompt available when applying the update fails", async () => {
