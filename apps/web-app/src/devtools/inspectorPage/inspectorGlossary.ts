@@ -53,6 +53,8 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "A mint or melt quote was observed in a new state while a linkshu flow (topup, autoswap, melt) polled it; the quote link ties the poll sequence together.",
   LightningFeeProbed:
     "linkshu measured a mint's Lightning fee by pricing another mint's unpaid invoice as a melt quote. Nothing is paid; links carry both quote ids.",
+  "npubCash.upstreamQuotesListed":
+    "The wallet asked upstream npub.cash which mint quotes for the user's <npub>@npub.cash address were paid; the payload counts what was listed and what was new. Each new quote is then minted by a linkshu topup.adopt operation sharing its quote link.",
   "send.rowForgotten":
     "The app dropped a pending send row because its token verifiably reached the recipient (chat message published, or payment request POSTed). Follow the row link back to the send.send operation that produced it.",
 };

@@ -10,7 +10,7 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 - Nostr (chat, profile, auth-related flows)
 - Evolu (local-first DB + sync)
 - Cashu + mints (Lightning wallet flow)
-- npub.cash (LN address + mint preference sync)
+- npub.cash (LN address + mint preference sync on Linky's own server; payments to `<npub>@npub.cash` are collected from upstream too)
 
 ## Authentication model
 
@@ -43,6 +43,7 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 - Contacts: add/edit/delete, QR scan/share, grouping
 - Messages: encrypted private chat (gift-wrap/NIP-17 flows)
 - Wallet: Cashu token ingest, restore, validation, spend
+- Lightning address receive: payments to `<npub>@linky.fit` and `<npub>@npub.cash` both land in the wallet, whatever address the profile advertises
 - Payments:
   - Lightning invoice and LN address payment
   - contact payment via Cashu message flow

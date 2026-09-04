@@ -53,6 +53,8 @@ export const describeTaggedCashuError = (error: unknown): string | null => {
       return withDetail("Lightning payment failed", detail);
     case "QuoteExpired":
       return "The quote expired, try again";
+    case "QuoteAlreadyIssued":
+      return "Another wallet already minted this quote";
     case "TokenAlreadyKnown":
       return "Token is already in the wallet";
     case "TokenRowNotFound":

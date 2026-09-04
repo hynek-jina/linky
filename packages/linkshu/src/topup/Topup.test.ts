@@ -1,4 +1,8 @@
-import type { MintQuoteBolt11Response, Proof } from "@cashu/cashu-ts";
+import type {
+  MintProofsConfig,
+  MintQuoteBolt11Response,
+  Proof,
+} from "@cashu/cashu-ts";
 import { Amount as CashuAmount, MintOperationError } from "@cashu/cashu-ts";
 import {
   Effect,
@@ -30,7 +34,7 @@ import { KeyValueStore } from "../ports/KeyValueStore";
 import type { KeyValueStoreService } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
 import type { TokenStoreService } from "../ports/TokenStore";
-import { TopupDraft } from "./domain";
+import { PaidQuoteDraft, QuoteLockingKey, TopupDraft } from "./domain";
 import {
   PENDING_TOPUP_KEY_PREFIX,
   PendingTopup,
@@ -87,6 +91,7 @@ interface FakeWalletArgs {
 
 const makeWallet = (args: FakeWalletArgs) => {
   const mintCounters: number[] = [];
+  const mintConfigs: Array<MintProofsConfig | undefined> = [];
   const restoreCalls: Array<{ start: number; count: number }> = [];
   let checks = 0;
   const wallet: LoadedWallet = {
@@ -115,10 +120,11 @@ const makeWallet = (args: FakeWalletArgs) => {
       checks += 1;
       return Promise.resolve(response);
     },
-    mintProofsBolt11: (_amount, _quote, _config, outputType) => {
+    mintProofsBolt11: (_amount, _quote, config, outputType) => {
       const counter =
         outputType?.type === "deterministic" ? outputType.counter : -1;
       mintCounters.push(counter);
+      mintConfigs.push(config);
       return args.mintProofs
         ? args.mintProofs(counter)
         : Promise.resolve(mintedProofs);
@@ -134,7 +140,7 @@ const makeWallet = (args: FakeWalletArgs) => {
     meltProofsBolt11: () => Promise.reject(new Error("not under test")),
     batchRestore: () => Promise.reject(new Error("not under test")),
   };
-  return { wallet, mintCounters, restoreCalls };
+  return { wallet, mintCounters, mintConfigs, restoreCalls };
 };
 
 interface Storage {
@@ -186,7 +192,7 @@ const startAndAwait = Effect.gen(function* () {
 
 const resumeAndAwait = Effect.gen(function* () {
   const topup = yield* Topup;
-  const handles = yield* topup.resumePending;
+  const handles = yield* topup.resumePending();
   const first = handles[0];
   return {
     count: handles.length,
@@ -468,7 +474,7 @@ describe("Topup", () => {
     const { wallet } = makeWallet({ states: [quoteResponse("UNPAID")] });
     const resumed = await makeHarness(wallet, storage).run(
       Effect.gen(function* () {
-        const handles = yield* (yield* Topup).resumePending;
+        const handles = yield* (yield* Topup).resumePending();
         const first = handles[0];
         return first === undefined ? null : yield* Effect.either(first.result);
       }),
@@ -525,5 +531,195 @@ describe("Topup", () => {
     // A reserved counter means the invoice was paid: the record must outlive
     // the failure so the funds stay reclaimable.
     expect(await pendingKeys(storage.kv)).toHaveLength(1);
+  });
+});
+
+const lockingKey = QuoteLockingKey.make("ab".repeat(32));
+
+const paidQuote = (locked: boolean) =>
+  new PaidQuoteDraft({
+    quoteId: QuoteId.make(quoteId),
+    mint,
+    amount: Amount.make(16),
+    invoice: Bolt11Invoice.make(invoice),
+    expiresAt: null,
+    locked,
+  });
+
+const adoptAndAwait = (draft: PaidQuoteDraft, key?: QuoteLockingKey) =>
+  Effect.gen(function* () {
+    const topup = yield* Topup;
+    return yield* Effect.either(
+      topup.adopt(draft, key === undefined ? {} : { lockingKey: key }),
+    );
+  });
+
+describe("Topup.adopt", () => {
+  it("mints a quote someone else paid into an accepted row", async () => {
+    const storage = freshStorage();
+    const { wallet, mintCounters, mintConfigs } = makeWallet({
+      states: [quoteResponse("PAID")],
+    });
+    const { run, events } = makeHarness(wallet, storage);
+
+    const exit = await run(adoptAndAwait(paidQuote(false)));
+
+    assert(Exit.isSuccess(exit));
+    assert(exit.value._tag === "Right");
+    expect(exit.value.right.amount).toBe(16);
+    expect(exit.value.right.quoteId).toBe(quoteId);
+    expect(mintCounters).toEqual([1]);
+    expect(mintConfigs).toEqual([undefined]);
+
+    const rows = await Effect.runPromise(storage.tokens.loadAll);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].state).toBe("accepted");
+    expect(await pendingKeys(storage.kv)).toEqual([]);
+    expect(
+      events.some(
+        (event) =>
+          event._tag === "OperationSucceeded" && event.name === "topup.adopt",
+      ),
+    ).toBe(true);
+  });
+
+  it("hands the locking key to the mint call for a locked quote", async () => {
+    const storage = freshStorage();
+    const { wallet, mintConfigs } = makeWallet({
+      states: [quoteResponse("PAID")],
+    });
+    const { run, events } = makeHarness(wallet, storage);
+
+    const exit = await run(adoptAndAwait(paidQuote(true), lockingKey));
+
+    assert(Exit.isSuccess(exit));
+    assert(exit.value._tag === "Right");
+    expect(mintConfigs).toEqual([{ privkey: lockingKey }]);
+    // The key must never leave through the inspector.
+    expect(JSON.stringify(events)).not.toContain(lockingKey);
+  });
+
+  it("rejects a locked quote without its key before touching the mint", async () => {
+    const storage = freshStorage();
+    const { wallet, mintCounters } = makeWallet({
+      states: [quoteResponse("PAID")],
+    });
+    const { run } = makeHarness(wallet, storage);
+
+    const exit = await run(adoptAndAwait(paidQuote(true)));
+
+    assert(Exit.isSuccess(exit));
+    assert(exit.value._tag === "Left");
+    expect(exit.value.left._tag).toBe("MintRejected");
+    expect(mintCounters).toEqual([]);
+    expect(await pendingKeys(storage.kv)).toEqual([]);
+  });
+
+  it("leaves a quote another wallet already minted alone", async () => {
+    const storage = freshStorage();
+    const { wallet, mintCounters, restoreCalls } = makeWallet({
+      states: [quoteResponse("ISSUED")],
+    });
+    const { run } = makeHarness(wallet, storage);
+
+    const exit = await run(adoptAndAwait(paidQuote(false)));
+
+    assert(Exit.isSuccess(exit));
+    assert(exit.value._tag === "Left");
+    expect(exit.value.left._tag).toBe("QuoteAlreadyIssued");
+    expect(mintCounters).toEqual([]);
+    expect(restoreCalls).toEqual([]);
+    expect(await pendingKeys(storage.kv)).toEqual([]);
+    expect(await Effect.runPromise(storage.kv.get(counterKey))).toBeNull();
+  });
+
+  it("treats a quote the mint still calls unpaid as a rejection", async () => {
+    const storage = freshStorage();
+    const { wallet, mintCounters } = makeWallet({
+      states: [quoteResponse("UNPAID")],
+    });
+    const { run } = makeHarness(wallet, storage);
+
+    const exit = await run(adoptAndAwait(paidQuote(false)));
+
+    assert(Exit.isSuccess(exit));
+    assert(exit.value._tag === "Left");
+    expect(exit.value.left._tag).toBe("MintRejected");
+    expect(mintCounters).toEqual([]);
+    expect(await pendingKeys(storage.kv)).toEqual([]);
+  });
+
+  it("resumes an adopted locked quote after a crash, key in hand", async () => {
+    const storage = freshStorage();
+    const crashing = makeWallet({
+      states: [quoteResponse("PAID")],
+      mintProofs: () => Promise.reject(new TypeError("Failed to fetch")),
+    });
+    const crashed = await makeHarness(crashing.wallet, storage).run(
+      adoptAndAwait(paidQuote(true), lockingKey),
+    );
+    assert(Exit.isSuccess(crashed));
+    assert(crashed.value._tag === "Left");
+    expect(crashed.value.left._tag).toBe("MintUnreachable");
+    expect(await pendingKeys(storage.kv)).toHaveLength(1);
+
+    // Without the key the resumed record fails before any mint call and
+    // stays put; with it, the interrupted attempt finishes on its slot.
+    const keyless = makeWallet({ states: [quoteResponse("PAID")] });
+    const stuck = await makeHarness(keyless.wallet, storage).run(
+      Effect.gen(function* () {
+        const handles = yield* (yield* Topup).resumePending();
+        const first = handles[0];
+        return first === undefined ? null : yield* Effect.either(first.result);
+      }),
+    );
+    assert(Exit.isSuccess(stuck));
+    assert(stuck.value?._tag === "Left");
+    expect(stuck.value.left._tag).toBe("MintRejected");
+    expect(keyless.mintCounters).toEqual([]);
+    expect(await pendingKeys(storage.kv)).toHaveLength(1);
+
+    const resuming = makeWallet({ states: [quoteResponse("PAID")] });
+    const resumed = await makeHarness(resuming.wallet, storage).run(
+      Effect.gen(function* () {
+        const handles = yield* (yield* Topup).resumePending({ lockingKey });
+        const first = handles[0];
+        return first === undefined ? null : yield* first.result;
+      }),
+    );
+    assert(Exit.isSuccess(resumed));
+    expect(resumed.value?.amount).toBe(16);
+    expect(resuming.mintCounters).toEqual([1]);
+    expect(resuming.mintConfigs).toEqual([{ privkey: lockingKey }]);
+    expect(await pendingKeys(storage.kv)).toEqual([]);
+  });
+
+  it("decodes records written before the locked flag existed", async () => {
+    const storage = freshStorage();
+    await Effect.runPromise(
+      storage.kv.set(
+        PENDING_TOPUP_KEY_PREFIX +
+          [mint, quoteId].map(encodeURIComponent).join("."),
+        JSON.stringify({
+          quoteId,
+          mint,
+          unit: "sat",
+          keysetId: keysetHex,
+          amount: 16,
+          invoice,
+          expiresAt: null,
+          createdAt: Math.floor(Date.now() / 1000),
+          mintCounter: null,
+        }),
+      ),
+    );
+    const { wallet, mintConfigs } = makeWallet({
+      states: [quoteResponse("PAID")],
+    });
+    const resumed = await makeHarness(wallet, storage).run(resumeAndAwait);
+
+    assert(Exit.isSuccess(resumed));
+    expect(resumed.value.receipt?.amount).toBe(16);
+    expect(mintConfigs).toEqual([undefined]);
   });
 });
