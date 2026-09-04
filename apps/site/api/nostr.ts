@@ -1,12 +1,12 @@
 import {
   getFirstQueryValue,
   getNpubcashBaseUrl,
-  proxyFixedUrl,
   sendProxyFailure,
   sendPublicProxyResult,
   type ApiRequest,
   type ApiResponse,
 } from "./_npubcash.js";
+import { safeFetch } from "./_safeFetch.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
@@ -16,7 +16,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       targetUrl.searchParams.set("name", name);
     }
 
-    sendPublicProxyResult(res, await proxyFixedUrl(targetUrl));
+    sendPublicProxyResult(res, await safeFetch(targetUrl));
   } catch (error) {
     sendProxyFailure(res, error);
   }

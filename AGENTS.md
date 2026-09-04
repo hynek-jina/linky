@@ -109,6 +109,7 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 - Play upload bundles require release signing via `apps/native-shell/android/keystore.properties` (template: `keystore.properties.example` next to it) or `LINKY_UPLOAD_STORE_FILE` / `LINKY_UPLOAD_STORE_PASSWORD` / `LINKY_UPLOAD_KEY_ALIAS` / `LINKY_UPLOAD_KEY_PASSWORD`; `bun run native:aab:release` fails fast when those credentials are missing
 - Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to inspect persistent client/SW push logs and manually reset service workers/caches when needed
 - The pinned versions in `docker/evolu-relay/package.json` must stay protocol-compatible with the web app's `@evolu/common` — check upstream `apps/relay/CHANGELOG.md` when bumping Evolu packages
+- Outbound HTTP in `apps/site/api/` must go through `safeFetch` from `api/_safeFetch.ts` (resolve → validate → pinned connect, manual redirects); a raw `fetch` there reintroduces the SSRF hole, and the target must be `https:` on a public host, so an `http://localhost` `NPUBCASH_BASE_URL` is rejected by design
 - `apps/push/.env.development` and `apps/web-app/.env.development` are intentionally committed (localhost-only config; the VAPID keypair in there is dev-only, never reuse it in production)
 
 ## Maintaining This File

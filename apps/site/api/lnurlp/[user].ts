@@ -3,12 +3,12 @@ import {
   getNpubcashBaseUrl,
   getPublicOrigin,
   parseJsonObject,
-  proxyFixedUrl,
   sendProxyFailure,
   sendPublicProxyResult,
   type ApiRequest,
   type ApiResponse,
 } from "../_npubcash.js";
+import { safeFetch } from "../_safeFetch.js";
 
 const rewriteLnurlCallback = (
   payRequestText: string,
@@ -45,7 +45,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       targetUrl.searchParams.set("nostr", nostr);
     }
 
-    const proxyResult = await proxyFixedUrl(targetUrl);
+    const proxyResult = await safeFetch(targetUrl);
     const isPayRequest = !amount;
     sendPublicProxyResult(res, {
       ...proxyResult,

@@ -1,37 +1,16 @@
 import {
   getFirstQueryValue,
   parseJsonObject,
-  proxyFixedUrl,
   sendProxyFailure,
   sendProxyResult,
   type ApiRequest,
   type ApiResponse,
 } from "./_npubcash.js";
+import { isAllowedTarget, safeFetch } from "./_safeFetch.js";
 
 const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:]+\.[^@\s/:]+$/;
 const MILLISAT_AMOUNT_PATTERN = /^\d{1,15}$/;
 const MAX_COMMENT_LENGTH = 1000;
-
-const isPublicHostname = (hostname: string): boolean => {
-  const host = hostname.toLowerCase();
-  const isIpLiteral = /^[\d.]+$/.test(host) || host.includes(":");
-  const isLocalName =
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal");
-  return !isIpLiteral && !isLocalName && host.includes(".");
-};
-
-const isAllowedTarget = (url: URL): boolean => {
-  return (
-    url.protocol === "https:" &&
-    url.port === "" &&
-    url.username === "" &&
-    url.password === "" &&
-    isPublicHostname(url.hostname)
-  );
-};
 
 const getLnurlpEndpoint = (lightningAddress: string): URL | null => {
   if (!LIGHTNING_ADDRESS_PATTERN.test(lightningAddress)) return null;
@@ -56,8 +35,8 @@ const readCallbackUrl = (payRequestText: string): URL | null => {
 };
 
 // Same-origin helper for `/cashu/`: it performs the LNURL-pay hops itself so the
-// only URLs ever fetched are the address's well-known endpoint and the callback
-// that endpoint returned.
+// only URLs ever fetched are the address's well-known endpoint, the callback
+// that endpoint returned, and redirects of those that pass the same checks.
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   const address = getFirstQueryValue(req.query?.address)?.toLowerCase();
   const endpoint = address ? getLnurlpEndpoint(address) : null;
@@ -73,7 +52,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const payRequest = await proxyFixedUrl(endpoint);
+    const payRequest = await safeFetch(endpoint);
     if (!amount) {
       sendProxyResult(res, payRequest);
       return;
@@ -93,7 +72,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         comment.slice(0, MAX_COMMENT_LENGTH),
       );
     }
-    sendProxyResult(res, await proxyFixedUrl(callback));
+    sendProxyResult(res, await safeFetch(callback));
   } catch (error) {
     sendProxyFailure(res, error);
   }
