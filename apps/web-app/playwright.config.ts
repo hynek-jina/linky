@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const LOCAL_STACK_SPECS = [
+  "**/chat-recovery.spec.ts",
   "**/proxy-payment.spec.ts",
   "**/linkshu-migration.spec.ts",
 ];

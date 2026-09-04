@@ -138,7 +138,7 @@ export const useEditChatMessage = <
 
       updateLocalNostrMessage(String(editContext.messageId ?? ""), {
         createdAtSec: exit.value.sentAt,
-        rumorId: exit.value.rumorId,
+        rumorId: editedFromId,
       });
 
       if (typeof navigator !== "undefined" && navigator.onLine === false) {

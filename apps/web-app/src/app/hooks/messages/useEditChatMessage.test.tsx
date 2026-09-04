@@ -156,7 +156,7 @@ describe("useEditChatMessage", () => {
       "local-message",
       {
         createdAtSec: SENT_AT,
-        rumorId: EDIT_MESSAGE_ID,
+        rumorId: EDITED_FROM,
       },
     );
     expect(harness.setChatDraft).toHaveBeenCalledWith("");

@@ -41,13 +41,12 @@ import type {
   PaymentTelemetryMethod,
 } from "../../types/appTypes";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
+import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 import type {
   AdoptPaidCashuQuote,
   ReceiveCashuToken,
 } from "../composition/useLinkshuComposition";
-
-import { nowSeconds } from "../../../utils/time";
-import type { Translate } from "../../../i18n";
 
 interface UseNpubCashClaimParams {
   /** Null until the linkshu runtime is composed (seed + owners resolved). */

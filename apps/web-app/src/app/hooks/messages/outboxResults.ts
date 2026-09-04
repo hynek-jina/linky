@@ -47,7 +47,10 @@ export const applyOutboxResult = (
     case "MessageEditReceipt":
       if (parsedRef.kind !== "message") return;
       updateLocalNostrMessage(parsedRef.id, {
-        rumorId: receipt.rumorId,
+        rumorId:
+          receipt._tag === "MessageEditReceipt"
+            ? receipt.editOf
+            : receipt.rumorId,
         status: "sent",
         wrapId: receipt.selfCopy.wrapId,
       });
