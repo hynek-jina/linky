@@ -1,4 +1,5 @@
 import React from "react";
+import type { Translate } from "../i18n";
 
 interface OnboardingTask {
   done: boolean;
@@ -11,7 +12,7 @@ interface ContactsChecklistProps {
   dismissContactsOnboarding: () => void;
   onShowHow: (taskKey: string) => void;
   progressPercent: number;
-  t: (key: string) => string;
+  t: Translate;
   tasks: readonly OnboardingTask[];
   tasksCompleted: number;
   tasksTotal: number;

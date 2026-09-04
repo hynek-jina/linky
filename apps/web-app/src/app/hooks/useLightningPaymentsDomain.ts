@@ -29,6 +29,7 @@ import type {
   LoggedPaymentEventParams,
 } from "../types/appTypes";
 import type { MeltCashuInvoice } from "./composition/useLinkshuComposition";
+import type { Translate } from "../../i18n";
 
 const describeMeltError = (error: MeltError): string =>
   describeTaggedCashuError(error) ?? error._tag;
@@ -50,7 +51,7 @@ interface UseLightningPaymentsDomainParams {
   >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title?: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   /** Per-mint spendable balances from the linkshu read model. */
   walletMintBalances: readonly SendMintBalance[];
 }

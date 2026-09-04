@@ -232,6 +232,7 @@ export const en = {
   evoluHideHistoryData: "Hide history",
   evoluCurrentDataJson: "Current data",
   evoluHistoryDataJson: "Change history",
+  evoluTotalRows: "Total rows",
   evoluTable: "Table",
   evoluColumn: "Column",
   evoluId: "ID",

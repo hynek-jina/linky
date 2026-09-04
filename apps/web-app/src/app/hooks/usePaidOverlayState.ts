@@ -1,8 +1,9 @@
 import React from "react";
 import { useInit } from "../../hooks/useInit";
+import type { Translate } from "../../i18n";
 
 interface UsePaidOverlayStateParams {
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface UsePaidOverlayStateResult {

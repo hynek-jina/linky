@@ -18,6 +18,7 @@ import { AvatarPhotoInput } from "./AvatarPhotoInput";
 import { SelfieCaptureModal } from "./SelfieCaptureModal";
 import { PasteIcon } from "./icons";
 import { sleep } from "../utils/time";
+import type { Translate } from "../i18n";
 
 type UnauthenticatedLayoutProps = {
   confirmPendingOnboardingProfile: () => Promise<void>;
@@ -45,7 +46,7 @@ type UnauthenticatedLayoutProps = {
   setLang: (lang: Lang) => void;
   setPendingOnboardingName: (value: string) => void;
   submitReturningSlip39: (inputOverride?: string) => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
 };
 
 const formatTemplate = (template: string, vars: Record<string, string>) =>

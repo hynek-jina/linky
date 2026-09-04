@@ -67,6 +67,7 @@ import { navigateTo } from "../hooks/useRouting";
 import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { nowSeconds } from "../utils/time";
+import type { Translate } from "../i18n";
 
 interface Contact {
   id: string;
@@ -136,7 +137,7 @@ interface ChatPageProps {
   setMintIconUrlByMint: React.Dispatch<
     React.SetStateAction<Record<string, string | null>>
   >;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface IndexedBankPaymentOffer {

@@ -23,6 +23,7 @@ import type {
   UpdateLocalNostrReaction,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+import type { Translate } from "../../../i18n";
 
 const isPubkey = Schema.is(Pubkey);
 const isRumorId = Schema.is(RumorId);
@@ -48,7 +49,7 @@ interface UseSendReactionParams<
   selectedContact: TContact | null;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   softDeleteLocalNostrReaction: (id: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 

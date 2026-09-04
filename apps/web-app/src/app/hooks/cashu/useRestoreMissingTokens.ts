@@ -8,6 +8,7 @@ import type {
   MintUrlInput,
 } from "../../types/appTypes";
 import type { RestoreCashuTokens } from "../composition/useLinkshuComposition";
+import type { Translate } from "../../../i18n";
 
 interface UseRestoreMissingTokensParams {
   cashuIsBusy: boolean;
@@ -24,7 +25,7 @@ interface UseRestoreMissingTokensParams {
   restoreCashuTokens: RestoreCashuTokens | null;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setTokensRestoreIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
-  t: (key: string) => string;
+  t: Translate;
   tokensRestoreIsBusy: boolean;
 }
 

@@ -16,6 +16,7 @@ import type {
   LocalNostrMessage,
 } from "../types/appTypes";
 import { nowSeconds } from "../../utils/time";
+import type { Translate } from "../../i18n";
 
 export interface MainSwipeRouteProps {
   activeGroup: string | null;
@@ -51,7 +52,7 @@ export interface MainSwipeRouteProps {
   showGroupFilter: boolean;
   showProfileQrOnTiltEnabled: boolean;
   startContactsGuide: (task: ContactsGuideKey) => void;
-  t: (key: string) => string;
+  t: Translate;
   visibleContacts: {
     conversations: ContactRowLike[];
     others: ContactRowLike[];
@@ -125,7 +126,7 @@ interface MainSwipeBottomTabBarProps {
   activeTab: "contacts" | "wallet" | null;
   contactsLabel: string;
   onTabChange: (tab: "contacts" | "wallet") => void;
-  t: (key: string) => string;
+  t: Translate;
   walletLabel: string;
 }
 

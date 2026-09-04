@@ -25,6 +25,7 @@ import type {
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+import type { Translate } from "../../../i18n";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
@@ -62,7 +63,7 @@ interface UseSendChatMessageParams<
   setChatDraft: React.Dispatch<React.SetStateAction<string>>;
   setChatSendIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
   triggerChatScrollToBottom: (messageId?: string) => void;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }

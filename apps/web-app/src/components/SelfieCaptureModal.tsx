@@ -1,10 +1,11 @@
 import React from "react";
+import type { Translate } from "../i18n";
 
 interface SelfieCaptureModalProps {
   onCancel: () => void;
   onCaptured: (dataUrl: string) => void;
   onError: (error: unknown) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const AVATAR_SIZE_PX = 160;

@@ -3,6 +3,7 @@ import { AmountDisplay } from "./AmountDisplay";
 import { PayIcon } from "./icons";
 import { Keypad } from "./Keypad";
 import { useAmountInputKeypad } from "./useAmountInputKeypad";
+import type { Translate } from "../i18n";
 
 interface PaymentAmountPanelProps {
   amount: string;
@@ -19,7 +20,7 @@ interface PaymentAmountPanelProps {
   submitIcon?: ReactNode | undefined;
   submitLabel?: string | undefined;
   submitTitle?: string | undefined;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({

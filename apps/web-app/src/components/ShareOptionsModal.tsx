@@ -1,4 +1,5 @@
 import React from "react";
+import type { Translate } from "../i18n";
 
 interface ShareOptionsModalProps {
   onClose: () => void;
@@ -7,7 +8,7 @@ interface ShareOptionsModalProps {
   onSms: () => void;
   onWhatsApp: () => void;
   shareText: string;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function ShareOptionsModal({

@@ -1,12 +1,13 @@
 import React from "react";
 import { formatMintHost } from "../utils/mint";
+import type { Translate } from "../i18n";
 
 interface PaymentMintMeltConfirmModalProps {
   fromMint: string;
   isBusy: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
   toMint: string;
 }
 

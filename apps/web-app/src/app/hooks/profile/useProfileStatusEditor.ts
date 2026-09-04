@@ -10,6 +10,7 @@ import {
 } from "../../../nostrStatus";
 import { saveCachedStatus } from "../../../profileCache";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 interface UseProfileStatusEditorParams {
   currentNpub: string | null;
@@ -17,7 +18,7 @@ interface UseProfileStatusEditorParams {
   myProfileStatus: string | null;
   setMyProfileStatus: React.Dispatch<React.SetStateAction<string | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface UseProfileStatusEditorResult {

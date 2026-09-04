@@ -33,6 +33,7 @@ import {
 import { isHttpUrl } from "../../../utils/validation";
 import { applyLightningAddressToProfileMetadata } from "../../lib/profileMetadata";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 interface UseProfileEditorParams {
   currentNpub: string | null;
@@ -53,7 +54,7 @@ interface UseProfileEditorParams {
   setMyProfilePicture: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfileStatus: React.Dispatch<React.SetStateAction<string | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface PersistProfileValuesArgs {

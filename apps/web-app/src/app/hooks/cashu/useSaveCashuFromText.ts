@@ -13,6 +13,7 @@ import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import { isUnknownContactId } from "../messages/contactIdentity";
 import type { ReceiveCashuToken } from "../composition/useLinkshuComposition";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 interface CashuTokenMetaRow {
   id: string;
@@ -42,7 +43,7 @@ interface UseSaveCashuFromTextParams {
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title?: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   touchMintInfo: (mintUrl: string, nowSec: number) => void;
 }
 

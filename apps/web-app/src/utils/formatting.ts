@@ -1,3 +1,4 @@
+import type { Translate } from "../i18n";
 export const getInitials = (name: string): string => {
   const normalized = name.trim();
   if (!normalized) return "?";
@@ -183,7 +184,7 @@ export const previewTokenText = (token: string | null): string | null => {
 export const formatChatDayLabel = (
   ms: number,
   lang: string | undefined,
-  t: (key: string) => string,
+  t: Translate,
 ): string => {
   const d = new Date(ms);
   const now = new Date();

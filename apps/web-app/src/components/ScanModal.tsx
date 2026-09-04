@@ -8,6 +8,7 @@ import {
   SwitchCameraIcon,
   TopupIcon,
 } from "./icons";
+import type { Translate } from "../i18n";
 
 interface ScanModalProps {
   closeScan: () => void;
@@ -25,7 +26,7 @@ interface ScanModalProps {
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
   showTypeAction: boolean;
   showWalletActions: boolean;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function ScanModal({

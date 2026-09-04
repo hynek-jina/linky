@@ -18,6 +18,7 @@ import type {
   ResumePendingCashuTopups,
   StartCashuTopup,
 } from "../composition/useLinkshuComposition";
+import type { Translate } from "../../../i18n";
 
 const describeTopupError = (error: TopupError): string =>
   describeTaggedCashuError(error) ?? error._tag;
@@ -39,7 +40,7 @@ interface UseTopupFlowParams {
   showPaidOverlay: (title?: string) => void;
   /** Null until the linkshu runtime is composed (seed + owners resolved). */
   startCashuTopup: StartCashuTopup | null;
-  t: (key: string) => string;
+  t: Translate;
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
   topupRecipientNprofile: string | null;
 }

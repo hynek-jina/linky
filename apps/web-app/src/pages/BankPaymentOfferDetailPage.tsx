@@ -43,6 +43,7 @@ import { BankPaymentAmount } from "../components/BankPaymentAmount";
 import { PrivateFileBubble } from "../components/PrivateFileBubble";
 import { PrivateImageBubble } from "../components/PrivateImageBubble";
 import { nowSeconds } from "../utils/time";
+import type { Translate } from "../i18n";
 
 interface BankPaymentOfferDetailPageProps {
   bankPaymentOfferMessages: LocalNostrMessage[];
@@ -66,7 +67,7 @@ interface BankPaymentOfferDetailPageProps {
     replyToMessage?: LocalNostrMessage,
   ) => Promise<void>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface BankPaymentOfferEntry {
@@ -201,7 +202,7 @@ const PaymentConfirmation = ({
   t,
 }: {
   confirmation: BankPaymentConfirmation;
-  t: (key: string) => string;
+  t: Translate;
 }) => {
   const rumorId = String(confirmation.message.rumorId ?? "").trim() || null;
   return (
@@ -236,7 +237,7 @@ const PendingPaymentConfirmation = ({
   t,
 }: {
   pending: PendingConfirmation;
-  t: (key: string) => string;
+  t: Translate;
 }) => (
   <div className="bank-payment-offer-confirmation">
     <strong>{t("bankPaymentOfferConfirmation")}</strong>
@@ -260,7 +261,7 @@ const PendingPaymentConfirmation = ({
 const getStatusLabel = (
   status: LinkyBankPaymentOfferStatus,
   isIncoming: boolean,
-  t: (key: string) => string,
+  t: Translate,
 ): string => {
   switch (status) {
     case "accepted":
@@ -289,7 +290,7 @@ const RecipientProgress = ({
   t,
 }: {
   status: LinkyBankPaymentOfferStatus;
-  t: (key: string) => string;
+  t: Translate;
 }) => {
   const hasAccepted =
     status === "accepted" ||
@@ -359,7 +360,7 @@ const RequesterIntro = ({
   canCycleAmount: boolean;
   requesterName: string;
   status: LinkyBankPaymentOfferStatus;
-  t: (key: string) => string;
+  t: Translate;
 }) => (
   <div className="bank-payment-offer-requester-intro">
     <strong>
@@ -372,7 +373,7 @@ const RequesterIntro = ({
 
 const buildPaymentRows = (
   payment: BankPayment,
-  t: (key: string) => string,
+  t: Translate,
 ): BankPaymentFieldRow[] => {
   const rows: BankPaymentFieldRow[] = [];
   const amount = getSpdField(payment, "AM");
@@ -405,7 +406,7 @@ const buildPaymentRows = (
   return rows;
 };
 
-const getOpenErrorText = (error: unknown, t: (key: string) => string) => {
+const getOpenErrorText = (error: unknown, t: Translate) => {
   if (error instanceof Error && error.name === "AbortError") {
     return null;
   }

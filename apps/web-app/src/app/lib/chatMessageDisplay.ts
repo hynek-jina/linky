@@ -13,6 +13,7 @@ import {
   getLinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
 } from "./bankPaymentOffer";
+import type { I18nKey, Translate } from "../../i18n";
 
 const PREVIEW_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
@@ -34,12 +35,12 @@ interface FormatChatMessagePreviewArgs {
   content: string;
   direction?: "in" | "out" | null;
   formatDisplayedAmountText: (amountSat: number) => string;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const getBankPaymentOfferStatusPreviewKey = (
-  status: LinkyBankPaymentOfferStatus,
-): string => {
+  status: Exclude<LinkyBankPaymentOfferStatus, "canceled" | "offered">,
+): I18nKey => {
   switch (status) {
     case "accepted":
       return "bankPaymentOfferStatusAccepted";
@@ -53,9 +54,6 @@ const getBankPaymentOfferStatusPreviewKey = (
       return "bankPaymentOfferStatusDeclined";
     case "settled":
       return "bankPaymentOfferStatusSettled";
-    case "canceled":
-    case "offered":
-      return "";
   }
 };
 

@@ -3,6 +3,7 @@ import type { AvatarEditorControlId } from "../derivedProfile";
 import { formatShortNpub, getInitials } from "../utils/formatting";
 import { AvatarControlGrid } from "./AvatarControlGrid";
 import { AvatarPhotoInput } from "./AvatarPhotoInput";
+import type { Translate } from "../i18n";
 
 interface ProfileAvatarEditorProps {
   currentNpub: string;
@@ -17,7 +18,7 @@ interface ProfileAvatarEditorProps {
   profileEditPicture: string;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
   profileSelectedPictureKind: "custom" | "generated";
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function ProfileAvatarEditor({

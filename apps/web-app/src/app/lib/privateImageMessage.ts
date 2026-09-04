@@ -10,6 +10,7 @@ import { decodeBase64Url, encodeBase64Url } from "../../utils/base64";
 import { getUnknownErrorMessage, isRecord } from "../../utils/unknown";
 import { asNonEmptyString } from "../../utils/validation";
 import { nowSeconds } from "../../utils/time";
+import type { I18nKey, Translate } from "../../i18n";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -194,7 +195,7 @@ const isPdfFile = (file: File): boolean =>
   isPdfFileType(file.type) || (file.type === "" && /\.pdf$/i.test(file.name));
 
 /** i18n key of the reason the file can't be sent, or null when it can. */
-export const getChatAttachmentRejection = (file: File): string | null => {
+export const getChatAttachmentRejection = (file: File): I18nKey | null => {
   if (isPdfFile(file)) {
     return file.size > MAX_PDF_BYTES ? "chatPdfTooLarge" : null;
   }
@@ -202,7 +203,7 @@ export const getChatAttachmentRejection = (file: File): string | null => {
   return file.size > MAX_IMAGE_SOURCE_BYTES ? "chatImageTooLarge" : null;
 };
 
-export const chatAttachmentErrorKey = (error: unknown): string | null => {
+export const chatAttachmentErrorKey = (error: unknown): I18nKey | null => {
   const message = getUnknownErrorMessage(error, "");
   if (message === "chat-file-too-large") return "chatPdfTooLarge";
   if (message === "chat-image-too-large") return "chatImageTooLarge";
@@ -604,7 +605,7 @@ export const decryptPrivateImageMessage = async (
 };
 
 export const privateImagePreviewText = (
-  t: (key: string) => string,
+  t: Translate,
   payload: PrivateImageMessagePayload,
 ): string =>
   isPrivatePdfPayload(payload) ? t("chatPdfMessage") : t("chatImageMessage");

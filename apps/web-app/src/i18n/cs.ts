@@ -235,6 +235,7 @@ export const cs = {
   evoluHideHistoryData: "Skrýt historii",
   evoluCurrentDataJson: "Aktuální data",
   evoluHistoryDataJson: "Historie změn",
+  evoluTotalRows: "Celkem řádků",
   evoluTable: "Tabulka",
   evoluColumn: "Sloupec",
   evoluId: "ID",

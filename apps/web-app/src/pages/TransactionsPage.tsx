@@ -23,6 +23,7 @@ import {
 } from "../utils/formatting";
 import { isRecord } from "../utils/unknown";
 import { asNonEmptyString } from "../utils/validation";
+import type { Translate } from "../i18n";
 
 type TransactionStatus = "declined" | "error" | "ok" | "pending";
 type TransactionDirection = "in" | "out";
@@ -521,7 +522,7 @@ interface TransactionCardProps {
   item: TransactionItem;
   nostrPictureByNpub: Readonly<Record<string, string | null>>;
   onToggle: (id: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   tokenByReferenceId: ReadonlyMap<string, string>;
 }
 

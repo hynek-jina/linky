@@ -1,4 +1,5 @@
 import type { LocalNostrMessage } from "../types/appTypes";
+import type { Translate } from "../../i18n";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageKeys,
@@ -641,7 +642,7 @@ export const mergeBankPaymentOffersIntoLastMessageByContactId = (
 
 export const formatRemainingTime = (
   remainingSec: number,
-  t: (key: string) => string,
+  t: Translate,
 ): string => {
   if (remainingSec <= 0) return t("bankPaymentOfferExpired");
 

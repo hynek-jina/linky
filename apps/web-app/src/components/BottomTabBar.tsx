@@ -1,13 +1,14 @@
 import React from "react";
 import { useNavigation } from "../hooks/useRouting";
 import { BottomTab } from "./BottomTab";
+import type { Translate } from "../i18n";
 
 interface BottomTabBarProps {
   activeTab: "contacts" | "wallet" | null;
   activeProgress?: number;
   contactsLabel: string;
   onTabChange?: (tab: "contacts" | "wallet") => void;
-  t: (key: string) => string;
+  t: Translate;
   walletLabel: string;
 }
 

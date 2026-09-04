@@ -2,11 +2,12 @@ import React from "react";
 import { Bitcoin, Languages, Settings } from "lucide-react";
 import { useNavigation } from "../hooks/useRouting";
 import { FeedbackIcon } from "./icons";
+import type { Translate } from "../i18n";
 
 interface MenuModalProps {
   closeMenu: () => void;
   openFeedbackContact: () => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function MenuModal({

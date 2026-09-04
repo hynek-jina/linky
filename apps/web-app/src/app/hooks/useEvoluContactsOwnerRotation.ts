@@ -41,6 +41,7 @@ import {
 import { readRowOwnerId } from "../lib/rowOwnerId";
 import { UnknownRecord } from "../../utils/schema";
 import { getUnknownErrorMessage } from "../../utils/unknown";
+import type { Translate } from "../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -98,7 +99,7 @@ interface UseEvoluContactsOwnerRotationParams {
   isSeedLogin: boolean;
   pushToast: (message: string) => void;
   slip39Seed: string | null;
-  t: (key: string) => string;
+  t: Translate;
   upsert: EvoluMutations["upsert"];
 }
 

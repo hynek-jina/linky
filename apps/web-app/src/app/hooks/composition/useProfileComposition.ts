@@ -12,6 +12,7 @@ import { getInitialShowProfileQrOnTiltEnabled } from "../../../utils/storage";
 import { usePortraitOrientationLock } from "../usePortraitOrientationLock";
 import { useProfileEditor } from "../profile/useProfileEditor";
 import { useProfileStatusEditor } from "../profile/useProfileStatusEditor";
+import type { Translate } from "../../../i18n";
 
 interface UseProfileCompositionParams {
   currentNpub: string | null;
@@ -23,7 +24,7 @@ interface UseProfileCompositionParams {
   nostrStatusByNpub: Record<string, string | null>;
   route: ReturnType<typeof useRouting>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const useProfileComposition = ({

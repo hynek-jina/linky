@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { parseDefaultLightningAddressNpub } from "../derivedProfile";
 import { useNavigation } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
@@ -13,7 +14,7 @@ interface SaveContactPromptModalProps {
     npub: string | null;
     suggestedName: string | null;
   }) => void;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export function SaveContactPromptModal({

@@ -5,6 +5,7 @@ import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import { FEEDBACK_CONTACT_NPUB } from "../../utils/constants";
 import type { ContactNameRowLike } from "../types/appTypes";
+import type { Translate } from "../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -15,7 +16,7 @@ interface UseFeedbackContactParams<
   contacts: readonly TContact[];
   insert: EvoluMutations["insert"];
   pushToast: (message: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   update: EvoluMutations["update"];
 }
 

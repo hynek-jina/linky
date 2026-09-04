@@ -154,6 +154,7 @@ import { readField } from "../../../utils/unknown";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { nowSeconds } from "../../../utils/time";
+import type { Translate } from "../../../i18n";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 
@@ -388,7 +389,7 @@ interface UseContactsMessagingCompositionParams {
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   syncedNostrIdentityMatchesLocal: boolean;
   syncedNostrIdentityResolution: IdentityOwnersCompositionResult["syncedNostrIdentityResolution"];
-  t: (key: string) => string;
+  t: Translate;
   transactionsBootstrapSnapshot: NostrBootstrapParams["transactionsSnapshot"];
   transactionsOwnerId: IdentityOwnersCompositionResult["transactionsOwnerId"];
   update: EvoluMutations["update"];
@@ -3275,7 +3276,7 @@ export const useContactsMessagingComposition = ({
         ];
       });
       if (payloads.length !== newNpubs.length) {
-        setStatus(`${t("errorPrefix")}: ${t("invalidNpub")}`);
+        setStatus(`${t("errorPrefix")}: ${t("contactIdentifierInvalid")}`);
         return;
       }
 

@@ -5,6 +5,7 @@ import type { JsonValue } from "../../types/json";
 import { asRecord } from "../../utils/validation";
 import type { ContactRowLike } from "../types/appTypes";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
+import type { Translate } from "../../i18n";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -18,7 +19,7 @@ interface UseAppDataTransferParams<TContact extends ContactRowLike> {
   insert: EvoluMutations["insert"];
   upsert: EvoluMutations["upsert"];
   pushToast: (message: string) => void;
-  t: (key: string) => string;
+  t: Translate;
   update: EvoluMutations["update"];
 }
 

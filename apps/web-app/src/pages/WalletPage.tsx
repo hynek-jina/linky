@@ -5,6 +5,7 @@ import { WalletBalance } from "../components/WalletBalance";
 import { WalletWarning } from "../components/WalletWarning";
 import { useAppShellActions } from "../app/context/AppShellContexts";
 import { useNavigation } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
@@ -14,7 +15,7 @@ interface WalletPageProps {
   scanIsOpen: boolean;
   showWalletWarning: boolean;
   showBottomTabBar?: boolean;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const WalletPage: React.FC<WalletPageProps> = React.memo(

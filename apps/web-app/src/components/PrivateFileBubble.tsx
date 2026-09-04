@@ -15,12 +15,13 @@ import {
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
 import { ShareIcon } from "./icons";
+import type { Translate } from "../i18n";
 
 interface PrivateFileBubbleProps {
   onBlobChange: (blob: Blob | null) => void;
   payload: PrivateImageMessagePayload;
   rumorId: string | null;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 const PREVIEW_WIDTH_PX = 260;

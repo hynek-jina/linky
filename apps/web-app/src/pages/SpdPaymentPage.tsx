@@ -19,6 +19,7 @@ import {
   type BankPayment,
   type BankPaymentFieldKey,
 } from "../utils/spdPayment";
+import type { I18nKey, Translate } from "../i18n";
 
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
@@ -44,7 +45,7 @@ interface SpdPaymentPageProps {
     staggerDelaySec: number;
   }) => Promise<{ chatId: string; offerId: string } | null>;
   spdPayload: string;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 interface SpdPaymentFieldRow {
@@ -145,7 +146,7 @@ const getSpdAmountSat = (
   return Number.isFinite(amountSat) && amountSat > 0 ? amountSat : null;
 };
 
-const FIELD_LABEL_KEYS: Record<BankPaymentFieldKey, string> = {
+const FIELD_LABEL_KEYS: Record<BankPaymentFieldKey, I18nKey> = {
   ACC: "spdPaymentAccount",
   AM: "spdPaymentAmount",
   BIC: "spdPaymentBic",
@@ -160,7 +161,7 @@ const FIELD_LABEL_KEYS: Record<BankPaymentFieldKey, string> = {
 
 const buildSpdRows = (
   payment: BankPayment,
-  t: (key: string) => string,
+  t: Translate,
 ): SpdPaymentFieldRow[] =>
   getBankPaymentEditableFieldKeys(payment.format).flatMap((key) => {
     const value = getDisplayedFieldValue(payment, key);
@@ -187,7 +188,7 @@ const createDraftFields = (payment: BankPayment): BankPaymentFields =>
 
 interface BankPaymentEditError {
   field: string | null;
-  key: string;
+  key: I18nKey;
 }
 
 const EDIT_ERRORS: Record<string, BankPaymentEditError> = {

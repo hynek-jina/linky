@@ -50,6 +50,7 @@ import {
 import type { useCashuWalletComposition } from "./useCashuWalletComposition";
 import type { useContactsMessagingComposition } from "./useContactsMessagingComposition";
 import type { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
+import type { Translate } from "../../../i18n";
 
 type CashuWalletCompositionResult = ReturnType<
   typeof useCashuWalletComposition
@@ -122,7 +123,7 @@ interface UseScanNativeCompositionParams {
   setPendingLightningInvoiceConfirmation: CashuWalletCompositionResult["setPendingLightningInvoiceConfirmation"];
   setPendingLnurlWithdrawConfirmation: CashuWalletCompositionResult["setPendingLnurlWithdrawConfirmation"];
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
-  t: (key: string) => string;
+  t: Translate;
 }
 
 export const useScanNativeComposition = ({

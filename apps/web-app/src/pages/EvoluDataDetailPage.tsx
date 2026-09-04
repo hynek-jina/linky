@@ -361,7 +361,9 @@ export function EvoluDataDetailPage(): React.ReactElement {
 
           <div className="settings-row">
             <div className="settings-left">
-              <span className="settings-label">{t("evoluCurrentData")}</span>
+              <span className="settings-label">
+                {t("evoluCurrentDataJson")}
+              </span>
             </div>
             <div className="settings-right">
               <span className="muted">{totalCurrentRows} rows</span>
@@ -370,7 +372,9 @@ export function EvoluDataDetailPage(): React.ReactElement {
 
           <div className="settings-row">
             <div className="settings-left">
-              <span className="settings-label">{t("evoluHistoryData")}</span>
+              <span className="settings-label">
+                {t("evoluHistoryDataJson")}
+              </span>
             </div>
             <div className="settings-right">
               <span className="muted">{historyRows} rows</span>
