@@ -4,15 +4,7 @@ import type {
   Proof,
 } from "@cashu/cashu-ts";
 import { Amount as CashuAmount, MintOperationError } from "@cashu/cashu-ts";
-import {
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Stream,
-  TestClock,
-  TestContext,
-} from "effect";
+import { Effect, Exit, Layer, Stream, TestClock, TestContext } from "effect";
 import type { Scope } from "effect";
 import {
   Amount,
@@ -34,6 +26,7 @@ import { KeyValueStore } from "../ports/KeyValueStore";
 import type { KeyValueStoreService } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
 import type { TokenStoreService } from "../ports/TokenStore";
+import { runOnTestClock } from "../testing/clock";
 import { PaidQuoteDraft, QuoteLockingKey, TopupDraft } from "./domain";
 import {
   PENDING_TOPUP_KEY_PREFIX,
@@ -396,16 +389,7 @@ describe("Topup", () => {
     const exit = await run(
       Effect.gen(function* () {
         yield* TestClock.adjust("1000 seconds");
-        const fiber = yield* Effect.fork(Effect.either(startAndAwait));
-        // Flush the rejected check between adjustments so the poll reaches
-        // its next sleep before the clock moves.
-        for (let tick = 0; tick < 12; tick += 1) {
-          yield* Effect.promise(
-            () => new Promise((resolve) => setTimeout(resolve, 0)),
-          );
-          yield* TestClock.adjust("5 seconds");
-        }
-        return yield* Fiber.join(fiber);
+        return yield* runOnTestClock(Effect.either(startAndAwait), "5 seconds");
       }).pipe(Effect.provide(TestContext.TestContext)),
     );
 

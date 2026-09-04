@@ -25,6 +25,7 @@ import type { CounterScope } from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
 import { isRecoverableOutputCollision } from "../internal/outputCollisions";
 import { checkProofStates, unspentProofs } from "../internal/proofStates";
+import { pollUntil } from "../internal/poll";
 import { decodeQuoteId, emitQuoteState } from "../internal/quotes";
 import {
   removeConsumedRows,
@@ -61,7 +62,7 @@ const MAX_MELT_ATTEMPTS = 5;
  */
 const MELT_COLLISION_FALLBACK_BUMP = 64;
 /** Bounded wait for a PENDING Lightning payment before giving up. */
-const PENDING_POLLS = 6;
+const PENDING_POLL_ATTEMPTS = 6;
 const PENDING_POLL_INTERVAL = Duration.millis(500);
 
 const decodeAmount = Schema.decodeUnknownOption(Amount);
@@ -285,35 +286,43 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
     ): Effect.Effect<MeltReceipt, MeltError> =>
       Effect.gen(function* () {
         let lastState = "PENDING";
-        for (let poll = 0; poll < PENDING_POLLS; poll += 1) {
-          yield* Effect.sleep(PENDING_POLL_INTERVAL);
-          const checked = yield* Effect.either(
-            checkQuote(exec.wallet, exec.quote),
+        // A missed poll is no information; the bounded poll decides.
+        const pollState = Effect.map(
+          Effect.either(checkQuote(exec.wallet, exec.quote)),
+          Either.match({
+            onLeft: () => null,
+            onRight: (checked) => {
+              const state = quoteStateOf(checked);
+              if (state !== null && state !== lastState) {
+                lastState = state;
+                emitQuoteState(inspector, "melt", exec.quote, state);
+              }
+              return state;
+            },
+          }),
+        );
+        yield* Effect.sleep(PENDING_POLL_INTERVAL);
+        const state = yield* pollUntil(pollState, {
+          attempts: PENDING_POLL_ATTEMPTS,
+          interval: PENDING_POLL_INTERVAL,
+          settled: (state) => state === "PAID" || state === "UNPAID",
+        });
+        if (state === "PAID") {
+          const change = yield* reclaimBlankChange(
+            exec.wallet,
+            exec.scope,
+            blankStart,
+            blanks,
           );
-          // A missed poll is no information; the bounded loop decides.
-          if (Either.isLeft(checked)) continue;
-          const state = quoteStateOf(checked.right);
-          if (state !== null && state !== lastState) {
-            lastState = state;
-            emitQuoteState(inspector, "melt", exec.quote, state);
-          }
-          if (state === "PAID") {
-            const change = yield* reclaimBlankChange(
-              exec.wallet,
-              exec.scope,
-              blankStart,
-              blanks,
-            );
-            return yield* finishPaid(exec, change);
-          }
-          if (state === "UNPAID") {
-            yield* releaseInputsRow(exec.inputsRow, "melt-unpaid");
-            return yield* new PaymentFailed({
-              mint: exec.quote.mint,
-              quoteId: exec.quote.quoteId,
-              detail: "the lightning payment failed at the mint",
-            });
-          }
+          return yield* finishPaid(exec, change);
+        }
+        if (state === "UNPAID") {
+          yield* releaseInputsRow(exec.inputsRow, "melt-unpaid");
+          return yield* new PaymentFailed({
+            mint: exec.quote.mint,
+            quoteId: exec.quote.quoteId,
+            detail: "the lightning payment failed at the mint",
+          });
         }
         return yield* Effect.fail(paymentPending(exec.quote));
       });

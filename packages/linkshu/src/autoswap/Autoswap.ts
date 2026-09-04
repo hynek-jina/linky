@@ -5,6 +5,7 @@ import { Amount, NonNegativeAmount, UnixSeconds } from "../domain/primitives";
 import type { MintUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { inspectOperationWith } from "../internal/operations";
+import { pollUntil } from "../internal/poll";
 import {
   checkMintQuote,
   claimMintQuote,
@@ -38,7 +39,7 @@ import { PendingAutoswapClaim, pendingClaims } from "./internal/pendingClaim";
  */
 const MAX_AMOUNT_ATTEMPTS = 4;
 /** The melt settled, so the target's quote flips within a poll or two. */
-const CLAIM_POLLS = 6;
+const CLAIM_POLL_ATTEMPTS = 6;
 const CLAIM_POLL_INTERVAL = Duration.millis(500);
 
 /** Melt failures wearing autoswap's error union. */
@@ -106,23 +107,30 @@ export class Autoswap extends Effect.Service<Autoswap>()("linkshu/Autoswap", {
     ): Effect.Effect<ClaimedQuote, AutoswapError> =>
       Effect.gen(function* () {
         let lastState: string | null = null;
-        for (let poll = 0; poll < CLAIM_POLLS; poll += 1) {
-          const state = (yield* checkMintQuote(wallet, pending)).state;
-          if (state !== lastState) {
-            lastState = state;
-            emitQuoteState(inspector, "autoswap", pending, state);
-          }
-          if (state !== QUOTE_UNPAID) {
-            return yield* claimMintQuote(claimContext(wallet), pending);
-          }
-          yield* Effect.sleep(CLAIM_POLL_INTERVAL);
-        }
-        return yield* new PaymentFailed({
-          mint: pending.mint,
-          quoteId: pending.quoteId,
-          detail:
-            "the melt settled but the target mint still reports its quote unpaid; the pending claim resumes it",
+        const pollState = Effect.map(
+          checkMintQuote(wallet, pending),
+          (quote) => {
+            if (quote.state !== lastState) {
+              lastState = quote.state;
+              emitQuoteState(inspector, "autoswap", pending, quote.state);
+            }
+            return quote.state;
+          },
+        );
+        const state = yield* pollUntil(pollState, {
+          attempts: CLAIM_POLL_ATTEMPTS,
+          interval: CLAIM_POLL_INTERVAL,
+          settled: (state) => state !== QUOTE_UNPAID,
         });
+        if (state === QUOTE_UNPAID) {
+          return yield* new PaymentFailed({
+            mint: pending.mint,
+            quoteId: pending.quoteId,
+            detail:
+              "the melt settled but the target mint still reports its quote unpaid; the pending claim resumes it",
+          });
+        }
+        return yield* claimMintQuote(claimContext(wallet), pending);
       });
 
     /**
