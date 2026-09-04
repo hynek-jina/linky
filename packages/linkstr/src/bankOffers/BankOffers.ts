@@ -1,14 +1,6 @@
 import { Effect } from "effect";
 import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
-import { RumorId } from "../domain/primitives";
-import { Inspector } from "../inspector/Inspector";
-import { freshClientId, inspectOperation } from "../internal/operations";
-import type { OperationReceiptSummary } from "../internal/operations";
-import { nowSeconds } from "../internal/time";
-import { deliverRumorToPeer } from "../internal/wrapDelivery";
-import { LinkstrIdentity } from "../services/LinkstrIdentity";
-import { NostrTransport } from "../services/NostrTransport";
-import { RelayPolicy } from "../services/RelayPolicy";
+import { makeWrapSendContext, sendToPeer } from "../internal/wrapSend";
 import { encodeBankOfferRumor } from "./codec";
 import {
   BankOfferReceipt,
@@ -16,26 +8,11 @@ import {
   type BankOfferDraft,
 } from "./domain";
 
-const summarizeReceipt = (
-  receipt: BankOfferReceipt,
-): OperationReceiptSummary => ({
-  rumorId: receipt.snapshotId,
-  clientId: receipt.clientId,
-  sentAt: receipt.sentAt,
-  selfCopy: receipt.selfCopy,
-  recipientCopy: receipt.recipientCopy,
-});
-
 export class BankOffers extends Effect.Service<BankOffers>()(
   "linkstr/BankOffers",
   {
     effect: Effect.gen(function* () {
-      const context = {
-        identity: yield* LinkstrIdentity,
-        transport: yield* NostrTransport,
-        relayPolicy: yield* RelayPolicy,
-      };
-      const inspector = yield* Inspector.orNoop;
+      const context = yield* makeWrapSendContext;
 
       const send = (
         draft: BankOfferDraft,
@@ -43,41 +20,23 @@ export class BankOffers extends Effect.Service<BankOffers>()(
         BankOfferReceipt,
         RecipientNotReached | NoRelayReachable
       > =>
-        Effect.gen(function* () {
-          const clientId = draft.clientId ?? (yield* freshClientId);
-          const sentAt = yield* nowSeconds;
-          const rumor = encodeBankOfferRumor(
-            draft,
-            context.identity.pubkey,
-            sentAt,
-            clientId,
-          );
-          const copies = yield* deliverRumorToPeer(context, {
-            rumor,
-            peer: draft.to,
-            clientId,
-            sentAt,
-            pushMarkRecipientCopy:
-              draft.pushMark ?? shouldPushBankOfferStatus(draft.status),
-            order: "recipientFirst",
-          });
-          return new BankOfferReceipt({
-            snapshotId: RumorId.make(rumor.id),
-            offerId: draft.offerId,
-            status: draft.status,
-            content: rumor.content,
-            clientId,
-            sentAt,
-            ...copies,
-          });
-        }).pipe(
-          inspectOperation(
-            inspector,
-            "bankOffers.send",
-            draft,
-            summarizeReceipt,
-          ),
-        );
+        sendToPeer(context, "bankOffers.send", draft, {
+          encode: encodeBankOfferRumor,
+          pushMarkRecipientCopy:
+            draft.pushMark ?? shouldPushBankOfferStatus(draft.status),
+          order: "recipientFirst",
+          receipt: (outcome, rumor) =>
+            new BankOfferReceipt({
+              snapshotId: outcome.rumorId,
+              offerId: draft.offerId,
+              status: draft.status,
+              content: rumor.content,
+              clientId: outcome.clientId,
+              sentAt: outcome.sentAt,
+              selfCopy: outcome.selfCopy,
+              recipientCopy: outcome.recipientCopy,
+            }),
+        });
 
       return { send } as const;
     }),
