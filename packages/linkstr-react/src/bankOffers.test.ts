@@ -100,7 +100,7 @@ describe("sendBankOfferAtom", () => {
         clientId: "client-react",
       }),
     );
-    expect(exit.value.snapshotId).toMatch(/^[0-9a-f]{64}$/);
+    expect(exit.value.rumorId).toMatch(/^[0-9a-f]{64}$/);
     expect(published.map(recipientOf)).toEqual([bob.pubkey, alice.pubkey]);
   });
 });

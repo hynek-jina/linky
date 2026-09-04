@@ -130,7 +130,7 @@ describe("BankOffers.send", () => {
     const rumor = Either.getOrThrow(
       unwrapToRumor(recipientWrap, bob.secretKey),
     );
-    expect(exit.value.snapshotId).toBe(rumor.id);
+    expect(exit.value.rumorId).toBe(rumor.id);
     expect(exit.value.content).toBe(rumor.content);
     expect(rumor.kind).toBe(24135);
     expect(JSON.parse(rumor.content)).toEqual(

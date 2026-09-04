@@ -17,7 +17,7 @@ export class PaymentNoticeDraft extends Schema.Class<PaymentNoticeDraft>(
 export class PaymentNoticeReceipt extends Schema.Class<PaymentNoticeReceipt>(
   "PaymentNoticeReceipt",
 )({
-  noticeId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   recipientCopy: WrapDelivery,

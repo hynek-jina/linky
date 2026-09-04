@@ -138,7 +138,7 @@ describe("outbox atoms", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.ref).toBe("row-1");
-    expect(exit.value.messageId).toMatch(/^[0-9a-f]{64}$/);
+    expect(exit.value.rumorId).toMatch(/^[0-9a-f]{64}$/);
     expect(exit.value.clientId).toBe("client-react");
 
     await expect.poll(() => handled.length).toBe(1);

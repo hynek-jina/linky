@@ -193,10 +193,10 @@ export const publishCashuMessagePayment = async ({
           ref: OutboxRef.make(`message:${localMessageId}`),
         });
         if (Exit.isSuccess(exit)) {
-          messageId = exit.value.messageId;
+          messageId = exit.value.rumorId;
           updateLocalNostrMessage(localMessageId, {
             createdAtSec: exit.value.sentAt,
-            rumorId: exit.value.messageId,
+            rumorId: exit.value.rumorId,
           });
         } else {
           sendError = failureMessage(exit.cause);

@@ -93,7 +93,7 @@ describe("sendSeenReceiptAtom", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.clientId).toBe("client-42");
-    expect(exit.value.receiptId).toMatch(/^[0-9a-f]{64}$/);
+    expect(exit.value.rumorId).toMatch(/^[0-9a-f]{64}$/);
 
     expect(published).toHaveLength(2);
     const recipients = published.map(recipientOf);

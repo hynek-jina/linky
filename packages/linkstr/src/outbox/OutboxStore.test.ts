@@ -34,7 +34,7 @@ import type { OutboxStoreService } from "./OutboxStore";
 const secretKey = NostrSecretKey.make(generateSecretKey());
 const pubkey = Pubkey.make(getPublicKey(secretKey));
 const relay = RelayUrl.make("wss://relay.test");
-const messageId = RumorId.make("ab".repeat(32));
+const rumorId = RumorId.make("ab".repeat(32));
 const clientId = ClientId.make("client-42");
 const sentAt = UnixSeconds.make(1_700_000_000);
 const storageKey = "test.outbox";
@@ -156,14 +156,14 @@ describe("OutboxStore.fromStringStorage", () => {
     const storage = stubStorage();
 
     const chatReceipt = new ChatMessageReceipt({
-      messageId,
+      rumorId,
       clientId,
       sentAt,
       selfCopy: delivery("cd"),
       recipientCopy: delivery("ef"),
     });
     const editReceipt = new MessageEditReceipt({
-      messageId,
+      rumorId,
       editOf: RumorId.make("12".repeat(32)),
       clientId,
       sentAt,
@@ -195,7 +195,7 @@ describe("OutboxStore.fromStringStorage", () => {
   it("revives a telemetry job with its operation and receipt", () => {
     const storage = stubStorage();
     const telemetryReceipt = new PaymentTelemetryReceipt({
-      telemetryId: messageId,
+      rumorId,
       clientId,
       sentAt,
       recipientCopy: delivery("ef"),
@@ -226,6 +226,37 @@ describe("OutboxStore.fromStringStorage", () => {
     }
     expect(stored.operation).toEqual(job.operation);
     expect(stored.state.result.receipt).toBeInstanceOf(PaymentTelemetryReceipt);
+  });
+
+  it("decodes receipts persisted under the legacy per-vertical id keys", () => {
+    const storage = stubStorage();
+    const receipt = new ChatMessageReceipt({
+      rumorId,
+      clientId,
+      sentAt,
+      selfCopy: delivery("cd"),
+      recipientCopy: delivery("ef"),
+    });
+    run(
+      buildStore(OutboxStore.fromStringStorage(storage, storageKey)).insert(
+        makeJob("legacy", succeededWith("legacy", receipt)),
+      ),
+    );
+    const stored = storage.map.get(storageKey);
+    if (stored === undefined) throw new Error("nothing stored");
+    storage.map.set(storageKey, stored.replace('"rumorId"', '"messageId"'));
+
+    const [job] = run(
+      buildStore(OutboxStore.fromStringStorage(storage, storageKey)).loadAll,
+    );
+    if (
+      job?.state._tag !== "awaiting-ack" ||
+      !(job.state.result instanceof OutboxJobSucceeded)
+    ) {
+      throw new Error("expected an awaiting-ack success");
+    }
+    expect(job.state.result.receipt).toBeInstanceOf(ChatMessageReceipt);
+    expect(job.state.result.receipt.rumorId).toBe(rumorId);
   });
 
   it("treats an unreadable stored value as empty", () => {

@@ -149,7 +149,7 @@ const rumorsForBob = (published: ReadonlyArray<SignedWrapEvent>) =>
     .map((wrap) => Either.getOrThrow(unwrapToRumor(wrap, bob.secretKey)));
 
 describe("Outbox", () => {
-  it("returns a deterministic messageId equal to the delivered rumor id", async () => {
+  it("returns a deterministic rumorId equal to the delivered rumor id", async () => {
     const published: Array<SignedWrapEvent> = [];
     const store = makeStore();
     const clientId = ClientId.make("client-outbox");
@@ -177,13 +177,13 @@ describe("Outbox", () => {
     expect(terminal.ref).toBe("row-1");
     expect(terminal.receipt).toBeInstanceOf(ChatMessageReceipt);
     if (!(terminal.receipt instanceof ChatMessageReceipt)) return;
-    expect(terminal.receipt.messageId).toBe(receipt.messageId);
+    expect(terminal.receipt.rumorId).toBe(receipt.rumorId);
     expect(terminal.receipt.clientId).toBe(clientId);
     expect(terminal.receipt.sentAt).toBe(sentAt);
 
     const rumors = rumorsForBob(published);
     expect(rumors).toHaveLength(1);
-    expect(rumors[0]?.id).toBe(receipt.messageId);
+    expect(rumors[0]?.id).toBe(receipt.rumorId);
     expect(rumors[0]?.created_at).toBe(sentAt);
   });
 
@@ -220,7 +220,7 @@ describe("Outbox", () => {
 
     expect(results.map((result) => result.ref)).toEqual(["row-1", "row-2"]);
     expect(results.every((r) => r._tag === "OutboxJobSucceeded")).toBe(true);
-    expect(second.messageId).not.toBe(first.messageId);
+    expect(second.rumorId).not.toBe(first.rumorId);
 
     // Every retry published the identical precomputed rumor.
     const firstRumors = rumorsForBob(published).filter(
@@ -228,7 +228,7 @@ describe("Outbox", () => {
     );
     expect(firstRumors.length).toBeGreaterThanOrEqual(2);
     for (const rumor of firstRumors) {
-      expect(rumor.id).toBe(first.messageId);
+      expect(rumor.id).toBe(first.rumorId);
       expect(rumor.created_at).toBe(first.sentAt);
     }
     expect(stored.every((job) => job.state._tag === "awaiting-ack")).toBe(true);
@@ -346,7 +346,7 @@ describe("Outbox", () => {
     if (reaction?._tag !== "OutboxJobSucceeded") return;
     expect(reaction.receipt).toBeInstanceOf(ReactionReceipt);
     if (!(reaction.receipt instanceof ReactionReceipt)) return;
-    expect(reaction.receipt.reactionId).toBe(receipts[1]?.messageId);
+    expect(reaction.receipt.rumorId).toBe(receipts[1]?.rumorId);
   });
 
   it("delivers payment telemetry and forgets the job once acked", async () => {

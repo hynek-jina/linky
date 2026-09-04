@@ -166,7 +166,7 @@ export const useSendReaction = <
         }
 
         updateLocalNostrReaction(pendingReactionId, {
-          wrapId: exit.value.messageId,
+          wrapId: exit.value.rumorId,
         });
 
         if (isOffline) {

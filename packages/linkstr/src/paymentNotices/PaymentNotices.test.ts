@@ -114,13 +114,13 @@ describe("PaymentNotices.send", () => {
       ["context", "bank_payment_offer"],
       ["offer", "offer-1"],
     ]);
-    expect(exit.value.noticeId).toBe(rumor.id);
+    expect(exit.value.rumorId).toBe(rumor.id);
     expect(exit.value.clientId).toBe(clientId);
     expect(exit.value.recipientCopy.wrapId).toBe(wrap.id);
     expect(exit.value.recipientCopy.acceptedBy).toEqual([relayA, relayB]);
   });
 
-  it("fails with PaymentNoticeNotDelivered when every relay rejects", async () => {
+  it("fails with WrapNotDelivered when every relay rejects", async () => {
     const exit = await runWith(
       stubTransport([], false),
       Effect.gen(function* () {
@@ -134,7 +134,7 @@ describe("PaymentNotices.send", () => {
     expect(exit).toEqual(
       Exit.fail(
         expect.objectContaining({
-          _tag: "PaymentNoticeNotDelivered",
+          _tag: "WrapNotDelivered",
           clientId,
           recipientCopy: expect.objectContaining({
             acceptedBy: [],

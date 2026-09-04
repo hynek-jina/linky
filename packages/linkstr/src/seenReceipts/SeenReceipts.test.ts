@@ -114,12 +114,12 @@ describe("SeenReceipts.send", () => {
     expect(recipients).toContain(alice.pubkey);
     expect(recipients).toContain(bob.pubkey);
 
-    // Both copies must decrypt to the same rumor: the receipt's receiptId.
+    // Both copies must decrypt to the same rumor: the receipt's rumorId.
     for (const { wrap } of published) {
       const key =
         recipientOf(wrap) === alice.pubkey ? alice.secretKey : bob.secretKey;
       const rumor = Either.getOrThrow(unwrapToRumor(wrap, key));
-      expect(rumor.id).toBe(receipt.receiptId);
+      expect(rumor.id).toBe(receipt.rumorId);
       expect(rumor.kind).toBe(24136);
       expect(rumor.content).toBe(String(draft.seenUpToSec));
       expect(firstTagValue(rumor.tags, "since")).toBe(String(draft.sinceSec));

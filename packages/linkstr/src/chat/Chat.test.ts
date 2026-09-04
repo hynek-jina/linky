@@ -176,7 +176,7 @@ describe("Chat sends", () => {
       const rumor = Either.getOrThrow(
         unwrapToRumor(recipient.wrap, bob.secretKey),
       );
-      expect(rumor.id).toBe(exit.value.messageId);
+      expect(rumor.id).toBe(exit.value.rumorId);
       expect(rumor.kind).toBe(kind);
     },
   );
@@ -234,7 +234,7 @@ describe("Chat sends", () => {
       const key =
         recipientOf(wrap) === alice.pubkey ? alice.secretKey : bob.secretKey;
       const rumor = Either.getOrThrow(unwrapToRumor(wrap, key));
-      expect(rumor.id).toBe(exit.value.messageId);
+      expect(rumor.id).toBe(exit.value.rumorId);
       expect(rumor.kind).toBe(14);
       expect(rumor.content).toBe(cashuToken);
     }
@@ -270,7 +270,7 @@ describe("Chat sends", () => {
       unwrapToRumor(recipient.wrap, bob.secretKey),
     );
     expect(rumor.created_at).toBe(sentAt);
-    expect(rumor.id).toBe(exit.value.messageId);
+    expect(rumor.id).toBe(exit.value.rumorId);
   });
 
   it("fails with RecipientNotReached when only the self copy lands", async () => {

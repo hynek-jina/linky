@@ -27,14 +27,10 @@ export class BankOffers extends Effect.Service<BankOffers>()(
           order: "recipientFirst",
           receipt: (outcome, rumor) =>
             new BankOfferReceipt({
-              snapshotId: outcome.rumorId,
+              ...outcome,
               offerId: draft.offerId,
               status: draft.status,
               content: rumor.content,
-              clientId: outcome.clientId,
-              sentAt: outcome.sentAt,
-              selfCopy: outcome.selfCopy,
-              recipientCopy: outcome.recipientCopy,
             }),
         });
 

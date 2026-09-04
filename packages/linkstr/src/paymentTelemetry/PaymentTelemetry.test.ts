@@ -205,7 +205,7 @@ describe("PaymentTelemetry.publishPaymentTelemetry", () => {
     expect(exit).toEqual(
       Exit.fail(
         expect.objectContaining({
-          _tag: "PaymentTelemetryNotDelivered",
+          _tag: "WrapNotDelivered",
           clientId: "telemetry-failure",
           recipientCopy: expect.objectContaining({
             acceptedBy: [],

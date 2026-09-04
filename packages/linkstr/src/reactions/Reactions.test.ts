@@ -117,12 +117,12 @@ describe("Reactions.react", () => {
     expect(recipients).toContain(alice.pubkey);
     expect(recipients).toContain(bob.pubkey);
 
-    // Both copies must decrypt to the same rumor: the receipt's reactionId.
+    // Both copies must decrypt to the same rumor: the receipt's rumorId.
     for (const { wrap } of published) {
       const key =
         recipientOf(wrap) === alice.pubkey ? alice.secretKey : bob.secretKey;
       const rumor = Either.getOrThrow(unwrapToRumor(wrap, key));
-      expect(rumor.id).toBe(receipt.reactionId);
+      expect(rumor.id).toBe(receipt.rumorId);
       expect(rumor.kind).toBe(7);
       expect(rumor.content).toBe("🔥");
       expect(firstTagValue(rumor.tags, "k")).toBe("15");
@@ -158,7 +158,7 @@ describe("Reactions.react", () => {
       unwrapToRumor(recipient.wrap, bob.secretKey),
     );
     expect(rumor.created_at).toBe(sentAt);
-    expect(rumor.id).toBe(exit.value.reactionId);
+    expect(rumor.id).toBe(exit.value.rumorId);
   });
 
   it("fails with RecipientNotReached when only the self copy lands", async () => {
@@ -241,7 +241,7 @@ describe("Reactions.retract", () => {
     expect(rumor.kind).toBe(5);
     expect(rumor.content).toBe("");
     expect(tagValues(rumor.tags, "e")).toEqual(reactionIds);
-    expect(rumor.id).toBe(exit.value.retractionId);
+    expect(rumor.id).toBe(exit.value.rumorId);
     // A generated clientId still travels on the wire for echo reconciliation.
     expect(firstTagValue(rumor.tags, "client")).toBe(exit.value.clientId);
   });

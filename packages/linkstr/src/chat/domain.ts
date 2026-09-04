@@ -90,7 +90,7 @@ export class EditMessageDraft extends Schema.Class<EditMessageDraft>(
 export class ChatMessageReceipt extends Schema.Class<ChatMessageReceipt>(
   "ChatMessageReceipt",
 )({
-  messageId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   selfCopy: WrapDelivery,
@@ -100,7 +100,7 @@ export class ChatMessageReceipt extends Schema.Class<ChatMessageReceipt>(
 export class MessageEditReceipt extends Schema.Class<MessageEditReceipt>(
   "MessageEditReceipt",
 )({
-  messageId: RumorId,
+  rumorId: RumorId,
   editOf: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,

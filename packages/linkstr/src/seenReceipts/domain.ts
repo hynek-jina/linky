@@ -22,7 +22,7 @@ export class SeenReceiptDraft extends Schema.Class<SeenReceiptDraft>(
 export class SeenReceiptSendReceipt extends Schema.Class<SeenReceiptSendReceipt>(
   "SeenReceiptSendReceipt",
 )({
-  receiptId: RumorId,
+  rumorId: RumorId,
   clientId: ClientId,
   sentAt: UnixSeconds,
   selfCopy: WrapDelivery,

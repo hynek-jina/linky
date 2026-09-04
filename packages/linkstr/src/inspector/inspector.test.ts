@@ -204,7 +204,7 @@ describe("Inspector", () => {
         }
         expect(operation.name).toBe("reactions.react");
         expect(operation.params).toBe(draft);
-        expect(operation.rumorId).toBe(receipt.reactionId);
+        expect(operation.rumorId).toBe(receipt.rumorId);
         expect(operation.clientId).toBe(receipt.clientId);
         if (operation.selfCopy === null) {
           throw new Error("reaction operation lost its self copy");
@@ -234,7 +234,7 @@ describe("Inspector", () => {
         ).toEqual(
           expect.objectContaining({
             name: "reactions.retract",
-            rumorId: receipt.retractionId,
+            rumorId: receipt.rumorId,
           }),
         );
       }),

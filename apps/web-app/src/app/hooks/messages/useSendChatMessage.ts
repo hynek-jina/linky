@@ -233,12 +233,12 @@ export const useSendChatMessage = <
 
         updateLocalNostrMessage(pendingId, {
           createdAtSec: exit.value.sentAt,
-          rumorId: exit.value.messageId,
+          rumorId: exit.value.rumorId,
         });
 
         void appendPushDebugLog("client", "chat send enqueued", {
           clientId,
-          messageId: exit.value.messageId,
+          rumorId: exit.value.rumorId,
         });
 
         if (typeof navigator !== "undefined" && navigator.onLine === false) {

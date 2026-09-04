@@ -18,14 +18,7 @@ export class SeenReceipts extends Effect.Service<SeenReceipts>()(
       > =>
         sendToPeer(context, "seenReceipts.send", draft, {
           encode: encodeSeenReceiptRumor,
-          receipt: (outcome) =>
-            new SeenReceiptSendReceipt({
-              receiptId: outcome.rumorId,
-              clientId: outcome.clientId,
-              sentAt: outcome.sentAt,
-              selfCopy: outcome.selfCopy,
-              recipientCopy: outcome.recipientCopy,
-            }),
+          receipt: (outcome) => new SeenReceiptSendReceipt(outcome),
         });
 
       return { send } as const;
