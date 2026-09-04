@@ -1,7 +1,6 @@
 import { Effect, Layer } from "effect";
 import {
   Amount,
-  Bip39Seed,
   FeeProbe,
   FeeProbeDraft,
   KeyValueStore,
@@ -9,18 +8,11 @@ import {
   MintUrl,
   runLinkshu,
 } from "../../src";
-import type { Bip39Seed as Bip39SeedType } from "../../src";
 import { FEE_PROBE_CACHE_KEY_PREFIX } from "../../src/feeProbe/internal/feeProbeCache";
+import { mintUrl, randomSeed } from "./helpers";
 
 // The dev stack runs a single mint, so it plays both roles: it issues the
 // probe invoice and prices melting against it. Nothing pays the invoice.
-const mintUrl = MintUrl.make(
-  process.env.LINKSHU_MINT_URL ?? "http://localhost:3338",
-);
-
-const randomSeed = (): Bip39SeedType =>
-  Bip39Seed.make(crypto.getRandomValues(new Uint8Array(64)));
-
 const draft = new FeeProbeDraft({
   mint: mintUrl,
   probeMint: mintUrl,
