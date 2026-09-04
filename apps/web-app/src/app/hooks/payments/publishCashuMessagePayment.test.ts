@@ -191,7 +191,7 @@ describe("publishCashuMessagePayment", () => {
       },
     ],
     [
-      "Error: relay unavailable",
+      "relay unavailable",
       (args: ReturnType<typeof createArgs>) => {
         args.enqueueOutbox.mockRejectedValue(new Error("relay unavailable"));
       },

@@ -74,8 +74,6 @@ import {
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../../utils/storage";
-import { getUnknownErrorMessage } from "../../../utils/unknown";
-import { makeLocalId } from "../../../utils/validation";
 import {
   forgetLinkyBankPaymentOfferSpdPayload,
   getLastBankPaymentOfferResponseSecByContactId,
@@ -151,6 +149,9 @@ import { useMessagesDomain } from "../useMessagesDomain";
 import { usePushRegistrationLifecycle } from "../usePushRegistrationLifecycle";
 import { useRelayDomain } from "../useRelayDomain";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
+import { readField } from "../../../utils/unknown";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
+import { makeLocalId } from "../../../utils/validation";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 
@@ -189,11 +190,6 @@ const positiveUnixSeconds = (value: unknown): UnixSeconds | undefined => {
 
 const INLINE_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
-
-const readObjectField = (value: unknown, field: string): unknown => {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Reflect.get(value, field);
-};
 
 const extractMentionedNpubs = (content: string): string[] => {
   const matches = String(content ?? "").match(INLINE_NPUB_PATTERN);
@@ -1345,11 +1341,10 @@ export const useContactsMessagingComposition = ({
 
     const normalizedNpub = normalizeNpubIdentifier(source.npub);
     const normalizedUnknownPubkeyHex = normalizePubkeyHex(
-      readObjectField(source, "unknownPubkeyHex"),
+      readField(source, "unknownPubkeyHex"),
     );
     const sourceGroupName = String(source.groupName ?? "").trim();
-    const isUnknownContact =
-      readObjectField(source, "isUnknownContact") === true;
+    const isUnknownContact = readField(source, "isUnknownContact") === true;
 
     return {
       id: normalizedId,

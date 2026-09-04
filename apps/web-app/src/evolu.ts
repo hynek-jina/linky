@@ -11,6 +11,7 @@ import {
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
 } from "./utils/storage";
+import { isRecord } from "./utils/unknown";
 
 const isEvoluLoggingEnabled = (): boolean => {
   if (!import.meta.env.DEV) return false;
@@ -78,9 +79,6 @@ type Stringifiable =
 
 type EvoluServerUrlInput = Stringifiable;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 const isJsonValue = (value: unknown): value is JsonValue => {
   if (
     value === null ||
@@ -111,8 +109,11 @@ const readCount = (rows: ReadonlyArray<EvoluQueryRow>): number => {
 
 const toByteArray = (value: unknown): number[] => {
   if (value instanceof Uint8Array) return Array.from(value);
-  if (!isRecord(value)) return [];
-  const entries = Object.values(value);
+  const entries = Array.isArray(value)
+    ? value
+    : isRecord(value)
+      ? Object.values(value)
+      : [];
   if (entries.some((entry) => typeof entry !== "number")) return [];
   const out: number[] = [];
   for (const entry of entries) {

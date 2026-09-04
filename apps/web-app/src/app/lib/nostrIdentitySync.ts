@@ -1,4 +1,6 @@
 import * as Evolu from "@evolu/common";
+import { readField } from "../../utils/unknown";
+import { trimString } from "../../utils/validation";
 
 export const ACTIVE_NOSTR_IDENTITY_ROW_ID =
   Evolu.createIdFromString<"NostrIdentity">("active-nostr-identity");
@@ -16,10 +18,8 @@ interface SyncedNostrIdentityResolution {
   shouldMigrateLegacyIdentity: boolean;
 }
 
-const readText = (row: object, key: string): string => {
-  const value = Reflect.get(row, key);
-  return typeof value === "string" ? value.trim() : "";
-};
+const readText = (row: object, key: string): string =>
+  trimString(readField(row, key));
 
 const readSwitchedAtSec = (row: object): number | null => {
   const value = Number(Reflect.get(row, "switchedAtSec"));

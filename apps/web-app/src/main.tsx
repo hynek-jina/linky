@@ -27,6 +27,7 @@ import {
   recordPwaControllerChange,
   recordPwaRegistered,
 } from "./utils/pwaUpdate";
+import { getUnknownErrorMessage, isRecord } from "./utils/unknown";
 
 type BufferFromArgs =
   | [arrayLike: ArrayLike<number> | ArrayBufferView]
@@ -288,10 +289,6 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null;
-};
-
 const getErrorName = (value: unknown): string | null => {
   if (value instanceof DOMException) {
     return value.name;
@@ -306,26 +303,9 @@ const getErrorName = (value: unknown): string | null => {
   return typeof name === "string" ? name : null;
 };
 
-const getErrorMessage = (value: unknown): string | null => {
-  if (value instanceof DOMException) {
-    return value.message;
-  }
-  if (value instanceof Error) {
-    return value.message;
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (!isRecord(value)) {
-    return null;
-  }
-  const message = value.message;
-  return typeof message === "string" ? message : null;
-};
-
 const isClipboardReadPermissionError = (value: unknown): boolean => {
   const name = getErrorName(value);
-  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+  const message = getUnknownErrorMessage(value, "").toLowerCase();
 
   if (name !== "NotAllowedError") {
     return false;
@@ -336,7 +316,7 @@ const isClipboardReadPermissionError = (value: unknown): boolean => {
 
 const isBenignFetchAbortError = (value: unknown): boolean => {
   const name = getErrorName(value);
-  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+  const message = getUnknownErrorMessage(value, "").toLowerCase();
 
   if (name === "AbortError") return true;
   // Safari surfaces aborted/cancelled fetches as plain `TypeError: Load failed`
@@ -359,7 +339,7 @@ const isLocalDevOrigin = (): boolean => {
 };
 
 const isDynamicImportFetchError = (value: unknown): boolean => {
-  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+  const message = getUnknownErrorMessage(value, "").toLowerCase();
   return (
     message.includes("failed to fetch dynamically imported module") ||
     message.includes("error loading dynamically imported module")

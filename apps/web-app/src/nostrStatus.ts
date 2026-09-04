@@ -1,3 +1,4 @@
+import { asNonEmptyString } from "./utils/validation";
 /**
  * Linky's kind-30315 status conventions: the last status line may carry a
  * comma-separated exchange-currency list; everything transport-level lives in
@@ -15,18 +16,12 @@ interface ParsedProfileGeneralStatus {
   text: string | null;
 }
 
-const normalizeStatusText = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
 const CURRENCY_CODE_PATTERN = /^[A-Z0-9]{2,10}$/;
 
 const parseCurrencyStatusCodes = (
   status: string | null | undefined,
 ): string[] | null => {
-  const normalizedStatus = normalizeStatusText(status);
+  const normalizedStatus = asNonEmptyString(status);
   if (!normalizedStatus) return null;
 
   const parts = normalizedStatus
@@ -66,7 +61,7 @@ const parseLinkyProfileExchangeStatus = (
 const parseProfileGeneralStatus = (
   status: string | null | undefined,
 ): ParsedProfileGeneralStatus => {
-  const normalizedStatus = normalizeStatusText(status);
+  const normalizedStatus = asNonEmptyString(status);
   if (!normalizedStatus) {
     return {
       currencies: [],
@@ -79,7 +74,7 @@ const parseProfileGeneralStatus = (
     const maybeCurrencies = parseLinkyProfileExchangeStatus(lines[index]);
     if (!maybeCurrencies) continue;
 
-    const text = normalizeStatusText(lines.slice(0, index).join("\n"));
+    const text = asNonEmptyString(lines.slice(0, index).join("\n"));
     return {
       currencies: maybeCurrencies,
       text,
@@ -152,7 +147,7 @@ export const buildProfileGeneralStatus = (params: {
   currencies: readonly ProfileStatusCurrency[];
   text: string | null | undefined;
 }): string | null => {
-  const text = normalizeStatusText(params.text);
+  const text = asNonEmptyString(params.text);
   const selected = PROFILE_STATUS_CURRENCIES.filter((currency) =>
     params.currencies.includes(currency),
   );

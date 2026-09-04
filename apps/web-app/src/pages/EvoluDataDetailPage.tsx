@@ -10,6 +10,7 @@ import {
   CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   MAX_CONTACTS_PER_OWNER,
 } from "../utils/constants";
+import { readRowOwnerId } from "../app/lib/rowOwnerId";
 
 const ONE_MB = 1024 * 1024;
 
@@ -42,14 +43,6 @@ export function EvoluDataDetailPage(): React.ReactElement {
     Awaited<ReturnType<typeof loadEvoluCurrentData>>
   >({});
   const [isLoading, setIsLoading] = useState(false);
-
-  const readRowOwnerId = (row: unknown): string => {
-    if (typeof row !== "object" || row === null) return "";
-    if (!("ownerId" in row)) return "";
-    const ownerId = row.ownerId;
-    if (typeof ownerId !== "string") return "";
-    return ownerId.trim();
-  };
 
   const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";

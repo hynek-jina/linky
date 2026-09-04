@@ -3,6 +3,7 @@ import {
   readNotificationOpenData,
   unwrapNotificationOpenValue,
 } from "./notificationOpen";
+import { readField } from "../../utils/unknown";
 
 interface NotificationOpenTarget {
   outerEventId: string;
@@ -13,11 +14,6 @@ interface NotificationOpenTarget {
 
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
-const readObjectField = (value: unknown, field: string): unknown => {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Reflect.get(value, field);
-};
-
 export const readNotificationOpenRoute = (value: unknown): string | null => {
   const source = unwrapNotificationOpenValue(value);
   if (typeof source === "string") {
@@ -26,13 +22,13 @@ export const readNotificationOpenRoute = (value: unknown): string | null => {
   }
 
   const notification = unwrapNotificationOpenValue(
-    readObjectField(source, "notification"),
+    readField(source, "notification"),
   );
   const data = unwrapNotificationOpenValue(
-    readObjectField(notification, "data") ?? readObjectField(source, "data"),
+    readField(notification, "data") ?? readField(source, "data"),
   );
   const normalized = String(
-    readObjectField(source, "route") ?? readObjectField(data, "route") ?? "",
+    readField(source, "route") ?? readField(data, "route") ?? "",
   ).trim();
   return normalized || null;
 };
@@ -64,18 +60,14 @@ export const readNotificationOpenTarget = (
   const source = unwrapNotificationOpenValue(value);
   if (typeof source !== "object" || source === null) return null;
 
-  const outerEventId = String(
-    readObjectField(source, "outerEventId") ?? "",
-  ).trim();
+  const outerEventId = String(readField(source, "outerEventId") ?? "").trim();
   const recipientPubkey = normalizePubkeyHex(
-    readObjectField(source, "recipientPubkey"),
+    readField(source, "recipientPubkey"),
   );
   const relayHints = readNotificationRelayHints(
-    readObjectField(source, "relayHints"),
+    readField(source, "relayHints"),
   );
-  const senderPubkey = normalizePubkeyHex(
-    readObjectField(source, "senderPubkey"),
-  );
+  const senderPubkey = normalizePubkeyHex(readField(source, "senderPubkey"));
 
   if (!outerEventId || !recipientPubkey) return null;
 

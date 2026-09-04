@@ -28,10 +28,9 @@ import type {
   RouteWithOptionalId,
 } from "../../types/appTypes";
 import type { InsertedChatMessage } from "./chatInbox";
+import { trimString } from "../../../utils/validation";
 
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
-
-const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
 export interface InboxContact {
   id: string;
@@ -145,8 +144,8 @@ const hasStoredIncomingCashuToken = (
 ): boolean =>
   ctx.messages.some(
     (message) =>
-      normalizeText(message.contactId) === contactId &&
-      normalizeText(message.direction) === "in" &&
+      trimString(message.contactId) === contactId &&
+      trimString(message.direction) === "in" &&
       Number.isFinite(message.createdAtSec) &&
       Math.abs(message.createdAtSec - createdAtSec) <=
         PAYMENT_NOTICE_MATCH_WINDOW_SECONDS &&
@@ -225,7 +224,7 @@ export const handleBankOfferSnapshotReceived = (
   const offerInfo = getLinkyBankPaymentOfferInfo(content);
   const offerText = getLinkyBankPaymentOfferText(content);
   if (!offerText) return;
-  const offerId = normalizeText(offerInfo?.offerId);
+  const offerId = trimString(offerInfo?.offerId);
   const isTerminalOffer = offerInfo
     ? isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)
     : false;

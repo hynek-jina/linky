@@ -1,4 +1,5 @@
 import type { LocalNostrMessage } from "../types/appTypes";
+import { readField } from "../../utils/unknown";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
@@ -115,11 +116,6 @@ export const setLinkyBankPaymentOfferMinimized = (
   }
 };
 
-const readObjectField = (value: unknown, field: string): unknown => {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Reflect.get(value, field);
-};
-
 interface LinkyBankPaymentOfferSpdRecord {
   createdAtSec: number;
   ownerPubkey: string;
@@ -130,10 +126,10 @@ interface LinkyBankPaymentOfferSpdRecord {
 const isLinkyBankPaymentOfferSpdRecord = (
   value: unknown,
 ): value is LinkyBankPaymentOfferSpdRecord => {
-  const createdAtSec = readObjectField(value, "createdAtSec");
-  const ownerPubkey = readObjectField(value, "ownerPubkey");
-  const sentCandidateKeys = readObjectField(value, "sentCandidateKeys");
-  const spdPayload = readObjectField(value, "spdPayload");
+  const createdAtSec = readField(value, "createdAtSec");
+  const ownerPubkey = readField(value, "ownerPubkey");
+  const sentCandidateKeys = readField(value, "sentCandidateKeys");
+  const spdPayload = readField(value, "spdPayload");
   return (
     typeof createdAtSec === "number" &&
     Number.isFinite(createdAtSec) &&
@@ -293,9 +289,9 @@ export interface LinkyBankPaymentOfferStaggerRecord {
 const isLinkyBankPaymentOfferStaggerRecipient = (
   value: unknown,
 ): value is LinkyBankPaymentOfferStaggerRecipient => {
-  const contactId = readObjectField(value, "contactId");
-  const contactPubHex = readObjectField(value, "contactPubHex");
-  const dueAtSec = readObjectField(value, "dueAtSec");
+  const contactId = readField(value, "contactId");
+  const contactPubHex = readField(value, "contactPubHex");
+  const dueAtSec = readField(value, "dueAtSec");
   return (
     typeof contactId === "string" &&
     contactId.trim() !== "" &&
@@ -310,13 +306,13 @@ const isLinkyBankPaymentOfferStaggerRecipient = (
 const isLinkyBankPaymentOfferStaggerRecord = (
   value: unknown,
 ): value is LinkyBankPaymentOfferStaggerRecord => {
-  const amountSat = readObjectField(value, "amountSat");
-  const amountText = readObjectField(value, "amountText");
-  const createdAtSec = readObjectField(value, "createdAtSec");
-  const expiresAtSec = readObjectField(value, "expiresAtSec");
-  const offerId = readObjectField(value, "offerId");
-  const ownerPubkey = readObjectField(value, "ownerPubkey");
-  const pending = readObjectField(value, "pending");
+  const amountSat = readField(value, "amountSat");
+  const amountText = readField(value, "amountText");
+  const createdAtSec = readField(value, "createdAtSec");
+  const expiresAtSec = readField(value, "expiresAtSec");
+  const offerId = readField(value, "offerId");
+  const ownerPubkey = readField(value, "ownerPubkey");
+  const pending = readField(value, "pending");
   return (
     (amountSat === null ||
       (typeof amountSat === "number" &&
@@ -536,25 +532,25 @@ export const getLinkyBankPaymentOfferInfo = (
 ): LinkyBankPaymentOfferInfo | null => {
   try {
     const parsed: unknown = JSON.parse(content);
-    const type = readObjectField(parsed, "type");
+    const type = readField(parsed, "type");
     if (type !== "linky.bank_payment_offer") return null;
 
-    const offerId = readObjectField(parsed, "offerId");
-    const amountText = readObjectField(parsed, "amountText");
-    const amountSat = readObjectField(parsed, "amountSat");
-    const bankPaidAtSec = readObjectField(parsed, "bankPaidAtSec");
-    const expiresAtSec = readObjectField(parsed, "expiresAtSec");
-    const extensionSec = readObjectField(parsed, "extensionSec");
-    const initiatedAtSec = readObjectField(parsed, "initiatedAtSec");
-    const status = readObjectField(parsed, "status");
-    const statusUpdatedAtSec = readObjectField(parsed, "statusUpdatedAtSec");
+    const offerId = readField(parsed, "offerId");
+    const amountText = readField(parsed, "amountText");
+    const amountSat = readField(parsed, "amountSat");
+    const bankPaidAtSec = readField(parsed, "bankPaidAtSec");
+    const expiresAtSec = readField(parsed, "expiresAtSec");
+    const extensionSec = readField(parsed, "extensionSec");
+    const initiatedAtSec = readField(parsed, "initiatedAtSec");
+    const status = readField(parsed, "status");
+    const statusUpdatedAtSec = readField(parsed, "statusUpdatedAtSec");
     if (typeof offerId !== "string" || !offerId.trim()) return null;
     if (typeof amountText !== "string" || !amountText.trim()) return null;
     if (!isLinkyBankPaymentOfferStatus(status)) return null;
 
-    const text = readObjectField(parsed, "text");
-    const offererPublicKey = readObjectField(parsed, "offererPublicKey");
-    const spdPayload = readObjectField(parsed, "spdPayload");
+    const text = readField(parsed, "text");
+    const offererPublicKey = readField(parsed, "offererPublicKey");
+    const spdPayload = readField(parsed, "spdPayload");
 
     return {
       amountSat:

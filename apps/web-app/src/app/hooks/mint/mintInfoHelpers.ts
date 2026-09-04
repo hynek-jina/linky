@@ -11,6 +11,7 @@ import type {
   MintUrlInput,
   OptionalText,
 } from "../../types/appTypes";
+import { isRecord } from "../../../utils/unknown";
 
 interface MintInfoRowLike {
   feesJson?: LocalMintInfoRow["feesJson"];
@@ -233,9 +234,6 @@ export const getMintInfoIconUrl = (
     return null;
   }
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 // Fees are not part of NUT-06 info; the only published fee is the active
 // keyset's input_fee_ppk from /v1/keysets.

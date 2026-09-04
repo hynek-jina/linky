@@ -1,5 +1,6 @@
 import type { CollectedInspectorRow } from "../inspector/inspectorRows";
 import { nostrKindLabel } from "../nostrKindNames";
+import { isRecord } from "../../utils/unknown";
 
 // Human vocabulary for inspector rows: per-tag and per-kind explanations shown
 // by the inspector UI.
@@ -63,10 +64,6 @@ const describeTag = (row: CollectedInspectorRow): string => {
   const known = TAG_DESCRIPTIONS[row.tag];
   if (known) return known;
   return `An inspector event tagged "${row.tag}" on the "${row.channel}" channel. Rows sharing any of its link ids are related.`;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
 const MAX_KIND_SCAN_DEPTH = 4;

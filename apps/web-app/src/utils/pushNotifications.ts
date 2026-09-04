@@ -1,3 +1,4 @@
+import { isRecord } from "./unknown";
 import {
   PushNotifications,
   type PushNotificationActionPerformed,
@@ -218,12 +219,6 @@ function hashStoredIdentifier(value: string | null): string | null {
     return null;
   }
   return value.slice(-24);
-}
-
-function isRecord(
-  value: unknown,
-): value is Record<string | number | symbol, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {

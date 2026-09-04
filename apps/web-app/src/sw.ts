@@ -6,6 +6,7 @@ const SW_BUILD_TAG = "linky-sw-2026-08-14T00:00-linkstr-wrap-fetch";
 const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
+import { getUnknownErrorMessage, isRecord } from "./utils/unknown";
 import {
   encodeNpub,
   identityFromNsec,
@@ -65,10 +66,6 @@ interface DecryptedPushMessage {
   isCashu: boolean;
   isPaymentNotice: boolean;
   senderPub: string;
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error ?? "");
 }
 
 function readEnvelopeDebugMeta(
@@ -158,12 +155,6 @@ function hasVisibleWindowClient(clientList: readonly WindowClient[]): boolean {
 
 async function logSw(message: string, details?: unknown): Promise<void> {
   await appendPushDebugLog("sw", message, details);
-}
-
-function isRecord(
-  value: unknown,
-): value is Record<string | number | symbol, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function readPushEnvelope(value: unknown): PushNotificationEnvelope | null {
@@ -299,7 +290,7 @@ async function fetchWrapInboxEvent(
   } catch (error) {
     void logSw("sw decrypt outer wrap fetch failed", {
       data: readEnvelopeDebugMeta(envelope),
-      error: describeError(error),
+      error: getUnknownErrorMessage(error, ""),
     });
     return null;
   }
@@ -510,7 +501,7 @@ self.addEventListener("error", (event: ErrorEvent) => {
 
 self.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
   void logSw("service worker unhandled rejection", {
-    reason: describeError(event.reason),
+    reason: getUnknownErrorMessage(event.reason, ""),
   });
 });
 
@@ -526,7 +517,7 @@ self.addEventListener("push", (event) => {
   } catch (error) {
     event.waitUntil(
       logSw("push event JSON parse failed", {
-        error: describeError(error),
+        error: getUnknownErrorMessage(error, ""),
       }),
     );
     envelope = null;
@@ -634,7 +625,7 @@ self.addEventListener("push", (event) => {
           .catch((error) =>
             logSw("notification display failed", {
               data,
-              error: describeError(error),
+              error: getUnknownErrorMessage(error, ""),
             }),
           ),
       ]);

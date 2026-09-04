@@ -52,6 +52,7 @@ import {
   type PeerSeenWindow,
   type SeenReceiptInboxContext,
 } from "./seenReceiptInbox";
+import { trimString } from "../../../utils/validation";
 
 // Fallback backfill window for a first session without a persisted cursor.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
@@ -72,8 +73,6 @@ const deriveMyPubkey = (currentNsec: string | null): string | null => {
 
 type InboxContactRowLike = ContactNameRowLike & { npub?: OptionalText };
 
-const normalizeText = (value: unknown): string => String(value ?? "").trim();
-
 const buildContactIndex = (
   contacts: readonly InboxContactRowLike[],
 ): Map<string, InboxContact> => {
@@ -84,11 +83,11 @@ const buildContactIndex = (
     const npub = normalizeNpubIdentifier(contact.npub);
     if (!npub) continue;
     const pubkey = decodeNpub(npub);
-    const id = normalizeText(contact.id);
+    const id = trimString(contact.id);
     if (!pubkey || !id) continue;
     contactByPubkey.set(pubkey, {
       id,
-      name: normalizeText(contact.name) || null,
+      name: trimString(contact.name) || null,
       npub,
     });
   }

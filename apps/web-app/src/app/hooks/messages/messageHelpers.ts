@@ -1,15 +1,14 @@
 import type { LocalNostrMessage } from "../../types/appTypes";
-
-const normalizeText = (value: unknown): string => String(value ?? "").trim();
+import { trimString } from "../../../utils/validation";
 
 export const getLocalNostrMessageRumorKey = (
   message: Pick<LocalNostrMessage, "contactId" | "direction" | "rumorId">,
 ): string => {
-  const rumorId = normalizeText(message.rumorId);
+  const rumorId = trimString(message.rumorId);
   if (!rumorId) return "";
 
-  const contactId = normalizeText(message.contactId);
-  const direction = normalizeText(message.direction);
+  const contactId = trimString(message.contactId);
+  const direction = trimString(message.direction);
   if (!contactId || (direction !== "in" && direction !== "out")) return "";
 
   return `${contactId}|${direction}|${rumorId}`;
@@ -20,8 +19,8 @@ const pickPreferredMessage = (
   candidate: LocalNostrMessage,
 ): LocalNostrMessage => {
   const score = (message: LocalNostrMessage): number => {
-    const hasWrap = normalizeText(message.wrapId) ? 4 : 0;
-    const hasClient = normalizeText(message.clientId) ? 2 : 0;
+    const hasWrap = trimString(message.wrapId) ? 4 : 0;
+    const hasClient = trimString(message.clientId) ? 2 : 0;
     const hasRumor = getLocalNostrMessageRumorKey(message) ? 1 : 0;
     const sent = String(message.status ?? "sent") === "sent" ? 1 : 0;
     return hasWrap + hasClient + hasRumor + sent;
@@ -39,10 +38,10 @@ const preferText = (
   primary: string | null | undefined,
   fallback: string | null | undefined,
 ): string | null | undefined => {
-  const primaryText = normalizeText(primary);
+  const primaryText = trimString(primary);
   if (primaryText) return primaryText;
 
-  const fallbackText = normalizeText(fallback);
+  const fallbackText = trimString(fallback);
   if (fallbackText) return fallbackText;
 
   if (primary === null || fallback === null) return null;
@@ -114,8 +113,8 @@ export const dedupeNostrMessagesByPriority = (
   const indexByRumorKey = new Map<string, number>();
 
   for (const message of rows) {
-    const wrapId = normalizeText(message.wrapId);
-    const clientId = normalizeText(message.clientId);
+    const wrapId = trimString(message.wrapId);
+    const clientId = trimString(message.clientId);
     const rumorKey = getLocalNostrMessageRumorKey(message);
 
     let existingIndex: number | undefined;
@@ -151,10 +150,10 @@ export const dedupeNostrMessagesByPriority = (
     }
 
     const current = deduped[existingIndex];
-    const currentWrapId = normalizeText(current.wrapId);
-    const candidateWrapId = normalizeText(message.wrapId);
-    const currentClientId = normalizeText(current.clientId);
-    const candidateClientId = normalizeText(message.clientId);
+    const currentWrapId = trimString(current.wrapId);
+    const candidateWrapId = trimString(message.wrapId);
+    const currentClientId = trimString(current.clientId);
+    const candidateClientId = trimString(message.clientId);
 
     let nextMessage = pickPreferredMessage(current, message);
     if (matchedBy === "client") {
@@ -186,8 +185,8 @@ export const dedupeNostrMessagesByPriority = (
       nextMessage,
       alternateMessage,
     );
-    const nextWrapId = normalizeText(nextMessage.wrapId);
-    const nextClientId = normalizeText(nextMessage.clientId);
+    const nextWrapId = trimString(nextMessage.wrapId);
+    const nextClientId = trimString(nextMessage.clientId);
     const nextRumorKey = getLocalNostrMessageRumorKey(nextMessage);
     if (nextWrapId) indexByWrapId.set(nextWrapId, existingIndex);
     if (nextClientId) indexByClientId.set(nextClientId, existingIndex);
@@ -208,13 +207,13 @@ export const dedupeChatMessages = (
   const deduped: LocalNostrMessage[] = [];
 
   for (const message of dedupeNostrMessagesByPriority(list)) {
-    const wrapId = normalizeText(message.wrapId);
+    const wrapId = trimString(message.wrapId);
     if (wrapId) {
       if (seenWrapIds.has(wrapId)) continue;
       seenWrapIds.add(wrapId);
     }
 
-    const clientId = normalizeText(message.clientId);
+    const clientId = trimString(message.clientId);
     if (clientId) {
       if (seenClientIds.has(clientId)) continue;
       seenClientIds.add(clientId);
@@ -227,9 +226,9 @@ export const dedupeChatMessages = (
     }
 
     if (!wrapId && !clientId) {
-      const content = normalizeText(message.content);
+      const content = trimString(message.content);
       const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
-      const direction = normalizeText(message.direction);
+      const direction = trimString(message.direction);
       const fallbackKey = `${direction}|${createdAtSec}|${content}`;
 
       if (content && createdAtSec > 0) {
@@ -243,10 +242,10 @@ export const dedupeChatMessages = (
 
   const visibleByBaseKey = new Map<string, LocalNostrMessage>();
   for (const message of deduped) {
-    const contactId = normalizeText(message.contactId);
-    const direction = normalizeText(message.direction);
+    const contactId = trimString(message.contactId);
+    const direction = trimString(message.direction);
     const baseRumorId =
-      normalizeText(message.editedFromId) || normalizeText(message.rumorId);
+      trimString(message.editedFromId) || trimString(message.rumorId);
     if (!contactId || !baseRumorId) continue;
     if (direction !== "in" && direction !== "out") continue;
 
@@ -258,9 +257,9 @@ export const dedupeChatMessages = (
     }
 
     const currentEditedWeight =
-      normalizeText(current.editedFromId) || current.isEdited ? 1 : 0;
+      trimString(current.editedFromId) || current.isEdited ? 1 : 0;
     const candidateEditedWeight =
-      normalizeText(message.editedFromId) || message.isEdited ? 1 : 0;
+      trimString(message.editedFromId) || message.isEdited ? 1 : 0;
 
     if (candidateEditedWeight > currentEditedWeight) {
       visibleByBaseKey.set(baseKey, message);
@@ -282,10 +281,10 @@ export const dedupeChatMessages = (
   }
 
   const collapsed = deduped.filter((message) => {
-    const contactId = normalizeText(message.contactId);
-    const direction = normalizeText(message.direction);
+    const contactId = trimString(message.contactId);
+    const direction = trimString(message.direction);
     const baseRumorId =
-      normalizeText(message.editedFromId) || normalizeText(message.rumorId);
+      trimString(message.editedFromId) || trimString(message.rumorId);
     if (!contactId || !baseRumorId) return true;
     if (direction !== "in" && direction !== "out") return true;
 

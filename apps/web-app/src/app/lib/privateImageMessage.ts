@@ -5,6 +5,8 @@ import {
 } from "@linky/linkstr";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { Schema } from "effect";
+import { getUnknownErrorMessage, isRecord } from "../../utils/unknown";
+import { asNonEmptyString } from "../../utils/validation";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -179,15 +181,6 @@ const getBlossomUploadProxyUrl = (): string => {
   return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const readString = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed || null;
-};
-
 const readPositiveInteger = (value: unknown): number | null => {
   if (typeof value !== "number") return null;
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -243,7 +236,7 @@ export const getChatAttachmentRejection = (file: File): string | null => {
 };
 
 export const chatAttachmentErrorKey = (error: unknown): string | null => {
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const message = getUnknownErrorMessage(error, "");
   if (message === "chat-file-too-large") return "chatPdfTooLarge";
   if (message === "chat-image-too-large") return "chatImageTooLarge";
   if (message === "chat-image-unsupported") return "chatAttachmentUnsupported";
@@ -397,8 +390,8 @@ const uploadToBlossom = async (
       const json = await response.json();
       if (!isRecord(json)) throw new Error("upload-invalid-response");
 
-      const url = readString(json.url);
-      const sha = readString(json.sha256);
+      const url = asNonEmptyString(json.url);
+      const sha = asNonEmptyString(json.sha256);
       if (!url || !sha) throw new Error("upload-invalid-response");
       if (sha.toLowerCase() !== prepared.encryptedSha256) {
         throw new Error("upload-hash-mismatch");
@@ -473,19 +466,19 @@ const parsePrivateImageRecord = (
   const isCompact = parsed.t === "i1";
   if (!isCompact && parsed.type !== PRIVATE_IMAGE_MESSAGE_TYPE) return null;
 
-  const url = readString(isCompact ? parsed.u : parsed.url);
-  const fileType = readString(isCompact ? parsed.m : parsed.fileType);
+  const url = asNonEmptyString(isCompact ? parsed.u : parsed.url);
+  const fileType = asNonEmptyString(isCompact ? parsed.m : parsed.fileType);
   const encryptionAlgorithm = isCompact
     ? parsed.a === "g"
       ? "aes-gcm"
       : null
-    : readString(parsed.encryptionAlgorithm);
-  const key = readString(isCompact ? parsed.k : parsed.key);
-  const nonce = readString(isCompact ? parsed.n : parsed.nonce);
-  const encryptedSha256 = readString(
+    : asNonEmptyString(parsed.encryptionAlgorithm);
+  const key = asNonEmptyString(isCompact ? parsed.k : parsed.key);
+  const nonce = asNonEmptyString(isCompact ? parsed.n : parsed.nonce);
+  const encryptedSha256 = asNonEmptyString(
     isCompact ? parsed.x : parsed.encryptedSha256,
   );
-  const originalSha256 = readString(
+  const originalSha256 = asNonEmptyString(
     isCompact ? parsed.o : parsed.originalSha256,
   );
   const storageEncodingValue = isCompact ? parsed.e : parsed.storageEncoding;
@@ -503,7 +496,7 @@ const parsePrivateImageRecord = (
   const hasDimensions = widthValue !== undefined || heightValue !== undefined;
   const width = readPositiveInteger(widthValue);
   const height = readPositiveInteger(heightValue);
-  const fileName = readString(isCompact ? parsed.f : parsed.fileName);
+  const fileName = asNonEmptyString(isCompact ? parsed.f : parsed.fileName);
 
   if (
     !url ||
@@ -540,7 +533,7 @@ const parsePrivateImageRecord = (
 export const parsePrivateImageMessage = (
   content: unknown,
 ): PrivateImageMessagePayload | null => {
-  const text = readString(content);
+  const text = asNonEmptyString(content);
   if (!text) return null;
 
   if (text.startsWith(PRIVATE_IMAGE_COMPACT_PREFIX)) {

@@ -1,3 +1,4 @@
+import { isRecord } from "../../utils/unknown";
 // Shared contract between the reporter (app side), the Vite collector
 // middleware (server/inspectorCollector.ts), and the standalone inspector page
 // (/inspector.html). Keep this file free of browser and Vite globals: it is
@@ -30,10 +31,6 @@ export interface CollectedInspectorRow extends InspectorRow {
   /** Per-tab app instance id of the reporting tab. */
   client: string;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
 
 export const isInspectorChannel = (value: unknown): value is string =>
   typeof value === "string" &&
