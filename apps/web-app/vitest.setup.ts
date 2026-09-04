@@ -1,4 +1,3 @@
-import "@testing-library/jest-dom/vitest";
 import { Buffer } from "buffer";
 
 if (typeof globalThis.Buffer === "undefined") {
