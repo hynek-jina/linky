@@ -28,15 +28,11 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 
 ## Owner rotation and limits
 
-- Contacts/cashu/messages owner lanes auto-rotate when owner-local write delta reaches:
-  - `OWNER_ROTATION_TRIGGER_WRITE_COUNT = 1000`
-- Per-type rotation cooldown:
-  - `OWNER_ROTATION_COOLDOWN_MS = 60000` (1 minute)
-- Contacts and valid token data migrate forward; messages are pointer-rotated (no message copy).
-- App reads active + previous message owner for continuity.
-- Stale owners are pruned locally (`n-2`) after rotation.
-- Contact cap:
-  - `MAX_CONTACTS_PER_OWNER = 500`
+Constants live in `apps/web-app/src/utils/constants.ts`; the mechanics are in `docs/architecture.md` ("Evolu persistence and owner lanes").
+
+- Each Evolu owner lane rotates on its own write-budget threshold: contacts `220`, cashu `170`, messages `160`, transactions `220` (`*_OWNER_ROTATION_TRIGGER_WRITE_COUNT`), with a per-scope `OWNER_ROTATION_COOLDOWN_MS = 60_000` cooldown.
+- Rotation is pointer-only for every scope: the active lane index moves forward in `ownerMeta`, nothing is copied, and older lanes stay readable instead of being pruned.
+- Contacts are additionally capped at `MAX_CONTACTS_PER_OWNER = 100` per active lane; a full lane triggers rotation to the next one.
 
 ## Features
 
@@ -127,25 +123,11 @@ curl -X POST "http://localhost:5173/__inspector/clear"
 tail -f apps/web-app/.inspector/rows-5173.ndjson
 ```
 
-Android shell currently adds:
-
-- encrypted native secret storage for identity data
-- native QR scanning in the Capacitor shell
-- native Android notification permission + FCM token bridge
-
-Native push delivery now works end-to-end when:
-
-- `apps/native-shell/android/app/google-services.json` is present for the Android shell build
-- `apps/push` is configured with `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON`
-
 ```bash
 bun install
 bun run dev
 bun run site:dev
 bun run push:dev
-bun run native:android:add
-bun run native:apk:debug
-bun run native:apk:release
 ```
 
 Build:
@@ -155,30 +137,13 @@ bun run build
 bun run site:build
 ```
 
-Android native shell debug APK:
+### Native shells
 
-```bash
-bun run native:android:add
-bun run native:apk:debug
-```
-
-Android signed release APK:
-
-```bash
-bun run native:apk:release
-```
-
-Latest built debug APK ends up at:
-
-```bash
-apps/native-shell/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Public download URL for the latest GitHub Release APK:
-
-```bash
-https://github.com/hynek-jina/linky/releases/latest/download/linky.apk
-```
+Android APK/AAB builds, signing, Firebase push setup, and the iOS project are documented in
+[`apps/native-shell/README.md`](./apps/native-shell/README.md). The root `native:*` scripts
+(`bun run native:apk:debug`, `bun run native:apk:release`, `bun run native:aab:release`, ...) forward
+to that workspace. Native push delivery additionally needs `apps/push` configured with
+`PUSH_FIREBASE_SERVICE_ACCOUNT_JSON`.
 
 Start the push service once:
 
