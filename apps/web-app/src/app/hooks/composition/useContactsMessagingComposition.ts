@@ -328,7 +328,7 @@ interface SavedContactRef {
   ownerId: IdentityOwnersCompositionResult["contactsOwnerId"] | null;
 }
 
-export interface PendingContactsGroupAssignment {
+interface PendingContactsGroupAssignment {
   messageId: string;
   savedContacts: SavedContactRef[];
 }

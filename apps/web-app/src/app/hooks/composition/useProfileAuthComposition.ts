@@ -20,9 +20,7 @@ interface UseProfileAuthCompositionParams {
   upsert: ReturnType<typeof useEvolu>["upsert"];
 }
 
-export type ProfileAuthCompositionResult = ReturnType<
-  typeof useProfileAuthDomain
->;
+type ProfileAuthCompositionResult = ReturnType<typeof useProfileAuthDomain>;
 
 export const useProfileAuthComposition = ({
   appendIdentityChangeNoticesRef,

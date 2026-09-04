@@ -2,9 +2,8 @@ import React from "react";
 
 import { clientInspectorStore } from "./clientInspectorStore";
 
-export const INSPECTOR_ENABLED_STORAGE_KEY = "linky.inspector_enabled";
-export const INSPECTOR_LOGS_ENABLED_STORAGE_KEY =
-  "linky.inspector_logs_enabled";
+const INSPECTOR_ENABLED_STORAGE_KEY = "linky.inspector_enabled";
+const INSPECTOR_LOGS_ENABLED_STORAGE_KEY = "linky.inspector_logs_enabled";
 
 const readPreference = (key: string): boolean | null => {
   try {

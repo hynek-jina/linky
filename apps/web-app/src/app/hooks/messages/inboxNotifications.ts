@@ -208,7 +208,7 @@ export const bankOfferContentFromSnapshot = (
     spdPayload: snapshot.spdPayload,
   });
 
-export interface BankOfferSnapshotScope {
+interface BankOfferSnapshotScope {
   contactId: string;
   delivery: "backfill" | "live";
   isOutgoing: boolean;

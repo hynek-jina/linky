@@ -12,7 +12,7 @@
 // still parse (with the missing fields nulled), so old clients keep working
 // while new clients reap the full benefit.
 
-export type RotationScope = "cashu" | "contacts" | "messages" | "transactions";
+type RotationScope = "cashu" | "contacts" | "messages" | "transactions";
 
 export interface RotationSnapshot {
   /** New owner lane index (e.g. 3 → owner derivation path uses `<scope>-3`). */

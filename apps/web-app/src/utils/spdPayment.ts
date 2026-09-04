@@ -9,7 +9,7 @@ import {
   normalizeBankAccountInput,
 } from "./bankAccount";
 
-export type BankPaymentFormat = "bysquare" | "epc" | "spd";
+type BankPaymentFormat = "bysquare" | "epc" | "spd";
 
 export interface BankPayment {
   fields: Record<string, string>;
@@ -17,7 +17,7 @@ export interface BankPayment {
   payload: string;
 }
 
-export interface SpdPayment extends BankPayment {
+interface SpdPayment extends BankPayment {
   format: "spd";
 }
 
@@ -34,7 +34,7 @@ const safeDecodeURIComponent = (value: string): string => {
   }
 };
 
-export const isSpdPaymentPayload = (input: string): boolean =>
+const isSpdPaymentPayload = (input: string): boolean =>
   String(input ?? "")
     .trim()
     .startsWith("SPD*");
@@ -69,14 +69,6 @@ export const parseSpdPayment = (input: string): SpdPayment => {
   }
 
   return { payload, fields, format: "spd" };
-};
-
-export const tryParseSpdPayment = (input: string): SpdPayment | null => {
-  try {
-    return parseSpdPayment(input);
-  } catch {
-    return null;
-  }
 };
 
 const createBankPayment = (args: {
@@ -200,7 +192,7 @@ export const isBankPaymentPayload = (input: string): boolean => {
   );
 };
 
-export type BankPaymentOfferCurrency = "CZK" | "EUR";
+type BankPaymentOfferCurrency = "CZK" | "EUR";
 
 export const getBankPaymentOfferCurrency = (
   input: string,

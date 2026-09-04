@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { EmojiPicker } from "./EmojiPicker";
 import { CopyIcon, EditIcon, ReplyIcon, ShareIcon } from "./icons";
 
-export interface MessageImageActions {
+interface MessageImageActions {
   canShare: boolean;
   onSave: () => void;
   onShare: () => void;

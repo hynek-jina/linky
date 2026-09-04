@@ -10,7 +10,7 @@ const EXTENSION_BY_IMAGE_TYPE: Record<string, string> = {
 };
 const MAX_EXPORT_FILE_NAME_LENGTH = 120;
 
-export interface PrivateImageExportLinks {
+interface PrivateImageExportLinks {
   rumor?: string;
 }
 

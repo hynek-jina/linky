@@ -7,7 +7,7 @@ const CASHU_TOKEN_STATE_ISSUED = "issued";
 const CASHU_TOKEN_STATE_PENDING = "pending";
 const CASHU_TOKEN_STATE_RESERVED = "reserved";
 
-export type CashuTokenState =
+type CashuTokenState =
   | typeof CASHU_TOKEN_STATE_ACCEPTED
   | typeof CASHU_TOKEN_STATE_ERROR
   | typeof CASHU_TOKEN_STATE_EXTERNALIZED

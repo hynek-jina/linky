@@ -19,7 +19,7 @@ export type AvatarEditorControlId =
   | "skin"
   | "clothing";
 
-export interface AvatarEditorControl {
+interface AvatarEditorControl {
   id: AvatarEditorControlId;
   label: string;
 }
@@ -481,7 +481,7 @@ const buildAvatarUrl = (selection: DerivedAvatarSelection): string => {
   return `https://api.dicebear.com/9.x/avataaars/svg?${params.toString()}`;
 };
 
-export const deriveInitialAvatarSelection = (
+const deriveInitialAvatarSelection = (
   seedSource: string,
 ): DerivedAvatarSelection => {
   const seed = normalizeSeed(seedSource);

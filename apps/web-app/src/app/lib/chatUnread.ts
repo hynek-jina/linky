@@ -1,4 +1,4 @@
-export interface ConversationReadMessage {
+interface ConversationReadMessage {
   createdAtSec: number;
   direction: "in" | "out";
 }

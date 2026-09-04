@@ -3,7 +3,7 @@ import * as Evolu from "@evolu/common";
 export const ACTIVE_NOSTR_IDENTITY_ROW_ID =
   Evolu.createIdFromString<"NostrIdentity">("active-nostr-identity");
 
-export interface SyncedNostrIdentity {
+interface SyncedNostrIdentity {
   nsec: string;
   npub: string | null;
   ownerId: string;
@@ -11,7 +11,7 @@ export interface SyncedNostrIdentity {
   switchedAtSec: number | null;
 }
 
-export interface SyncedNostrIdentityResolution {
+interface SyncedNostrIdentityResolution {
   identity: SyncedNostrIdentity | null;
   shouldMigrateLegacyIdentity: boolean;
 }

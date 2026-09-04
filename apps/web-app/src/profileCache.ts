@@ -15,14 +15,14 @@ const CachedProfile = Schema.Struct({
   metadata: ProfileMetadata,
   updatedAt: Schema.Number,
 });
-export type CachedProfile = typeof CachedProfile.Type;
+type CachedProfile = typeof CachedProfile.Type;
 
 const CachedStatus = Schema.Struct({
   /** Raw kind-30315 content; empty string means the status was cleared. */
   content: Schema.String,
   updatedAt: Schema.Number,
 });
-export type CachedStatus = typeof CachedStatus.Type;
+type CachedStatus = typeof CachedStatus.Type;
 
 const decodeCachedProfile = Schema.decodeUnknownOption(CachedProfile);
 const decodeCachedStatus = Schema.decodeUnknownOption(CachedStatus);
@@ -166,9 +166,6 @@ const registerAvatarObjectUrl = (npub: string, blob: Blob): string => {
   avatarObjectUrlByNpub.set(npub, url);
   return url;
 };
-
-export const peekAvatarObjectUrl = (npub: string): string | null =>
-  avatarObjectUrlByNpub.get(npub.trim()) ?? null;
 
 export const releaseAvatarObjectUrl = (npub: string): void => {
   const trimmed = npub.trim();

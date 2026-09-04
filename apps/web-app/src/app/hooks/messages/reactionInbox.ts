@@ -21,7 +21,7 @@ export type ReactionInboxEvent =
 
 type DeferrableReactionEvent = ReactionAdded | OwnReactionConfirmed;
 
-export interface ReactionInboxSessionState {
+interface ReactionInboxSessionState {
   deferredReactions: Map<string, DeferrableReactionEvent>;
   /** reactionId → retractor. Suppression is authorship-scoped: a peer's
    * retraction must not block reactions they did not author. */

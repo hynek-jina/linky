@@ -97,7 +97,7 @@ const scanForKinds = (
   }
 };
 
-export const collectNostrKinds = (payload: unknown): number[] => {
+const collectNostrKinds = (payload: unknown): number[] => {
   const kinds = new Set<number>();
   scanForKinds(payload, 0, kinds);
   return [...kinds].sort((left, right) => left - right);

@@ -6,7 +6,7 @@ interface UseProfilePeopleCompositionParams {
   peopleRouteBuilderInput: Parameters<typeof buildPeopleRouteProps>[0];
 }
 
-export interface ProfilePeopleCompositionResult {
+interface ProfilePeopleCompositionResult {
   peopleRouteProps: PeopleRoutesProps;
 }
 

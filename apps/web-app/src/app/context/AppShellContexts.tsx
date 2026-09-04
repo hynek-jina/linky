@@ -262,7 +262,7 @@ export const useAppShellActions = (): AppShellActionsContextValue =>
     "useAppShellActions",
   );
 
-export const useAppShellRouteContext = (): AppShellRouteContextValue =>
+const useAppShellRouteContext = (): AppShellRouteContextValue =>
   useContextValue(
     React.useContext(AppShellRouteContext),
     "useAppShellRouteContext",

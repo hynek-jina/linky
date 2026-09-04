@@ -4,12 +4,12 @@ import { getBestNostrName } from "../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
 import type { ContactRowLike } from "../types/appTypes";
 
-export interface ContactPublicProfile {
+interface ContactPublicProfile {
   lnAddress: string;
   name: string;
 }
 
-export interface ResolvedContactProfile extends ContactPublicProfile {
+interface ResolvedContactProfile extends ContactPublicProfile {
   hasLocalLnAddress: boolean;
   hasLocalName: boolean;
   localLnAddress: string;

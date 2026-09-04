@@ -44,7 +44,7 @@ import { useContactSuggestions } from "./useContactSuggestions";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
-export interface ContactNewPrefill {
+interface ContactNewPrefill {
   lnAddress: string;
   npub: string | null;
   suggestedName: string | null;
@@ -61,7 +61,7 @@ export interface ContactSearchCandidate {
   query: string;
 }
 
-export const CONTACT_SEARCH_RESULT_LIMIT = 6;
+const CONTACT_SEARCH_RESULT_LIMIT = 6;
 const NIP05_RESOLVE_TIMEOUT_MS = 3000;
 /** The exact candidate is shown before its profile arrives; wait at most this. */
 const EXACT_PROFILE_WAIT_MS = 3000;
@@ -158,7 +158,7 @@ const decodeDirectNpubIdentifier = async (
   return decodeNpub(normalized) ? normalized : null;
 };
 
-export const makeEmptyContactForm = (): ContactFormState => ({
+const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
   npub: "",
   lnAddress: "",

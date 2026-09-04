@@ -69,18 +69,6 @@ export const buildPaymentAmountAttempts = (
   return attempts;
 };
 
-export const getPaymentAmountReserveCap = (
-  requestedAmountSat: number,
-  availableBalanceSat: number,
-): number => {
-  const amountAttempts = buildPaymentAmountAttempts(
-    requestedAmountSat,
-    availableBalanceSat,
-  );
-  if (amountAttempts.length === 0) return 0;
-  return requestedAmountSat - amountAttempts[amountAttempts.length - 1];
-};
-
 export const isRetryablePaymentAmountFailure = (
   errorMessage: string,
 ): boolean => {

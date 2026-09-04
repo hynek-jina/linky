@@ -50,11 +50,11 @@ class LegacyError extends Schema.TaggedError<LegacyError>()("LegacyError", {
 const encodeLegacyError = Schema.encodeSync(Schema.parseJson(LegacyError));
 const decodeTokenText = Schema.decodeUnknownOption(TokenText);
 
-export type EvoluCashuMutationResult =
+type EvoluCashuMutationResult =
   | { readonly ok: true }
   | { readonly error: unknown; readonly ok: false };
 
-export interface EvoluCashuTokenInsertPayload {
+interface EvoluCashuTokenInsertPayload {
   readonly error?: typeof Evolu.NonEmptyString1000.Type;
   readonly id: CashuTokenId;
   readonly originalTokenText: typeof Evolu.NonEmptyString.Type;
@@ -62,7 +62,7 @@ export interface EvoluCashuTokenInsertPayload {
   readonly token: typeof Evolu.NonEmptyString.Type;
 }
 
-export interface EvoluCashuTokenUpdatePayload {
+interface EvoluCashuTokenUpdatePayload {
   readonly error?: typeof Evolu.NonEmptyString1000.Type | null;
   readonly id: CashuTokenId;
   readonly isDeleted?: typeof Evolu.sqliteTrue;
@@ -70,19 +70,19 @@ export interface EvoluCashuTokenUpdatePayload {
   readonly token?: typeof Evolu.NonEmptyString.Type;
 }
 
-export type EvoluCashuTokenUpsert = (
+type EvoluCashuTokenUpsert = (
   table: "cashuToken",
   payload: EvoluCashuTokenInsertPayload,
   options: { readonly ownerId: Evolu.OwnerId },
 ) => EvoluCashuMutationResult;
 
-export type EvoluCashuTokenUpdate = (
+type EvoluCashuTokenUpdate = (
   table: "cashuToken",
   payload: EvoluCashuTokenUpdatePayload,
   options: { readonly ownerId: Evolu.OwnerId },
 ) => EvoluCashuMutationResult;
 
-export interface EvoluTokenStoreDeps {
+interface EvoluTokenStoreDeps {
   /** All cashuToken rows visible to the wallet, across cashu owner lanes. */
   readonly loadTokenRows: () => Promise<ReadonlyArray<CashuTokenRow>>;
   readonly update: EvoluCashuTokenUpdate;

@@ -31,30 +31,6 @@ export const extractCashuTokenMeta = (
   };
 };
 
-export type CashuTokenWithMeta = Omit<
-  CashuTokenRow,
-  "amount" | "mint" | "unit"
-> &
-  CashuTokenMeta;
-
-export const enrichCashuTokenRow = (
-  row: CashuTokenRow,
-): CashuTokenWithMeta | null => {
-  const meta = extractCashuTokenMeta(row);
-  if (
-    meta.amount === null ||
-    !Number.isFinite(meta.amount) ||
-    meta.amount <= 0
-  ) {
-    return null;
-  }
-
-  return {
-    ...row,
-    ...meta,
-  };
-};
-
 /** linkshu's `extractTokenText` behind a bank-payment-payload exclusion. */
 export const extractCashuTokenFromText = (text: string): string | null => {
   const raw = String(text ?? "").trim();

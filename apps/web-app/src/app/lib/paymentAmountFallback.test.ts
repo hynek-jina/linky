@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildPaymentFailureAmountAttempts,
   buildPaymentAmountAttempts,
-  getPaymentAmountReserveCap,
   getPaymentAmountShortage,
   isRetryablePaymentAmountFailure,
 } from "./paymentAmountFallback";
@@ -19,13 +18,6 @@ describe("buildPaymentAmountAttempts", () => {
 
   it("keeps a single attempt when not sending the full balance", () => {
     expect(buildPaymentAmountAttempts(10, 12)).toEqual([10]);
-  });
-});
-
-describe("getPaymentAmountReserveCap", () => {
-  it("returns the max reserved fee from the fallback ladder", () => {
-    expect(getPaymentAmountReserveCap(249, 249)).toBe(21);
-    expect(getPaymentAmountReserveCap(200, 249)).toBe(0);
   });
 });
 

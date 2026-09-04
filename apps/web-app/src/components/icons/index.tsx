@@ -25,7 +25,7 @@ import {
   type LucideProps,
 } from "lucide-react";
 
-export interface IconProps extends LucideProps {
+interface IconProps extends LucideProps {
   size?: number | string;
 }
 

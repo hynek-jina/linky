@@ -138,21 +138,8 @@ export type OptionalBooleanTextNumber =
   | undefined;
 export type ContactIdLike = ContactId | string | null | undefined;
 
-export type PaymentLogField = JsonValue;
+type PaymentLogField = JsonValue;
 export type PaymentLogData = Record<string, PaymentLogField>;
-
-export type PublishWrappedResult = {
-  anySuccess: boolean;
-  error:
-    | string
-    | number
-    | boolean
-    | bigint
-    | symbol
-    | { toString(): string }
-    | null
-    | undefined;
-};
 
 export type ContactRowLike = {
   archivedAtSec?: OptionalNumber;
@@ -189,32 +176,6 @@ export type ContactPayRowLike = {
   name?: OptionalText;
 };
 
-export type ChatMessageRowLike = {
-  clientId?: OptionalText;
-  content?: OptionalText;
-  editedAtSec?: OptionalNumber;
-  editedFromId?: OptionalText;
-  direction?: OptionalText;
-  id?: OptionalText;
-  isEdited?: OptionalText;
-  localOnly?: OptionalText;
-  originalContent?: OptionalText;
-  pubkey?: OptionalText;
-  replyToContent?: OptionalText;
-  replyToId?: OptionalText;
-  rootMessageId?: OptionalText;
-  rumorId?: OptionalText;
-  status?: OptionalText;
-  wrapId?: OptionalText;
-};
-
-export type NostrMessageSummaryRow = {
-  content?: OptionalText;
-  direction?: OptionalText;
-  id?: OptionalText;
-  wrapId?: OptionalText;
-};
-
 export type RouteWithOptionalId = {
   id?: ContactIdLike;
   kind: string;
@@ -230,7 +191,7 @@ export type MintUrlInput =
   | { toString(): string }
   | null
   | undefined;
-export type MintSupportsMppValue = OptionalBooleanTextNumber;
+type MintSupportsMppValue = OptionalBooleanTextNumber;
 
 export type LocalMintInfoRow = {
   feesJson?: OptionalText;
@@ -283,7 +244,7 @@ export type NewLocalNostrMessage = Omit<LocalNostrMessage, "id" | "status"> & {
   status?: "sent" | "pending";
 };
 
-export type UpdateLocalNostrMessageFields = Pick<
+type UpdateLocalNostrMessageFields = Pick<
   LocalNostrMessage,
   | "clientId"
   | "content"
@@ -314,7 +275,7 @@ export type NewLocalNostrReaction = Omit<
   status?: "sent" | "pending";
 };
 
-export type UpdateLocalNostrReactionFields = Pick<
+type UpdateLocalNostrReactionFields = Pick<
   LocalNostrReaction,
   "clientId" | "emoji" | "messageId" | "reactorPubkey" | "status" | "wrapId"
 >;

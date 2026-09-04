@@ -16,7 +16,6 @@ import {
   rememberLinkyBankPaymentOfferSpdPayload,
   rememberLinkyBankPaymentOfferStaggerQueue,
   removeLinkyBankPaymentOfferStaggerRecipients,
-  shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStaggerRecord,
   type LinkyBankPaymentOfferStatus,
 } from "./bankPaymentOffer";
@@ -82,21 +81,6 @@ describe("bank payment offer notifications", () => {
     expect(
       getLinkyBankPaymentOfferInfo(createOffer(status).content)?.text,
     ).toBe(expectedText);
-  });
-
-  it("pushes offer states that require the other party's attention", () => {
-    expect(shouldPushLinkyBankPaymentOfferStatus("offered")).toBe(true);
-    expect(shouldPushLinkyBankPaymentOfferStatus("accepted")).toBe(true);
-    expect(shouldPushLinkyBankPaymentOfferStatus("accepted_by_other")).toBe(
-      true,
-    );
-    expect(shouldPushLinkyBankPaymentOfferStatus("bank_details_sent")).toBe(
-      true,
-    );
-    expect(shouldPushLinkyBankPaymentOfferStatus("bank_paid")).toBe(true);
-    expect(shouldPushLinkyBankPaymentOfferStatus("declined")).toBe(true);
-    expect(shouldPushLinkyBankPaymentOfferStatus("canceled")).toBe(false);
-    expect(shouldPushLinkyBankPaymentOfferStatus("settled")).toBe(false);
   });
 
   it("recognizes an offer whose active phase has expired", () => {

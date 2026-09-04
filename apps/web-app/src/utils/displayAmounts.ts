@@ -1,6 +1,6 @@
 import { formatInteger, normalizeLocale } from "./formatting";
 
-export type FiatDisplayCurrency = "czk" | "eur" | "chf" | "usd";
+type FiatDisplayCurrency = "czk" | "eur" | "chf" | "usd";
 
 export type DisplayCurrency = "sat" | "btc" | FiatDisplayCurrency | "hidden";
 
@@ -207,7 +207,7 @@ const parsePositiveDisplayNumber = (value: string): number => {
   return parsed;
 };
 
-export const getDisplayAmountInputValue = (
+const getDisplayAmountInputValue = (
   amountSat: number,
   options: DisplayAmountOptions,
 ): string => {
@@ -232,7 +232,7 @@ export const getDisplayAmountInputValue = (
   return String(normalizedAmount);
 };
 
-export const toAmountSatFromDisplayInput = (
+const toAmountSatFromDisplayInput = (
   displayValue: string,
   options: DisplayAmountOptions,
 ): number => {
@@ -248,7 +248,7 @@ export const toAmountSatFromDisplayInput = (
   return parsedDisplayValue;
 };
 
-export interface AmountInputKeyResult {
+interface AmountInputKeyResult {
   amountSat: string;
   displayValue: string;
 }

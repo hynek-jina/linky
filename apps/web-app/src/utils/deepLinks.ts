@@ -1,7 +1,7 @@
 import { parseTokenText } from "@linky/linkshu";
 import { normalizeNpubIdentifier } from "./nostrNpub";
 
-export interface NativeDeepLinkScanText {
+interface NativeDeepLinkScanText {
   kind: "scan-text";
   rawUrl: string;
   text: string;

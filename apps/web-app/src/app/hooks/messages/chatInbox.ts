@@ -15,7 +15,7 @@ import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 const trimmed = (value: string | null | undefined): string =>
   (value ?? "").trim();
 
-export const chatMessageContentFromBody = (body: MessageBody): string => {
+const chatMessageContentFromBody = (body: MessageBody): string => {
   switch (body._tag) {
     case "TextBody":
       return body.text;

@@ -55,7 +55,7 @@ const CachedRelayListsSchema = Schema.Struct({
   dmRelaysUpdatedAt: Schema.NullOr(Schema.Number),
 });
 
-export type CachedRelayLists = typeof CachedRelayListsSchema.Type;
+type CachedRelayLists = typeof CachedRelayListsSchema.Type;
 
 const decodeCachedRelayLists = Schema.decodeUnknownOption(
   CachedRelayListsSchema,

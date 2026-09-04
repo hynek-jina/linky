@@ -6,7 +6,7 @@ export interface MessageMentionContact {
   statusNames: string[];
 }
 
-export interface MessageMentionQuery {
+interface MessageMentionQuery {
   end: number;
   query: string;
   start: number;
