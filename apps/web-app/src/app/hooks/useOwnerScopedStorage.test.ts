@@ -142,7 +142,7 @@ describe("buildTransactionInsertPayload", () => {
     });
   });
 
-  it("uses status pending instead of phase and pendingLabel", () => {
+  it("stores publish-phase events as pending", () => {
     expect(
       buildTransactionInsertPayload({
         createdAtSec: 456,

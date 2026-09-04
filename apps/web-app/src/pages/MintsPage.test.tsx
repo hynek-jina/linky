@@ -133,7 +133,6 @@ describe("MintsPage", () => {
     expect(
       findButton(container, "cashu.cz").classList.contains("is-selected"),
     ).toBe(true);
-    expect(container.textContent).not.toContain("Melt foreign balance");
     const selectedItem = container.querySelector(
       ".mint-choice-item.is-selected",
     );

@@ -110,6 +110,11 @@ describe("parseRouteFromHash", () => {
       id: unknownChatId,
     });
   });
+  it("parses the manual payment route", () => {
+    replaceHash("#wallet/pay");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "manualPay" });
+  });
 });
 
 describe("parseNativeDeepLinkUrl", () => {

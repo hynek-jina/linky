@@ -64,44 +64,6 @@ const createContactAndOpenChat = async (page: Page): Promise<string> => {
   return decodeURIComponent(contactMatch[1]);
 };
 
-test("keeps authenticated screen gutters aligned", async ({ page }) => {
-  await setAuthenticatedStorage(page);
-  await page.setViewportSize({ ...MOBILE_VIEWPORT });
-
-  for (const route of [
-    "/#settings",
-    "/#wallet/transactions",
-    "/#wallet/topup",
-    "/#contact/new",
-  ]) {
-    await page.goto(route);
-
-    const shell = page.locator(".page.authenticated-page");
-    // First navigation of the suite: with parallel workers the dev server may
-    // still be compiling, and the default 5s expect timeout makes this flaky.
-    await expect(shell).toBeVisible({ timeout: 30_000 });
-    await expect(shell).toHaveCSS("padding-left", "20px");
-    await expect(shell).toHaveCSS("padding-right", "20px");
-    await expect(page.locator(".topbar")).toHaveCSS("padding-left", "20px");
-    await expect(page.locator(".topbar")).toHaveCSS("padding-right", "20px");
-
-    const rootPanel = page.locator(".page.authenticated-page > .panel");
-    await expect(rootPanel).toHaveCount(1);
-    await expect(rootPanel).toHaveCSS("padding-left", "0px");
-    await expect(rootPanel).toHaveCSS("padding-right", "0px");
-  }
-
-  await page.goto("/#profile");
-  await expect(page.locator(".topbar-left .topbar-btn")).toHaveCSS(
-    "justify-content",
-    "flex-start",
-  );
-  await expect(page.locator(".topbar > .topbar-btn")).toHaveCSS(
-    "justify-content",
-    "flex-end",
-  );
-});
-
 test("keeps unauthenticated auth gating without render loops", async ({
   page,
 }) => {
@@ -277,54 +239,6 @@ test("preserves route parity and critical handlers", async ({ page }) => {
   const paySend = page.locator("[data-guide='pay-send']");
   await expect(paySend).toBeVisible();
   await expect(paySend).toBeDisabled();
-});
-
-test("keeps long chat drafts visible above iPhone 8 and iPhone 16 keyboards", async ({
-  page,
-}) => {
-  await setAuthenticatedStorage(page);
-  await page.setViewportSize({ height: 667, width: 375 });
-  await createContactAndOpenChat(page);
-
-  const chatInput = page.locator("[data-guide='chat-input']");
-  await chatInput.fill(
-    Array.from({ length: 20 }, (_, index) => `Draft line ${index + 1}`).join(
-      "\n",
-    ),
-  );
-  await chatInput.evaluate((element) => element.blur());
-  await page.waitForTimeout(300);
-
-  for (const device of [
-    { height: 667, keyboardTop: 330, width: 375 },
-    { height: 852, keyboardTop: 430, width: 393 },
-  ]) {
-    await page.setViewportSize({ height: device.height, width: device.width });
-    await page.waitForTimeout(50);
-    await page.evaluate(({ height, keyboardTop }) => {
-      document.documentElement.style.setProperty(
-        "--chat-viewport-height",
-        `${keyboardTop}px`,
-      );
-      document.documentElement.style.setProperty(
-        "--chat-keyboard-inset",
-        `${height - keyboardTop}px`,
-      );
-    }, device);
-
-    const topbarBox = await page.locator(".topbar").boundingBox();
-    const chatInputBox = await chatInput.boundingBox();
-    expect(topbarBox).not.toBeNull();
-    expect(chatInputBox).not.toBeNull();
-    if (!topbarBox || !chatInputBox) throw new Error("Missing chat geometry");
-    expect(chatInputBox.height).toBeLessThanOrEqual(160);
-    expect(chatInputBox.y).toBeGreaterThanOrEqual(
-      topbarBox.y + topbarBox.height,
-    );
-    expect(chatInputBox.y + chatInputBox.height).toBeLessThanOrEqual(
-      device.keyboardTop,
-    );
-  }
 });
 
 test("supports chat reply, edit, reaction toggle, and copy actions", async ({

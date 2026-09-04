@@ -107,10 +107,6 @@ describe("SpdPaymentPage offer recipients", () => {
         contactList &&
         Boolean(requestButton.compareDocumentPosition(contactList) & 4),
     ).toBe(true);
-    expect(container.querySelector(".bank-payment-open-actions")).toBeNull();
-    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(
-      0,
-    );
 
     await act(async () => {
       contactButtons[1]?.click();

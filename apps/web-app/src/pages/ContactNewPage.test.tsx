@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContactNewPage } from "./ContactNewPage";
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
@@ -11,6 +11,7 @@ Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
 
 describe("ContactNewPage", () => {
   afterEach(() => {
+    vi.useRealTimers();
     document.body.innerHTML = "";
   });
 
@@ -48,6 +49,7 @@ describe("ContactNewPage", () => {
   });
 
   it("lists search candidates and highlights the verified exact match", async () => {
+    vi.useFakeTimers();
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -87,7 +89,7 @@ describe("ContactNewPage", () => {
       );
     });
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await vi.advanceTimersByTimeAsync(900);
     });
 
     const rows = container.querySelectorAll(".contact-new-search-result");
