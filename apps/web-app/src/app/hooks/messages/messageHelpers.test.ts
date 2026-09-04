@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LocalNostrMessage } from "../src/app/types/appTypes";
-import { dedupeNostrMessagesByPriority } from "../src/app/hooks/messages/messageHelpers";
+import type { LocalNostrMessage } from "../../types/appTypes";
+import { dedupeNostrMessagesByPriority } from "./messageHelpers";
 
 const makeMessage = (
   id: string,

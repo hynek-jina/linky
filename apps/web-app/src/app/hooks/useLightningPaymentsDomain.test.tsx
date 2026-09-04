@@ -9,10 +9,10 @@ import {
 } from "@linky/linkshu";
 import { Either } from "effect";
 import React, { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MeltCashuInvoice } from "../src/app/hooks/composition/useLinkshuComposition";
-import type { LnurlPayInvoiceResult } from "../src/lnurlPay";
+import { renderIntoDocument } from "../../testUtils/renderIntoDocument";
+import type { MeltCashuInvoice } from "./composition/useLinkshuComposition";
+import type { LnurlPayInvoiceResult } from "../../lnurlPay";
 
 const { fetchLnurlInvoiceForTargetMock } = vi.hoisted(() => ({
   fetchLnurlInvoiceForTargetMock:
@@ -21,16 +21,14 @@ const { fetchLnurlInvoiceForTargetMock } = vi.hoisted(() => ({
     >(),
 }));
 
-vi.mock("../src/lnurlPay", () => ({
+vi.mock("../../lnurlPay", () => ({
   fetchLnurlInvoiceForTarget: fetchLnurlInvoiceForTargetMock,
   getLnurlPayDisplayText: (target: string) => target,
   inferLightningAddressFromLnurlTarget: (target: string) =>
     target.includes("@") ? target : null,
 }));
 
-import { useLightningPaymentsDomain } from "../src/app/hooks/useLightningPaymentsDomain";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+import { useLightningPaymentsDomain } from "./useLightningPaymentsDomain";
 
 const MINT_URL = "https://mint.example";
 
@@ -61,7 +59,7 @@ interface SetupOptions {
 }
 
 const setup = async ({ balance = 100, meltCashuInvoice }: SetupOptions) => {
-  let payments: Payments | null = null;
+  const paymentsRef: { current: Payments | null } = { current: null };
   const logPaymentEvent = vi.fn();
   const setStatus = vi.fn();
   const showPaidOverlay = vi.fn();
@@ -91,20 +89,18 @@ const setup = async ({ balance = 100, meltCashuInvoice }: SetupOptions) => {
     });
 
     React.useEffect(() => {
-      payments = domain;
+      paymentsRef.current = domain;
     }, [domain]);
     return null;
   };
 
-  const root = createRoot(document.createElement("div"));
-  await act(async () => {
-    root.render(<Harness />);
-  });
-  const mounted: Payments | null = payments;
-  if (mounted === null) throw new Error("payments hook did not mount");
+  const { root } = await renderIntoDocument(<Harness />);
+  if (paymentsRef.current === null) {
+    throw new Error("payments hook did not mount");
+  }
   return {
     logPaymentEvent,
-    payments: mounted,
+    payments: paymentsRef.current,
     root,
     setPostPaySaveContact,
     setStatus,

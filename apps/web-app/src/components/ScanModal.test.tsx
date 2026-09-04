@@ -1,22 +1,16 @@
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 
 const { mockNavigate } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
 }));
 
-vi.mock("../src/hooks/useRouting", () => ({
+vi.mock("../hooks/useRouting", () => ({
   useNavigation: () => mockNavigate,
 }));
 
-import { ScanModal } from "../src/components/ScanModal";
-
-Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-  value: true,
-  configurable: true,
-  writable: true,
-});
+import { ScanModal } from "./ScanModal";
 
 const translate = (key: string): string => {
   switch (key) {
@@ -63,13 +57,9 @@ describe("ScanModal", () => {
   } satisfies React.ComponentProps<typeof ScanModal>;
 
   it("shows the manual action only when allowed", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<ScanModal {...baseProps} showTypeAction={true} />);
-    });
+    const { container, root } = await renderIntoDocument(
+      <ScanModal {...baseProps} showTypeAction={true} />,
+    );
 
     expect(container.textContent).toContain("Type");
     expect(container.textContent).toContain("Paste");
@@ -84,20 +74,15 @@ describe("ScanModal", () => {
 
   it("offers camera switching when multiple cameras are available", async () => {
     const cycleScanCamera = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <ScanModal
-          {...baseProps}
-          cycleScanCamera={cycleScanCamera}
-          scanCameraLabel="Back Camera 2"
-          scanCanSwitchCamera={true}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <ScanModal
+        {...baseProps}
+        cycleScanCamera={cycleScanCamera}
+        scanCameraLabel="Back Camera 2"
+        scanCanSwitchCamera={true}
+      />,
+    );
 
     const button = container.querySelector(".scan-camera-switch");
     expect(button?.getAttribute("title")).toBe("Back Camera 2");
@@ -111,19 +96,14 @@ describe("ScanModal", () => {
 
   it("calls the manual handler when the type button is pressed", async () => {
     const onTypeManually = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <ScanModal
-          {...baseProps}
-          onTypeManually={onTypeManually}
-          showTypeAction={true}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <ScanModal
+        {...baseProps}
+        onTypeManually={onTypeManually}
+        showTypeAction={true}
+      />,
+    );
 
     const button = Array.from(container.querySelectorAll("button")).find(
       (element) => element.textContent?.includes("Type"),
@@ -140,19 +120,14 @@ describe("ScanModal", () => {
 
   it("returns receive scan close to wallet", async () => {
     const closeScan = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <ScanModal
-          {...baseProps}
-          closeScan={closeScan}
-          scanEntryPoint="receive"
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <ScanModal
+        {...baseProps}
+        closeScan={closeScan}
+        scanEntryPoint="receive"
+      />,
+    );
 
     const button = container.querySelector(".scan-header .topbar-btn");
 
@@ -168,20 +143,15 @@ describe("ScanModal", () => {
 
   it("shows issue action in send flow and calls it", async () => {
     const onIssueToken = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <ScanModal
-          {...baseProps}
-          onIssueToken={onIssueToken}
-          scanEntryPoint="send"
-          showWalletActions={true}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <ScanModal
+        {...baseProps}
+        onIssueToken={onIssueToken}
+        scanEntryPoint="send"
+        showWalletActions={true}
+      />,
+    );
 
     const button = Array.from(container.querySelectorAll("button")).find(
       (element) => element.textContent?.includes("Issue"),
@@ -199,20 +169,15 @@ describe("ScanModal", () => {
 
   it("shows manual recipient action in send flow and calls it", async () => {
     const onTypePayment = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <ScanModal
-          {...baseProps}
-          onTypePayment={onTypePayment}
-          scanEntryPoint="send"
-          showWalletActions={true}
-        />,
-      );
-    });
+    const { container } = await renderIntoDocument(
+      <ScanModal
+        {...baseProps}
+        onTypePayment={onTypePayment}
+        scanEntryPoint="send"
+        showWalletActions={true}
+      />,
+    );
 
     const button = Array.from(container.querySelectorAll("button")).find(
       (element) => element.textContent?.includes("Type recipient"),

@@ -90,7 +90,7 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)
-- Vitest excludes `tests/**/*.spec.ts` — those are Playwright E2E suites run separately
+- Vitest excludes `tests/**` — that directory holds only the Playwright suites plus `tests/helpers` and `tests/fixtures`; unit tests live next to their subject under `src/`
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - Playwright cannot intercept requests made by a service worker, and `src/sw.ts` has a Workbox `CacheFirst` route for image destinations that matches cross-origin URLs — any test stubbing remote images must use `serviceWorkers: "block"`
 - The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent

@@ -2,13 +2,11 @@ import { MintUrl, NonNegativeAmount, RestoreReport } from "@linky/linkshu";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useRestoreMissingTokens } from "../src/app/hooks/cashu/useRestoreMissingTokens";
-import type { RestoreCashuTokens } from "../src/app/hooks/composition/useLinkshuComposition";
-import type { CashuTokenRow } from "../src/evolu";
-import { createCashuTokenRowFixture } from "../src/testUtils/cashuTokenRow";
-import { MAIN_MINT_URL } from "../src/utils/mint";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+import { useRestoreMissingTokens } from "./useRestoreMissingTokens";
+import type { RestoreCashuTokens } from "../composition/useLinkshuComposition";
+import type { CashuTokenRow } from "../../../evolu";
+import { createCashuTokenRowFixture } from "../../../testUtils/cashuTokenRow";
+import { MAIN_MINT_URL } from "../../../utils/mint";
 
 type RestoreMissingTokens = () => Promise<void>;
 

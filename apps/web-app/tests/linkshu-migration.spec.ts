@@ -40,6 +40,7 @@ import {
 import { expectNoBootErrorPanel, watchAppErrors } from "./helpers/diagnostics";
 import { createSeedIdentity, setSeedLoginStorage } from "./helpers/identity";
 import { stubFiatRates, stubThirdPartyAssets } from "./helpers/network";
+import { topUp } from "./helpers/wallet";
 
 /** VITE_MAIN_MINT_URL baked into the e2e image (docker-compose.dev.yml). */
 const MINT_URL = "http://localhost:3338";
@@ -164,17 +165,6 @@ const createMintInvoice = async (
 
 const readStorage = (page: Page, key: string): Promise<string | null> =>
   page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
-
-const topUp = async (page: Page, sats: number): Promise<void> => {
-  await page.goto("/#wallet/topup");
-  for (const digit of String(sats).split("")) {
-    await page.getByRole("button", { exact: true, name: digit }).click();
-  }
-  await page.locator("[data-guide='topup-show-invoice']").click();
-  await page.locator("img.qr").waitFor({ state: "visible", timeout: 60_000 });
-  // Leave before the claim completes, exactly as a user would.
-  await page.goto("/#wallet");
-};
 
 test("legacy cashu storage migrates and the wallet keeps working", async ({
   browser,

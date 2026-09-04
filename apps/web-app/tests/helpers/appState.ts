@@ -4,7 +4,7 @@ import { expect, type Page } from "@playwright/test";
 export const MOBILE_VIEWPORT = { height: 844, width: 390 } as const;
 
 /** Counts page loads so a mid-test reload cannot pass unnoticed. */
-export const LOAD_COUNTER_KEY = "e2e.loads";
+const LOAD_COUNTER_KEY = "e2e.loads";
 
 /**
  * Clear storage once per session and pin the locale/currency.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LocalNostrReaction } from "../src/app/types/appTypes";
-import { aggregateReactions } from "../src/app/hooks/messages/chatReactions";
+import type { LocalNostrReaction } from "../../types/appTypes";
+import { aggregateReactions } from "./chatReactions";
 
 const makeReaction = (
   id: string,

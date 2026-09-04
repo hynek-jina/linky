@@ -1,7 +1,7 @@
 import type { OwnerId } from "@evolu/common";
 import React, { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderIntoDocument } from "../../../testUtils/renderIntoDocument";
 import type {
   AdvancedSettingsContextValue,
   EvoluSettingsContextValue,
@@ -12,11 +12,6 @@ import {
   useSystemSettingsComposition,
   type SystemSettingsCompositionResult,
 } from "./useSystemSettingsComposition";
-
-Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
-  configurable: true,
-  value: true,
-});
 
 const noop = (): void => {};
 const noopAsync = async (): Promise<void> => {};
@@ -190,17 +185,14 @@ describe("useSystemSettingsComposition", () => {
     const advancedSettingsInput = createAdvancedSettings(pushToast);
     const evoluSettingsInput = createEvoluSettings(wipeEvoluStorage);
     const resultRef = React.createRef<SystemSettingsCompositionResult | null>();
-    const root = createRoot(document.createElement("div"));
 
-    await act(async () => {
-      root.render(
-        <Harness
-          advancedSettingsInput={advancedSettingsInput}
-          evoluSettingsInput={evoluSettingsInput}
-          resultRef={resultRef}
-        />,
-      );
-    });
+    const { root } = await renderIntoDocument(
+      <Harness
+        advancedSettingsInput={advancedSettingsInput}
+        evoluSettingsInput={evoluSettingsInput}
+        resultRef={resultRef}
+      />,
+    );
 
     act(() => {
       readResult(resultRef).evoluSettingsContext.requestClearDatabase();

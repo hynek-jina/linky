@@ -1,8 +1,8 @@
 import { nip19 } from "nostr-tools";
 
-export const LOCAL_RELAY_URL = "ws://localhost:7777";
+const LOCAL_RELAY_URL = "ws://localhost:7777";
 
-export const npubToHex = (npub: string): string => {
+const npubToHex = (npub: string): string => {
   const decoded = nip19.decode(npub);
   if (decoded.type !== "npub" || typeof decoded.data !== "string") {
     throw new Error(`Not an npub: ${npub}`);

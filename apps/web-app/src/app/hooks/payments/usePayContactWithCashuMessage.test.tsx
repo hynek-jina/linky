@@ -24,21 +24,19 @@ import {
 import { Either, Exit } from "effect";
 import { getPublicKey, nip19 } from "nostr-tools";
 import React, { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSecretKey } from "../../../testUtils/nostrKeys";
+import { buildCashuToken } from "../../../testUtils/cashuToken";
+import { renderIntoDocument } from "../../../testUtils/renderIntoDocument";
 import type {
   CashuTokenLifecycle,
   SendCashuToken,
-} from "../src/app/hooks/composition/useLinkshuComposition";
+} from "../composition/useLinkshuComposition";
 import type {
   EnqueueOutbox,
   SendPaymentNotice,
-} from "../src/app/hooks/payments/publishCashuMessagePayment";
-import type {
-  ContactRowLike,
-  LocalNostrMessage,
-  NewLocalNostrMessage,
-} from "../src/app/types/appTypes";
+} from "./publishCashuMessagePayment";
+import type { ContactRowLike, LocalNostrMessage } from "../../types/appTypes";
 
 const { enqueueOutboxMock, navigateToMock, sendPaymentNoticeMock } = vi.hoisted(
   () => ({
@@ -48,7 +46,7 @@ const { enqueueOutboxMock, navigateToMock, sendPaymentNoticeMock } = vi.hoisted(
   }),
 );
 
-vi.mock("../src/hooks/useRouting", () => ({
+vi.mock("../../../hooks/useRouting", () => ({
   navigateTo: navigateToMock,
 }));
 
@@ -59,30 +57,19 @@ vi.mock("@linky/linkstr-react", () => ({
     atom === "enqueueOutboxAtom" ? enqueueOutboxMock : sendPaymentNoticeMock,
 }));
 
-import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayContactWithCashuMessage";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+import { usePayContactWithCashuMessage } from "./usePayContactWithCashuMessage";
 
 const CONTACT_ID = Evolu.createIdFromString<"Contact">("contact");
 const MINT_URL = "https://mint.example";
 
-const currentNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(1)));
-const contactNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(2)));
+const currentNpub = nip19.npubEncode(getPublicKey(createSecretKey(1)));
+const contactNpub = nip19.npubEncode(getPublicKey(createSecretKey(2)));
 
-const sendTokenText = `cashuA${btoa(
-  JSON.stringify({
-    token: [
-      {
-        mint: MINT_URL,
-        proofs: [{ amount: 600, C: "c", id: "i", secret: "s" }],
-      },
-    ],
-    unit: "sat",
-  }),
-)
-  .replace(/\+/g, "-")
-  .replace(/\//g, "_")
-  .replace(/=+$/g, "")}`;
+const sendTokenText = buildCashuToken({
+  amounts: [600],
+  mint: MINT_URL,
+  unit: "sat",
+});
 
 const sendReceipt = new SendReceipt({
   rowId: TokenRowId.make("send-row"),
@@ -125,39 +112,50 @@ const fallbackClientId = ClientId.make("fallback-client");
 type PayContact = ReturnType<
   typeof usePayContactWithCashuMessage<ContactRowLike>
 >;
+type PayParams = Parameters<
+  typeof usePayContactWithCashuMessage<ContactRowLike>
+>[0];
 
 interface SetupOptions {
-  appendLocalNostrMessage?: (message: NewLocalNostrMessage) => string;
-  enqueuePendingPayment?: ReturnType<typeof vi.fn>;
-  forget?: ReturnType<typeof vi.fn>;
-  logPaymentEvent?: ReturnType<typeof vi.fn>;
+  appendLocalNostrMessage?: PayParams["appendLocalNostrMessage"];
+  enqueuePendingPayment?: PayParams["enqueuePendingPayment"];
+  forget?: CashuTokenLifecycle["forget"];
+  logPaymentEvent?: PayParams["logPaymentEvent"];
   nostrMessagesLocal?: LocalNostrMessage[];
-  pushToast?: ReturnType<typeof vi.fn>;
+  pushToast?: PayParams["pushToast"];
   sendCashuToken?: SendCashuToken;
-  setStatus?: ReturnType<typeof vi.fn>;
-  showPaidOverlay?: ReturnType<typeof vi.fn>;
-  updateLocalNostrMessage?: ReturnType<typeof vi.fn>;
+  setStatus?: PayParams["setStatus"];
+  showPaidOverlay?: PayParams["showPaidOverlay"];
+  updateLocalNostrMessage?: PayParams["updateLocalNostrMessage"];
 }
 
 const setup = async (options: SetupOptions = {}) => {
   let payContact: PayContact | null = null;
-  const enqueuePendingPayment = options.enqueuePendingPayment ?? vi.fn();
-  const forget = options.forget ?? vi.fn(async () => {});
-  const logPaymentEvent = options.logPaymentEvent ?? vi.fn();
-  const pushToast = options.pushToast ?? vi.fn();
-  const setStatus = options.setStatus ?? vi.fn();
-  const showPaidOverlay = options.showPaidOverlay ?? vi.fn();
-  const updateLocalNostrMessage = options.updateLocalNostrMessage ?? vi.fn();
+  const enqueuePendingPayment =
+    options.enqueuePendingPayment ??
+    vi.fn<PayParams["enqueuePendingPayment"]>();
+  const forget =
+    options.forget ?? vi.fn<CashuTokenLifecycle["forget"]>(async () => {});
+  const logPaymentEvent =
+    options.logPaymentEvent ?? vi.fn<PayParams["logPaymentEvent"]>();
+  const pushToast = options.pushToast ?? vi.fn<PayParams["pushToast"]>();
+  const setStatus = options.setStatus ?? vi.fn<PayParams["setStatus"]>();
+  const showPaidOverlay =
+    options.showPaidOverlay ?? vi.fn<PayParams["showPaidOverlay"]>();
+  const updateLocalNostrMessage =
+    options.updateLocalNostrMessage ??
+    vi.fn<PayParams["updateLocalNostrMessage"]>();
   const sendCashuToken =
     options.sendCashuToken ?? vi.fn(async () => Either.right(sendReceipt));
 
   const cashuTokenLifecycle: CashuTokenLifecycle = {
-    checkIssuedClaims: vi.fn(),
+    checkIssuedClaims: vi.fn<CashuTokenLifecycle["checkIssuedClaims"]>(),
+    deleteSpent: vi.fn<CashuTokenLifecycle["deleteSpent"]>(),
     forget,
-    markExternalized: vi.fn(),
-    markIssued: vi.fn(),
-    reserve: vi.fn(),
-    returnToWallet: vi.fn(),
+    markExternalized: vi.fn<CashuTokenLifecycle["markExternalized"]>(),
+    markIssued: vi.fn<CashuTokenLifecycle["markIssued"]>(),
+    reserve: vi.fn<CashuTokenLifecycle["reserve"]>(),
+    returnToWallet: vi.fn<CashuTokenLifecycle["returnToWallet"]>(),
   };
 
   const Harness = () => {
@@ -195,10 +193,7 @@ const setup = async (options: SetupOptions = {}) => {
     return null;
   };
 
-  const root = createRoot(document.createElement("div"));
-  await act(async () => {
-    root.render(<Harness />);
-  });
+  const { root } = await renderIntoDocument(<Harness />);
 
   return {
     enqueuePendingPayment,
@@ -309,8 +304,8 @@ describe("usePayContactWithCashuMessage", () => {
     enqueueOutboxMock.mockResolvedValue(
       Exit.fail({ _tag: "LinkstrNotConfigured" }),
     );
-    const pushToast = vi.fn();
-    const showPaidOverlay = vi.fn();
+    const pushToast = vi.fn<PayParams["pushToast"]>();
+    const showPaidOverlay = vi.fn<PayParams["showPaidOverlay"]>();
     const harness = await setup({ pushToast, showPaidOverlay });
 
     const result = await payAlice(harness);
@@ -334,7 +329,7 @@ describe("usePayContactWithCashuMessage", () => {
         }),
       ),
     );
-    const setStatus = vi.fn();
+    const setStatus = vi.fn<PayParams["setStatus"]>();
     const harness = await setup({ sendCashuToken, setStatus });
 
     const result = await payAlice(harness);

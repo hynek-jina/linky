@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -6,13 +6,13 @@ const { navigateToMock } = vi.hoisted(() => ({
   navigateToMock: vi.fn(),
 }));
 
-vi.mock("../src/hooks/useRouting", () => ({
+vi.mock("../../../hooks/useRouting", () => ({
   navigateTo: navigateToMock,
   useNavigation: () => navigateToMock,
 }));
 
-import { useContactsGuide } from "../src/app/hooks/guide/useContactsGuide";
-import type { Route } from "../src/types/route";
+import { useContactsGuide } from "./useContactsGuide";
+import type { Route } from "../../../types/route";
 
 type GuideApi = ReturnType<typeof useContactsGuide>;
 
