@@ -66,6 +66,10 @@ beforeEach(() => {
 describe("lnurlp handler", () => {
   it.each([
     "alice",
+    "alice@%.example.com",
+    "alice@example.com#ignored",
+    "alice@example.com?ignored",
+    "alice@example.com\\ignored",
     "alice@127.0.0.1",
     "alice@[::1]",
     "alice@localhost",
