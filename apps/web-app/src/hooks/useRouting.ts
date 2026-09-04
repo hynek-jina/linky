@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { CashuTokenId, ContactId } from "../evolu";
-import { parseRouteFromHash, type Route } from "../types/route";
+import {
+  BANK_PAYMENT_EDIT_SUFFIX,
+  parseRouteFromHash,
+  type Route,
+} from "../types/route";
 
 export const NATIVE_BACK_BUTTON_EVENT = "linky-native-back-button";
 const BANK_PAYMENT_OFFER_RETURN_HASH_KEY =
@@ -98,7 +102,7 @@ type NavigationAction =
   | { route: "evoluServers" }
   | { route: "lnAddressPay"; lnAddress: string }
   | { route: "manualPay" }
-  | { route: "bankPayment"; spdPayload: string }
+  | { route: "bankPayment"; spdPayload: string; editing?: boolean }
   | { route: "bankPaymentOffer"; chatId: string; offerId: string }
   | { route: "mint"; mintUrl: string }
   | { route: "mints" }
@@ -206,7 +210,7 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "bankPayment":
       window.location.assign(
-        `#wallet/bank-payment/${encodeURIComponent(String(action.spdPayload ?? "").trim())}`,
+        `#wallet/bank-payment/${encodeURIComponent(String(action.spdPayload ?? "").trim())}${action.editing ? BANK_PAYMENT_EDIT_SUFFIX : ""}`,
       );
       break;
     case "bankPaymentOffer":

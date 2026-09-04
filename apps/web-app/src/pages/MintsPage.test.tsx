@@ -26,8 +26,8 @@ const probeLightningFee = vi.fn<ProbeLightningFee>(
         mint,
         probeMint,
         amount: 10000,
-        feeReserve: 100,
-        percent: 1,
+        feeReserve: 120,
+        percent: 1.2,
       }),
     ),
 );
@@ -179,7 +179,34 @@ describe("MintsPage", () => {
       mint: "https://cashu.cz",
       probeMint: "https://mint.minibits.cash/Bitcoin",
     });
-    expect(container.textContent).toContain("~1 %");
+    expect(container.textContent).toContain("~1.2 %");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps the Lightning fee's tenths above ten percent", async () => {
+    probeLightningFee.mockResolvedValueOnce(
+      Either.right(
+        decodeProbeResult({
+          mint: "https://cashu.cz",
+          probeMint: "https://mint.minibits.cash/Bitcoin",
+          amount: 10000,
+          feeReserve: 1250,
+          percent: 12.5,
+        }),
+      ),
+    );
+    mintSettings = createMintSettings();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<MintsPage />);
+    });
+    expect(container.textContent).toContain("~12.5 %");
 
     await act(async () => {
       root.unmount();

@@ -9,14 +9,22 @@ import {
 import { BankPaymentAmount } from "../components/BankPaymentAmount";
 import { SettingsStepper } from "../components/SettingsStepper";
 import { navigateTo } from "../hooks/useRouting";
+import { formatDomesticBankAccount } from "../utils/bankAccount";
 import type { FiatRates } from "../utils/displayAmounts";
 import { formatInteger, getInitials } from "../utils/formatting";
-import { tryParseBankPayment, type BankPayment } from "../utils/spdPayment";
+import {
+  getBankPaymentEditableFieldKeys,
+  tryParseBankPayment,
+  updateBankPaymentFields,
+  type BankPayment,
+  type BankPaymentFieldKey,
+} from "../utils/spdPayment";
 
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
   initialOfferContactCount: number;
   initialOfferDelaySec: number;
+  isEditing: boolean;
   offerContacts: {
     id?: unknown;
     lastBankPaymentResponseSec?: unknown;
@@ -47,6 +55,12 @@ interface SpdPaymentFieldRow {
 
 const getSpdField = (payment: BankPayment, key: string): string =>
   String(payment.fields[key] ?? "").trim();
+
+// Czech and Slovak accounts are shown the way their banks display them.
+const getDisplayedFieldValue = (payment: BankPayment, key: string): string => {
+  const value = getSpdField(payment, key);
+  return key === "ACC" ? (formatDomesticBankAccount(value) ?? value) : value;
+};
 
 const SATS_PER_BTC = 100_000_000;
 
@@ -131,34 +145,87 @@ const getSpdAmountSat = (
   return Number.isFinite(amountSat) && amountSat > 0 ? amountSat : null;
 };
 
+const FIELD_LABEL_KEYS: Record<BankPaymentFieldKey, string> = {
+  ACC: "spdPaymentAccount",
+  AM: "spdPaymentAmount",
+  BIC: "spdPaymentBic",
+  DT: "spdPaymentDueDate",
+  MSG: "spdPaymentMessage",
+  RF: "spdPaymentReference",
+  RN: "spdPaymentRecipient",
+  "X-KS": "spdPaymentConstantSymbol",
+  "X-SS": "spdPaymentSpecificSymbol",
+  "X-VS": "spdPaymentVariableSymbol",
+};
+
 const buildSpdRows = (
   payment: BankPayment,
   t: (key: string) => string,
-): SpdPaymentFieldRow[] => {
-  const rows: SpdPaymentFieldRow[] = [];
-  const addRow = (key: string, label: string) => {
-    const value = getSpdField(payment, key);
-    if (!value) return;
-    rows.push({ key, label, value });
+): SpdPaymentFieldRow[] =>
+  getBankPaymentEditableFieldKeys(payment.format).flatMap((key) => {
+    const value = getDisplayedFieldValue(payment, key);
+    return value ? [{ key, label: t(FIELD_LABEL_KEYS[key]), value }] : [];
+  });
+
+type BankPaymentFields = Record<string, string>;
+
+// `confirmed` edits are what the offer is built from; `draft` holds the form
+// while the user is editing and becomes `confirmed` on confirm.
+interface BankPaymentEdits {
+  confirmed: BankPaymentFields | null;
+  draft: BankPaymentFields | null;
+  payload: string;
+}
+
+const createDraftFields = (payment: BankPayment): BankPaymentFields =>
+  Object.fromEntries(
+    ["AM", ...getBankPaymentEditableFieldKeys(payment.format)].map((key) => [
+      key,
+      getDisplayedFieldValue(payment, key),
+    ]),
+  );
+
+interface BankPaymentEditError {
+  field: string | null;
+  key: string;
+}
+
+const EDIT_ERRORS: Record<string, BankPaymentEditError> = {
+  "bank-payment-invalid-account": {
+    field: "ACC",
+    key: "spdPaymentInvalidAccount",
+  },
+  "bank-payment-invalid-amount": {
+    field: "AM",
+    key: "spdPaymentInvalidAmount",
+  },
+  "bank-payment-invalid-bic": { field: "BIC", key: "spdPaymentInvalidBic" },
+  "spd-missing-account": { field: "ACC", key: "spdPaymentMissingAccount" },
+};
+
+const getEditError = (error: unknown): BankPaymentEditError =>
+  (error instanceof Error ? EDIT_ERRORS[error.message] : undefined) ?? {
+    field: null,
+    key: "spdPaymentEditInvalid",
   };
 
-  addRow("RN", t("spdPaymentRecipient"));
-  addRow("ACC", t("spdPaymentAccount"));
-  addRow("BIC", t("spdPaymentBic"));
-  addRow("RF", t("spdPaymentReference"));
-  addRow("X-VS", t("spdPaymentVariableSymbol"));
-  addRow("X-SS", t("spdPaymentSpecificSymbol"));
-  addRow("X-KS", t("spdPaymentConstantSymbol"));
-  addRow("MSG", t("spdPaymentMessage"));
-  addRow("DT", t("spdPaymentDueDate"));
-
-  return rows;
+const applyBankPaymentEdits = (
+  payment: BankPayment,
+  fields: BankPaymentFields | null,
+): { error: BankPaymentEditError | null; payment: BankPayment | null } => {
+  if (!fields) return { error: null, payment };
+  try {
+    return { error: null, payment: updateBankPaymentFields(payment, fields) };
+  } catch (error) {
+    return { error: getEditError(error), payment: null };
+  }
 };
 
 export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   cashuBalanceAfterMelt,
   initialOfferContactCount,
   initialOfferDelaySec,
+  isEditing,
   offerContacts,
   onRequestReimbursement,
   spdPayload,
@@ -183,6 +250,36 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     () => tryParseBankPayment(spdPayload),
     [spdPayload],
   );
+  const [edits, setEdits] = React.useState<BankPaymentEdits | null>(null);
+  // Edits belong to the payload they were started from; a new scan drops them.
+  const activeEdits =
+    payment && edits?.payload === payment.payload ? edits : null;
+  const confirmedFields = activeEdits?.confirmed ?? null;
+  // The edit form opens on the confirmed values (or the scanned ones) until
+  // the first keystroke creates a draft.
+  const draftFields = React.useMemo(
+    () =>
+      isEditing && payment
+        ? (activeEdits?.draft ?? confirmedFields ?? createDraftFields(payment))
+        : null,
+    [activeEdits, confirmedFields, isEditing, payment],
+  );
+  const editedPayment = React.useMemo(
+    () =>
+      payment
+        ? applyBankPaymentEdits(payment, draftFields ?? confirmedFields)
+        : { error: null, payment: null },
+    [confirmedFields, draftFields, payment],
+  );
+
+  // Leaving the form by navigation (topbar back, hardware back) cancels the
+  // draft; only Confirm keeps it.
+  React.useEffect(() => {
+    if (isEditing) return;
+    setEdits((current) =>
+      current?.draft ? { ...current, draft: null } : current,
+    );
+  }, [isEditing]);
   const selectedOfferContacts = React.useMemo(
     () =>
       selectedOfferContactKeys.flatMap((key) => {
@@ -217,9 +314,14 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     );
   }
 
-  const amount = parseSpdAmount(getSpdField(payment, "AM"));
+  const activePayment = editedPayment.payment;
+  const amount = activePayment
+    ? parseSpdAmount(getSpdField(activePayment, "AM"))
+    : null;
   const currency = getSpdField(payment, "CC").toLowerCase();
-  const amountSat = getSpdAmountSat(payment, fiatRates);
+  const amountSat = activePayment
+    ? getSpdAmountSat(activePayment, fiatRates)
+    : null;
   const amountText =
     displayCurrency === "hidden" && amount !== null
       ? "*****"
@@ -228,8 +330,24 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         : amountSat === null
           ? ""
           : formatDisplayedAmountText(amountSat);
-  const recipient = getSpdField(payment, "RN");
-  const rows = buildSpdRows(payment, t);
+  const rows = buildSpdRows(activePayment ?? payment, t);
+  const editableKeys = getBankPaymentEditableFieldKeys(payment.format);
+  const currencyCode = getSpdField(payment, "CC").toUpperCase();
+  const editError = editedPayment.error;
+  const updateDraftField = (key: string, value: string) =>
+    setEdits((current) => {
+      const own = current?.payload === payment.payload ? current : null;
+      const base = own?.draft ?? own?.confirmed ?? createDraftFields(payment);
+      return {
+        confirmed: own?.confirmed ?? null,
+        draft: { ...base, [key]: value },
+        payload: payment.payload,
+      };
+    });
+  const confirmEdits = () => {
+    setEdits({ confirmed: draftFields, draft: null, payload: payment.payload });
+    navigateTo({ route: "bankPayment", spdPayload });
+  };
   const offerContactsCount = selectedOfferContacts.length;
   const hasEnoughCashuForProxy =
     amountSat !== null && amountSat <= cashuBalanceAfterMelt;
@@ -246,6 +364,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
 
   const requestReimbursement = async () => {
     if (
+      !activePayment ||
       selectedOfferContacts.length === 0 ||
       !amountText ||
       !hasEnoughCashuForProxy ||
@@ -261,7 +380,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         amountSat,
         amountText,
         contacts: selectedOfferContacts,
-        spdPayload: payment.payload,
+        spdPayload: activePayment.payload,
         staggerDelaySec: offerDelaySec,
       });
       if (offer) {
@@ -278,6 +397,71 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     }
   };
 
+  if (draftFields) {
+    return (
+      <section className="panel panel-plain bank-payment-page">
+        <div className="bank-payment-summary">
+          <BankPaymentAmount
+            canCycle={Boolean(amountText)}
+            text={amountText || t("spdPaymentAmountUnknown")}
+          />
+        </div>
+
+        <div className="bank-payment-fields bank-payment-edit">
+          {["AM" as const, ...editableKeys].map((key) => {
+            const inputId = `bank-payment-field-${key}`;
+            const suffix = key === "AM" ? currencyCode : "";
+            const fieldError = editError?.field === key ? editError : null;
+            return (
+              <div className="bank-payment-edit-row" key={key}>
+                <label htmlFor={inputId}>{t(FIELD_LABEL_KEYS[key])}</label>
+                <div
+                  className={
+                    suffix
+                      ? "input-with-public-value has-public-value"
+                      : "input-with-public-value"
+                  }
+                >
+                  <input
+                    id={inputId}
+                    aria-invalid={fieldError ? true : undefined}
+                    inputMode={key === "AM" ? "decimal" : undefined}
+                    value={draftFields[key] ?? ""}
+                    onChange={(event) =>
+                      updateDraftField(key, event.target.value)
+                    }
+                  />
+                  {suffix ? (
+                    <span className="input-public-value">{suffix}</span>
+                  ) : null}
+                </div>
+                {fieldError ? (
+                  <p className="bank-payment-error bank-payment-offer-status">
+                    {t(fieldError.key)}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+          {editError && editError.field === null ? (
+            <p className="bank-payment-error bank-payment-offer-status">
+              {t(editError.key)}
+            </p>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          className="btn-wide bank-payment-edit-confirm"
+          disabled={!activePayment}
+          onClick={confirmEdits}
+        >
+          {t("spdPaymentEditConfirm")}
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className="panel panel-plain bank-payment-page">
       <div className="bank-payment-summary">
@@ -285,9 +469,6 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
           canCycle={Boolean(amountText)}
           text={amountText || t("spdPaymentAmountUnknown")}
         />
-        <div className="muted bank-payment-recipient">
-          {recipient || t("spdPaymentRecipientUnknown")}
-        </div>
       </div>
 
       <div className="bank-payment-fields">
@@ -305,6 +486,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         type="button"
         className="btn-wide bank-payment-request"
         disabled={
+          !activePayment ||
           selectedOfferContacts.length === 0 ||
           !amountText ||
           !hasEnoughCashuForProxy ||

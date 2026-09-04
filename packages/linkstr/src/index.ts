@@ -64,6 +64,7 @@ export * from "./profiles/domain";
 export * from "./profiles/events";
 export * from "./profiles/Profiles";
 export * from "./profiles/ProfileWatch";
+export * from "./profiles/search";
 export * from "./push/codec";
 export * from "./push/headless";
 export * from "./push/PushInbox";

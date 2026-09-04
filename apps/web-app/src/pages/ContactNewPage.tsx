@@ -213,7 +213,10 @@ interface ContactNewPageProps {
   groupNames: string[];
   handleSaveContact: () => void;
   isSavingContact: boolean;
-  searchNewContact: (query?: string) => Promise<ContactSearchResult>;
+  searchNewContact: (
+    query?: string,
+    onProgress?: (result: ContactSearchResult) => void,
+  ) => Promise<ContactSearchResult>;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;
 }
@@ -288,19 +291,22 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
       lastSearchedQueryRef.current = queryText;
       setSearchIsBusy(true);
       clearSearchFeedback();
-      const result = await searchNewContact(queryText);
-
-      if (requestSeq !== searchRequestSeqRef.current) return;
-      if (searchQueryRef.current !== queryText) {
-        setSearchIsBusy(false);
-        return;
-      }
-
-      setSearchIsBusy(false);
-
-      if (result.kind === "found") {
+      const isCurrentRequest = () =>
+        requestSeq === searchRequestSeqRef.current &&
+        searchQueryRef.current === queryText;
+      const showFound = (result: ContactSearchResult) => {
+        if (!isCurrentRequest() || result.kind !== "found") return;
         setManualCreateQuery(null);
         setSearchResults({ contacts: result.contacts, query: queryText });
+      };
+      const result = await searchNewContact(queryText, showFound);
+
+      if (requestSeq !== searchRequestSeqRef.current) return;
+      setSearchIsBusy(false);
+      if (searchQueryRef.current !== queryText) return;
+
+      if (result.kind === "found") {
+        showFound(result);
         return;
       }
 
@@ -370,11 +376,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     Boolean(searchQuery) &&
     manualCreateQuery === searchQuery &&
     !searchIsBusy;
+  // Stays visible under partial results until every lookup has settled.
   const showSearchLoader =
     Boolean(searchQuery) &&
-    !searchResults &&
-    !searchError &&
-    manualCreateQuery !== searchQuery;
+    (searchIsBusy ||
+      (!searchResults && !searchError && manualCreateQuery !== searchQuery));
 
   return (
     <section className="panel panel-plain">

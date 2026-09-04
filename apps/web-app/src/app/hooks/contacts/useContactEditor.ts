@@ -61,7 +61,16 @@ export interface ContactSearchCandidate {
   query: string;
 }
 
-export const CONTACT_SEARCH_RESULT_LIMIT = 3;
+export const CONTACT_SEARCH_RESULT_LIMIT = 6;
+const NIP05_RESOLVE_TIMEOUT_MS = 3000;
+/** The exact candidate is shown before its profile arrives; wait at most this. */
+const EXACT_PROFILE_WAIT_MS = 3000;
+
+const settleWithin = <T>(promise: Promise<T>, ms: number): Promise<T | null> =>
+  Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 
 export type ContactSearchResult =
   | { kind: "empty" }
@@ -781,6 +790,7 @@ export const useContactEditor = ({
   const resolveExactContact = React.useCallback(
     async (
       rawQuery: string,
+      onCandidate: (candidate: ContactSearchCandidate) => void,
     ): Promise<
       | { kind: "resolved"; contact: ContactSearchCandidate }
       | { kind: "error"; identifier: string }
@@ -790,12 +800,25 @@ export const useContactEditor = ({
         npub: string,
         fallback: { name: string; lnAddress: string },
       ) => {
-        const metadata = await fetchAndCacheProfile(fetchProfileOneShot, npub);
-        return {
-          contact: toSearchCandidate(npub, metadata, rawQuery, {
+        const candidateWith = (metadata: ProfileMetadata | null) =>
+          toSearchCandidate(npub, metadata, rawQuery, {
             ...fallback,
             isExactMatch: true,
-          }),
+          });
+        const cachedMetadata = loadCachedProfile(npub)?.metadata ?? null;
+        onCandidate(candidateWith(cachedMetadata));
+        const fetched = fetchAndCacheProfile(fetchProfileOneShot, npub).then(
+          (metadata) => {
+            const contact = candidateWith(metadata ?? cachedMetadata);
+            onCandidate(contact);
+            return contact;
+          },
+        );
+        // The identity is settled; a slow profile fetch keeps filling the
+        // candidate in through onCandidate instead of holding the result.
+        const contact = await settleWithin(fetched, EXACT_PROFILE_WAIT_MS);
+        return {
+          contact: contact ?? candidateWith(cachedMetadata),
           kind: "resolved" as const,
         };
       };
@@ -806,7 +829,9 @@ export const useContactEditor = ({
       if (!parseNip05IdentifierInput(rawQuery)) return { kind: "none" };
 
       const queryPrefill = getContactQueryPrefill(rawQuery);
-      const nip05Result = await resolveNip05Input(rawQuery);
+      const nip05Result = await resolveNip05Input(rawQuery, {
+        signal: AbortSignal.timeout(NIP05_RESOLVE_TIMEOUT_MS),
+      });
       if (nip05Result.kind === "none" || nip05Result.kind === "not_found") {
         return { kind: "none" };
       }
@@ -830,53 +855,84 @@ export const useContactEditor = ({
   );
 
   const searchProfileCandidates = React.useCallback(
-    async (rawQuery: string): Promise<ContactSearchCandidate[]> => {
+    async (
+      rawQuery: string,
+      onCandidates: (candidates: ContactSearchCandidate[]) => void,
+    ): Promise<ContactSearchCandidate[]> => {
       // An npub is an exact identifier; text search would only add noise.
       if (/^npub1/i.test(normalizeNpubIdentifier(rawQuery) ?? "")) return [];
+      const toCandidates = (hits: ReadonlyArray<ProfileSearchHit>) =>
+        hits.map((hit) => {
+          const npub = encodeNpub(hit.pubkey);
+          saveCachedProfile(npub, hit.metadata, hit.updatedAt);
+          return toSearchCandidate(npub, hit.metadata, rawQuery, {
+            isExactMatch: false,
+            lnAddress: "",
+            name: "",
+          });
+        });
       const exit = await searchProfilesOneShot({
         options: {
           limit: CONTACT_SEARCH_RESULT_LIMIT,
           searchRelays: NOSTR_SEARCH_RELAYS,
+          // Linky users first; fresh accounts carry only the synthetic
+          // `npub…@linky.fit` lud16, so the raw suffix is the signal.
+          preferredDomains: [DEFAULT_NIP05_DOMAIN],
+          onHits: (hits) => onCandidates(toCandidates(hits)),
         },
         query: rawQuery,
       });
-      if (Exit.isFailure(exit)) return [];
-      return exit.value.map((hit: ProfileSearchHit) => {
-        const npub = encodeNpub(hit.pubkey);
-        saveCachedProfile(npub, hit.metadata, hit.updatedAt);
-        return toSearchCandidate(npub, hit.metadata, rawQuery, {
-          isExactMatch: false,
-          lnAddress: "",
-          name: "",
-        });
-      });
+      return Exit.isFailure(exit) ? [] : toCandidates(exit.value);
     },
     [searchProfilesOneShot, toSearchCandidate],
   );
 
+  /**
+   * Two concurrent lookups; `onProgress` receives the merged list every time
+   * either one learns something, with the exact (npub / NIP-05) candidate
+   * always first. The returned promise settles when both are done.
+   */
   const searchNewContact = React.useCallback(
-    async (query?: string): Promise<ContactSearchResult> => {
+    async (
+      query?: string,
+      onProgress?: (result: ContactSearchResult) => void,
+    ): Promise<ContactSearchResult> => {
       if (route.kind !== "contactNew") return { kind: "empty" };
 
       const rawQuery = String(query ?? form.npub ?? "").trim();
       if (!rawQuery) return { kind: "empty" };
 
-      const [exact, searched] = await Promise.all([
-        resolveExactContact(rawQuery),
-        searchProfileCandidates(rawQuery),
+      let exact: ContactSearchCandidate | null = null;
+      let searched: ContactSearchCandidate[] = [];
+      const mergeCandidates = (): ContactSearchCandidate[] => {
+        const contacts: ContactSearchCandidate[] = exact ? [exact] : [];
+        for (const candidate of searched) {
+          if (contacts.length >= CONTACT_SEARCH_RESULT_LIMIT) break;
+          if (contacts.some((known) => known.npub === candidate.npub)) continue;
+          contacts.push(candidate);
+        }
+        return contacts;
+      };
+      const publishProgress = () => {
+        const contacts = mergeCandidates();
+        if (contacts.length > 0) onProgress?.({ contacts, kind: "found" });
+      };
+
+      const [exactResult] = await Promise.all([
+        resolveExactContact(rawQuery, (candidate) => {
+          exact = candidate;
+          publishProgress();
+        }),
+        searchProfileCandidates(rawQuery, (candidates) => {
+          searched = candidates;
+          publishProgress();
+        }),
       ]);
 
-      const contacts: ContactSearchCandidate[] = [];
-      if (exact.kind === "resolved") contacts.push(exact.contact);
-      for (const candidate of searched) {
-        if (contacts.length >= CONTACT_SEARCH_RESULT_LIMIT) break;
-        if (contacts.some((known) => known.npub === candidate.npub)) continue;
-        contacts.push(candidate);
-      }
-
+      const contacts = mergeCandidates();
       if (contacts.length > 0) return { contacts, kind: "found" };
-      if (exact.kind === "error") {
-        return { identifier: exact.identifier, kind: "error" };
+      if (exactResult.kind === "error") {
+        return { identifier: exactResult.identifier, kind: "error" };
       }
       return { kind: "not_found", query: rawQuery };
     },

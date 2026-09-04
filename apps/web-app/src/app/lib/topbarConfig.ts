@@ -67,9 +67,16 @@ export const resolveBackAction = (
     case "profileEdit":
       return () => navigateTo({ route: "profile" });
 
+    case "bankPayment":
+      // Leaving the edit form discards the draft; the page itself has no
+      // cancel button.
+      return route.editing
+        ? () =>
+            navigateTo({ route: "bankPayment", spdPayload: route.spdPayload })
+        : () => navigateTo({ route: "wallet" });
+
     case "transactions":
     case "manualPay":
-    case "bankPayment":
     case "cashuTokens":
     case "cashuTokenEmit":
     case "topup":
@@ -217,6 +224,20 @@ export const buildTopbarRight = ({
     };
   }
 
+  if (route.kind === "bankPayment") {
+    if (route.editing) return null;
+    return {
+      icon: "edit",
+      label: t("spdPaymentEditFields"),
+      onClick: () =>
+        navigateTo({
+          route: "bankPayment",
+          spdPayload: route.spdPayload,
+          editing: true,
+        }),
+    };
+  }
+
   if (route.kind === "contactNew") {
     return {
       icon: "scan",
@@ -247,7 +268,6 @@ export const buildTopbarRight = ({
     route.kind === "topupNoAmount" ||
     route.kind === "topupInvoice" ||
     route.kind === "manualPay" ||
-    route.kind === "bankPayment" ||
     route.kind === "bankPaymentOffer" ||
     route.kind === "cashuTokens" ||
     route.kind === "cashuTokenNew" ||

@@ -15,6 +15,22 @@ afterEach(() => {
 });
 
 describe("parseRouteFromHash", () => {
+  it("parses the bank payment route with an optional edit suffix", () => {
+    const payload = "SPD*1.0*ACC:CZ6508000000192000145399*AM:1.00*CC:CZK";
+    replaceHash(`#wallet/bank-payment/${encodeURIComponent(payload)}`);
+    expect(parseRouteFromHash()).toEqual({
+      kind: "bankPayment",
+      spdPayload: payload,
+    });
+
+    replaceHash(`#wallet/bank-payment/${encodeURIComponent(payload)}/edit`);
+    expect(parseRouteFromHash()).toEqual({
+      kind: "bankPayment",
+      spdPayload: payload,
+      editing: true,
+    });
+  });
+
   it("defaults to wallet when the url has no hash", () => {
     replaceHash("");
 
