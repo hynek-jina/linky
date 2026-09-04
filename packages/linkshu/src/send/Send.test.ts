@@ -367,36 +367,67 @@ describe("Send.send", () => {
     expect(exit.value.rows.every((row) => row.state === "accepted")).toBe(true);
   });
 
-  it("recovers a stale counter via NUT-09 restore and retries", async () => {
-    const { wallet, sendCalls, restoreCalls } = makeWallet({
-      send: (call) =>
-        call.sendCounter < 40
-          ? Promise.reject(outputsAlreadySigned())
-          : Promise.resolve({ keep: [proof(9, "k1")], send: [proof(4, "s1")] }),
-      restore: () =>
-        Promise.resolve({ proofs: [], lastCounterWithSignature: 39 }),
-    });
-    const { run, events } = makeHarness(wallet);
+  it.each([
+    outputsAlreadySigned(),
+    new MintOperationError(11008, "Duplicate outputs"),
+    new Error("Duplicate outputs"),
+  ])(
+    "recovers a stale counter via NUT-09 restore and retries: %s",
+    async (collision) => {
+      const { wallet, sendCalls, restoreCalls } = makeWallet({
+        send: (call) =>
+          call.sendCounter < 40
+            ? Promise.reject(collision)
+            : Promise.resolve({
+                keep: [proof(9, "k1")],
+                send: [proof(4, "s1")],
+              }),
+        restore: () =>
+          Promise.resolve({ proofs: [], lastCounterWithSignature: 39 }),
+      });
+      const { run, events } = makeHarness(wallet);
 
+      const exit = await run(sendAndInspect(draft(4), [tokenA, tokenB]));
+      assert(Exit.isSuccess(exit));
+      expect(exit.value.receipt._tag).toBe("Right");
+      expect(sendCalls.map((call) => call.sendCounter)).toEqual([1, 40]);
+      expect(sendCalls[1]?.keepCounter).toBe(104);
+      expect(restoreCalls).toEqual([{ start: 1, count: 100 }]);
+      expect(exit.value.counter).toBe("105"); // 40 + 64 + 1 fresh keep output
+
+      const counterEvents = events.filter(
+        (event) => event._tag === "CounterAdvanced",
+      );
+      expect(counterEvents).toEqual([
+        expect.objectContaining({
+          from: 1,
+          to: 40,
+          reason: "collision-recovery",
+        }),
+        expect.objectContaining({ from: 40, to: 105, reason: "used" }),
+      ]);
+    },
+  );
+
+  it("bounds duplicate-output retries and preserves source rows on rejection", async () => {
+    const { wallet, sendCalls, restoreCalls } = makeWallet({
+      send: () =>
+        Promise.reject(new MintOperationError(11008, "Duplicate outputs")),
+      restore: () => Promise.resolve({ proofs: [] }),
+    });
+    const { run } = makeHarness(wallet);
     const exit = await run(sendAndInspect(draft(4), [tokenA, tokenB]));
     assert(Exit.isSuccess(exit));
-    expect(exit.value.receipt._tag).toBe("Right");
-    expect(sendCalls.map((call) => call.sendCounter)).toEqual([1, 40]);
-    expect(sendCalls[1]?.keepCounter).toBe(104);
-    expect(restoreCalls).toEqual([{ start: 1, count: 100 }]);
-    expect(exit.value.counter).toBe("105"); // 40 + 64 + 1 fresh keep output
-
-    const counterEvents = events.filter(
-      (event) => event._tag === "CounterAdvanced",
-    );
-    expect(counterEvents).toEqual([
-      expect.objectContaining({
-        from: 1,
-        to: 40,
-        reason: "collision-recovery",
-      }),
-      expect.objectContaining({ from: 40, to: 105, reason: "used" }),
+    assert(exit.value.receipt._tag === "Left");
+    expect(exit.value.receipt.left).toMatchObject({
+      _tag: "MintRejected",
+      code: 11008,
+    });
+    expect(sendCalls.map((call) => call.sendCounter)).toEqual([
+      1, 129, 257, 385, 513,
     ]);
+    expect(restoreCalls).toHaveLength(5);
+    expect(exit.value.rows.every((row) => row.state === "accepted")).toBe(true);
   });
 
   it("offers proofs shared by twin rows only once and consumes both rows", async () => {
