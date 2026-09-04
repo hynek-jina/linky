@@ -3,8 +3,8 @@ import { unknownErrorMessage } from "../mint/internal/loadWallet";
 
 /**
  * Recognizers for the mint failures the swap loop can recover from by moving
- * the deterministic counter, ported verbatim from the web app's
- * `cashuErrors.ts` (message fallbacks included: not every mint sends codes).
+ * the deterministic counter. Message fallbacks included: not every mint sends
+ * codes.
  */
 
 const mintErrorCode = (error: unknown): number | null =>
@@ -30,7 +30,7 @@ export const isOutputsAlreadySignedError = (error: unknown): boolean => {
 // NUT-04/NUT-05 code 11004: the mint holds orphan unsigned promise rows
 // (`c_ IS NULL`) matching our B_'s, typically melt-blank leftovers. Restore
 // cannot surface unsigned promises, so recovery uses a fixed bump instead.
-export const isOutputsPendingError = (error: unknown): boolean => {
+const isOutputsPendingError = (error: unknown): boolean => {
   if (mintErrorCode(error) === 11004) return true;
   const message = lowercaseMessage(error);
   return (

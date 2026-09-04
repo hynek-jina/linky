@@ -13,7 +13,7 @@ import { Inspector } from "../inspector/Inspector";
 import { deterministicCounterKey } from "../internal/counters";
 import { WalletInstances } from "../mint/internal/WalletInstances";
 import type { LoadedWallet } from "../mint/internal/WalletInstances";
-import { deterministicIdTokenStore } from "../ports/deterministicIdTokenStore";
+import { deterministicIdTokenStore } from "../testing/deterministicIdTokenStore";
 import { inMemoryKeyValueStore } from "../ports/inMemoryKeyValueStore";
 import { inMemoryTokenStore } from "../ports/inMemoryTokenStore";
 import { KeyValueStore } from "../ports/KeyValueStore";

@@ -1,7 +1,7 @@
 import { Clock, Effect, Layer } from "effect";
 import { TokenRowId, UnixSeconds } from "../domain/primitives";
-import { StoredTokenRow, TokenStore } from "./TokenStore";
-import type { TokenStoreService } from "./TokenStore";
+import { StoredTokenRow, TokenStore } from "../ports/TokenStore";
+import type { TokenStoreService } from "../ports/TokenStore";
 
 /**
  * In-memory store with the observable semantics of stores that derive row
@@ -11,7 +11,7 @@ import type { TokenStoreService } from "./TokenStore";
  * are ignored. Exists so package tests exercise flows against id collisions
  * a unique-id store can never produce.
  */
-export const makeDeterministicIdTokenStore = (): TokenStoreService => {
+const makeDeterministicIdTokenStore = (): TokenStoreService => {
   const idByText = new Map<string, TokenRowId>();
   const idFor = (originalTokenText: string): TokenRowId => {
     const key = originalTokenText.trim();

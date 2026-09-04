@@ -12,7 +12,7 @@ import type { LinkshuInspectorEvent } from "../inspector/events";
 import { Inspector } from "../inspector/Inspector";
 import { WalletInstances } from "../mint/internal/WalletInstances";
 import type { LoadedWallet } from "../mint/internal/WalletInstances";
-import { deterministicIdTokenStore } from "../ports/deterministicIdTokenStore";
+import { deterministicIdTokenStore } from "../testing/deterministicIdTokenStore";
 import { inMemoryKeyValueStore } from "../ports/inMemoryKeyValueStore";
 import {
   inMemoryTokenStore,
