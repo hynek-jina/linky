@@ -8,6 +8,19 @@ export const getInitials = (name: string): string => {
   return letters.join("") || "?";
 };
 
+export const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = unitIndex === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+};
+
 export const formatShortNpub = (npub: string): string => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return "";

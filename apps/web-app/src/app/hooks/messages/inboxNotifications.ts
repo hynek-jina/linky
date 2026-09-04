@@ -29,6 +29,7 @@ import type {
 } from "../../types/appTypes";
 import type { InsertedChatMessage } from "./chatInbox";
 import { trimString } from "../../../utils/validation";
+import { nowSeconds } from "../../../utils/time";
 
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
 
@@ -241,11 +242,7 @@ export const handleBankOfferSnapshotReceived = (
     : false;
   const isExpiredOffer =
     offerInfo && !isTerminalOffer
-      ? isLinkyBankPaymentOfferExpired(
-          offerInfo,
-          event.sentAt,
-          Math.floor(Date.now() / 1e3),
-        )
+      ? isLinkyBankPaymentOfferExpired(offerInfo, event.sentAt, nowSeconds())
       : false;
   if (isExpiredOffer || (!isTerminalOffer && hasTerminalKnownOffer)) return;
 

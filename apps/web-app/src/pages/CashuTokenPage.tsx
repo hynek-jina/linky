@@ -17,6 +17,7 @@ import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId, CashuTokenRow } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
+import { getMintDisplay } from "../app/lib/tokenMessageInfo";
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
@@ -79,14 +80,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     const mint = String(tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
     return { mintText: mint, tokenAmount: amount };
   }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
-  const mintDisplay = (() => {
-    if (!mintText) return null;
-    try {
-      return new URL(mintText).host;
-    } catch {
-      return mintText;
-    }
-  })();
+  const mintDisplay = getMintDisplay(mintText);
   const isExternalized = isCashuTokenExternalizedState(row?.state);
   const isIssued = isCashuTokenIssuedState(row?.state);
   const isReserved = isCashuTokenReservedState(row?.state);

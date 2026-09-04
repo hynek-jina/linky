@@ -2,6 +2,7 @@ import { Check, CheckCheck, FolderPlus, Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
+  formatRemainingTime,
   isLinkyBankPaymentOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   type LinkyBankPaymentOfferInfo,
@@ -131,19 +132,6 @@ const getChatTimeFormatter = (locale: string): Intl.DateTimeFormat => {
   });
   chatTimeFormatters.set(locale, formatter);
   return formatter;
-};
-
-const formatRemainingTime = (
-  remainingSec: number,
-  t: (key: string) => string,
-): string => {
-  if (remainingSec <= 0) return t("bankPaymentOfferExpired");
-
-  const minutes = Math.floor(remainingSec / 60);
-  const seconds = Math.max(0, remainingSec % 60);
-  return t("bankPaymentOfferTimeRemainingClock")
-    .replace("{minutes}", String(minutes))
-    .replace("{seconds}", String(seconds).padStart(2, "0"));
 };
 
 const getBankPaymentOfferDescription = (

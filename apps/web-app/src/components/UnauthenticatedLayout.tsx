@@ -17,6 +17,7 @@ import { AvatarControlGrid } from "./AvatarControlGrid";
 import { AvatarPhotoInput } from "./AvatarPhotoInput";
 import { SelfieCaptureModal } from "./SelfieCaptureModal";
 import { PasteIcon } from "./icons";
+import { sleep } from "../utils/time";
 
 type UnauthenticatedLayoutProps = {
   confirmPendingOnboardingProfile: () => Promise<void>;
@@ -438,9 +439,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
         passwordManagerSaveFormRef.current?.requestSave();
         await savePendingOnboardingBackupToPasswordManager(username, password);
 
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, 150);
-        });
+        await sleep(150);
       }
 
       await confirmPendingOnboardingProfile();

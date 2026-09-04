@@ -55,6 +55,7 @@ import {
 } from "../../../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
+  formatMintHost,
   MAIN_MINT_URL,
   normalizeMintUrl,
 } from "../../../utils/mint";
@@ -2281,19 +2282,11 @@ export const useCashuWalletComposition = ({
     return selected;
   }, [cashuAcceptedMintBalances, mainMintForTokenList]);
 
-  const formatMintButtonLabel = React.useCallback((mintUrl: string) => {
-    try {
-      return new URL(mintUrl).host || mintUrl.replace(/^https?:\/\//i, "");
-    } catch {
-      return mintUrl.replace(/^https?:\/\//i, "");
-    }
-  }, []);
-
   const cashuMeltToMainMintButtonLabel =
     mainMintForTokenList && largestForeignMintForTokenList
       ? t("cashuMeltToMainMint").replace(
           "{mint}",
-          formatMintButtonLabel(mainMintForTokenList),
+          formatMintHost(mainMintForTokenList),
         )
       : null;
 
@@ -2438,7 +2431,7 @@ export const useCashuWalletComposition = ({
           t("cashuMeltToMainMintDone")
             .replace("{amount}", `${moved.approxPrefix}${moved.amountText}`)
             .replace("{unit}", moved.unitLabel)
-            .replace("{mint}", formatMintButtonLabel(targetMint)),
+            .replace("{mint}", formatMintHost(targetMint)),
         );
         return;
       }
@@ -2480,7 +2473,6 @@ export const useCashuWalletComposition = ({
     cashuIsBusy,
     defaultMintUrl,
     formatDisplayedAmountParts,
-    formatMintButtonLabel,
     largestForeignMintForTokenList,
     rememberSeenMint,
     setCashuIsBusy,

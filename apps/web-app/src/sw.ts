@@ -35,6 +35,7 @@ import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import { getStoredPushNsec } from "./utils/pushNsecStorage";
+import { formatShortNpub } from "./utils/formatting";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -179,13 +180,6 @@ function truncateNotificationBody(value: string): string {
     return normalized;
   }
   return `${normalized.slice(0, 140)}…`;
-}
-
-function formatShortNpub(value: string): string {
-  const trimmed = String(value ?? "").trim();
-  if (!trimmed) return "";
-  if (trimmed.length <= 18) return trimmed;
-  return `${trimmed.slice(0, 10)}...${trimmed.slice(-6)}`;
 }
 
 function formatNotificationPeerLabel(pubkeyHex: string): string {

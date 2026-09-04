@@ -26,6 +26,8 @@ import {
 } from "./displayAmounts";
 import { asNonEmptyString, trimString } from "./validation";
 
+import { nowSeconds, sleep } from "./time";
+
 export const safeLocalStorageGet = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -99,12 +101,6 @@ const createLeaseLockOwner = (): string => {
   const randomUuid = globalThis.crypto?.randomUUID?.();
   if (typeof randomUuid === "string" && randomUuid.trim()) return randomUuid;
   return `${Date.now()}:${Math.random().toString(36).slice(2)}`;
-};
-
-const sleep = async (delayMs: number): Promise<void> => {
-  await new Promise<void>((resolve) => {
-    globalThis.setTimeout(resolve, delayMs);
-  });
 };
 
 const readLocalStorageLeaseLock = (key: string) =>
@@ -236,9 +232,7 @@ export const getInitialSeenReceiptsEnabledAtSec = (): number | null => {
   );
   if (raw === "0") return null;
   const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0
-    ? parsed
-    : Math.floor(Date.now() / 1e3);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : nowSeconds();
 };
 
 export const getInitialPayWithCashuEnabled = (): boolean => {

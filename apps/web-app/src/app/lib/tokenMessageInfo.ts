@@ -15,7 +15,7 @@ export interface CashuTokenMessageInfo {
   unit: string | null;
 }
 
-const getMintDisplay = (mintValue: MintUrlInput): string | null => {
+export const getMintDisplay = (mintValue: MintUrlInput): string | null => {
   const mintText = String(mintValue ?? "").trim();
   if (!mintText) return null;
   try {

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 export const UnknownRecord = Schema.Record({
   key: Schema.String,
   value: Schema.Unknown,

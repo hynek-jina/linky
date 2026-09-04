@@ -2,10 +2,10 @@ import { isRecord } from "./unknown";
 import { asNonEmptyString } from "./validation";
 import { encodeNpub, parsePubkey, RelayUrl } from "@linky/linkstr";
 import { Schema } from "effect";
+import { stripNostrUriPrefix } from "./nostrNpub";
 
 export const DEFAULT_NIP05_DOMAIN = "linky.fit";
 
-const NOSTR_URI_PREFIX = "nostr:";
 const NIP05_LOCAL_PART_RE = /^[a-z0-9._-]+$/i;
 const NIP05_DOMAIN_RE = /^[a-z0-9.-]+$/i;
 
@@ -27,14 +27,6 @@ type Nip05ResolutionResult =
   | { identifier: Nip05Identifier; kind: "not_found" }
   | { identifier: Nip05Identifier; kind: "error"; message: string }
   | { kind: "none" };
-
-const stripNostrUriPrefix = (value: string): string => {
-  const trimmed = value.trim();
-  return trimmed.slice(0, NOSTR_URI_PREFIX.length).toLowerCase() ===
-    NOSTR_URI_PREFIX
-    ? trimmed.slice(NOSTR_URI_PREFIX.length).trim()
-    : trimmed;
-};
 
 const looksLikeDirectNpub = (value: string): boolean => {
   const normalized = stripNostrUriPrefix(value);

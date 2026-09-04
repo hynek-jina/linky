@@ -25,6 +25,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
 import { makeLocalId } from "../../../utils/validation";
+import { nowSeconds } from "../../../utils/time";
 
 const OptionalStoredValue = Schema.optional(
   Schema.NullOr(Schema.Union(Schema.String, Schema.Number, Schema.Boolean)),
@@ -255,7 +256,7 @@ export const useMintInfoStore = ({
           ? performance.now()
           : Date.now();
 
-      const nowSec = Math.floor(Date.now() / 1000);
+      const nowSec = nowSeconds();
       recordMintRuntime(cleaned, { lastCheckedAtSec: nowSec, latencyMs: null });
 
       try {
@@ -360,7 +361,7 @@ export const useMintInfoStore = ({
     if (!cleaned || isMintDeleted(cleaned)) return;
 
     const existing = mintInfoByUrl.get(cleaned);
-    const nowSec = Math.floor(Date.now() / 1000);
+    const nowSec = nowSeconds();
     if (!existing) {
       touchMintInfo(cleaned, nowSec);
       return;
@@ -390,7 +391,7 @@ export const useMintInfoStore = ({
   React.useEffect(() => {
     if (encounteredMintUrls.length === 0) return;
 
-    const nowSec = Math.floor(Date.now() / 1000);
+    const nowSec = nowSeconds();
     const candidates = new Set<string>();
 
     for (const mintUrl of encounteredMintUrls) candidates.add(mintUrl);

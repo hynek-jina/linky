@@ -12,6 +12,7 @@ import type {
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import { isUnknownContactId } from "../messages/contactIdentity";
 import type { ReceiveCashuToken } from "../composition/useLinkshuComposition";
+import { nowSeconds } from "../../../utils/time";
 
 interface CashuTokenMetaRow {
   id: string;
@@ -151,7 +152,7 @@ export const useSaveCashuFromText = ({
 
           const cleanedMint = String(receipt.mint).trim().replace(/\/+$/, "");
           if (cleanedMint && !isMintDeleted(cleanedMint)) {
-            const nowSec = Math.floor(Date.now() / 1000);
+            const nowSec = nowSeconds();
             const existing = mintInfoByUrl.get(cleanedMint);
             touchMintInfo(cleanedMint, nowSec);
 

@@ -46,6 +46,8 @@ import type {
   ReceiveCashuToken,
 } from "../composition/useLinkshuComposition";
 
+import { nowSeconds } from "../../../utils/time";
+
 interface UseNpubCashClaimParams {
   /** Null until the linkshu runtime is composed (seed + owners resolved). */
   adoptPaidCashuQuote: AdoptPaidCashuQuote | null;
@@ -169,7 +171,7 @@ export const useNpubCashClaim = ({
     ({ amount, mint, unit, method, details }: ReceivedPayment) => {
       const cleanedMint = mint.trim().replace(/\/+$/, "");
       if (cleanedMint && !isMintDeleted(cleanedMint)) {
-        const nowSec = Math.floor(Date.now() / 1000);
+        const nowSec = nowSeconds();
         const existing = mintInfoByUrl.get(cleanedMint);
         touchMintInfo(cleanedMint, nowSec);
 

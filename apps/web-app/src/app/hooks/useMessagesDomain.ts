@@ -40,6 +40,7 @@ import {
   makeLocalId,
   trimString,
 } from "../../utils/validation";
+import { nowSeconds } from "../../utils/time";
 
 interface UseMessagesDomainParams {
   appOwnerId: OwnerId | null;
@@ -1686,7 +1687,7 @@ export const useMessagesDomain = ({
         id: makeLocalId(),
         contactId: toText(payload.contactId),
         amountSat,
-        createdAtSec: Math.floor(Date.now() / 1000),
+        createdAtSec: nowSeconds(),
         ...(payload.messageId ? { messageId: payload.messageId } : {}),
       };
 

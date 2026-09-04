@@ -10,6 +10,7 @@ import {
   type ProfileStatusCurrency,
 } from "../../../nostrStatus";
 import { saveCachedStatus } from "../../../profileCache";
+import { nowSeconds } from "../../../utils/time";
 
 interface UseProfileStatusEditorParams {
   currentNpub: string | null;
@@ -74,11 +75,7 @@ export const useProfileStatusEditor = ({
           new StatusDraft({ content: nextStatus ?? "" }),
         );
         if (Exit.isFailure(exit)) throw new Error("publish failed");
-        saveCachedStatus(
-          currentNpub,
-          nextStatus ?? "",
-          Math.floor(Date.now() / 1000),
-        );
+        saveCachedStatus(currentNpub, nextStatus ?? "", nowSeconds());
       } catch (error) {
         setMyProfileStatus(previousStatus);
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);

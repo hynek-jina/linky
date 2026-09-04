@@ -66,6 +66,7 @@ import { ReplyPreview } from "../components/ReplyPreview";
 import { navigateTo } from "../hooks/useRouting";
 import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { nowSeconds } from "../utils/time";
 
 interface Contact {
   id: string;
@@ -1202,7 +1203,7 @@ export const ChatPage: FC<ChatPageProps> = ({
     const chatId = String(selectedContact?.id ?? "").trim();
     if (!chatId) return;
 
-    const nowSec = Math.floor(Date.now() / 1_000);
+    const nowSec = nowSeconds();
     let newestOffer: { offerId: string; updatedAtSec: number } | null = null;
 
     for (const message of bankPaymentOfferMessages) {

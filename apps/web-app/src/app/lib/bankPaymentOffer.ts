@@ -6,6 +6,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { readField } from "../../utils/unknown";
+import { nowSeconds } from "../../utils/time";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
@@ -207,7 +208,7 @@ export const rememberLinkyBankPaymentOfferSpdPayload = (args: {
   const spdPayload = args.spdPayload.trim();
   if (!offerId || !spdPayload) return;
 
-  const nowSec = Math.floor(Date.now() / 1000);
+  const nowSec = nowSeconds();
   pruneExpiredSpdRecords(nowSec);
   writeSpdRecord(offerId, {
     createdAtSec: nowSec,
@@ -227,7 +228,7 @@ export const readLinkyBankPaymentOfferSpdRecord = (args: {
   if (!record) return null;
   // Delete rather than just hide an expired record so a later clock
   // correction cannot bring it back to life.
-  if (isExpiredSpdRecord(record, Math.floor(Date.now() / 1000))) {
+  if (isExpiredSpdRecord(record, nowSeconds())) {
     forgetLinkyBankPaymentOfferSpdPayload(args.offerId);
     return null;
   }
@@ -362,7 +363,7 @@ export const readLinkyBankPaymentOfferStaggerRecords = (
   ownerPubkey: string,
 ): LinkyBankPaymentOfferStaggerRecord[] => {
   const records: LinkyBankPaymentOfferStaggerRecord[] = [];
-  const nowSec = Math.floor(Date.now() / 1000);
+  const nowSec = nowSeconds();
   for (const key of safeLocalStorageKeys()) {
     if (
       !key.startsWith(`${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.`)
@@ -751,4 +752,17 @@ export const mergeBankPaymentOffersIntoLastMessageByContactId = (
   }
 
   return merged;
+};
+
+export const formatRemainingTime = (
+  remainingSec: number,
+  t: (key: string) => string,
+): string => {
+  if (remainingSec <= 0) return t("bankPaymentOfferExpired");
+
+  const minutes = Math.floor(remainingSec / 60);
+  const seconds = Math.max(0, remainingSec % 60);
+  return t("bankPaymentOfferTimeRemainingClock")
+    .replace("{minutes}", String(minutes))
+    .replace("{seconds}", String(seconds).padStart(2, "0"));
 };

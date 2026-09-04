@@ -15,6 +15,7 @@ import type {
   ContactsGuideKey,
   LocalNostrMessage,
 } from "../types/appTypes";
+import { nowSeconds } from "../../utils/time";
 
 export interface MainSwipeRouteProps {
   activeGroup: string | null;
@@ -77,9 +78,7 @@ const useVisibleContactSections = (
   bankPaymentOfferMessages: readonly LocalNostrMessage[],
   visibleContacts: MainSwipeRouteProps["visibleContacts"],
 ): VisibleContactSections => {
-  const [nowSec, setNowSec] = React.useState(() =>
-    Math.floor(Date.now() / 1_000),
-  );
+  const [nowSec, setNowSec] = React.useState(() => nowSeconds());
   const activeOffers = React.useMemo(
     () => getActiveBankPaymentOfferContacts(bankPaymentOfferMessages, nowSec),
     [bankPaymentOfferMessages, nowSec],
@@ -88,7 +87,7 @@ const useVisibleContactSections = (
   React.useEffect(() => {
     if (activeOffers.nextExpiryAtSec === null) return;
     const timeoutId = window.setTimeout(
-      () => setNowSec(Math.floor(Date.now() / 1_000)),
+      () => setNowSec(nowSeconds()),
       Math.max(0, activeOffers.nextExpiryAtSec * 1_000 - Date.now() + 25),
     );
     return () => window.clearTimeout(timeoutId);

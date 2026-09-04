@@ -152,6 +152,7 @@ import {
 import { readField } from "../../../utils/unknown";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
+import { nowSeconds } from "../../../utils/time";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 
@@ -2355,7 +2356,7 @@ export const useContactsMessagingComposition = ({
           hasPendingBankPaymentOfferResponderWork(
             bankPaymentOfferMessages,
             myPubHex,
-            Math.floor(Date.now() / 1e3),
+            nowSeconds(),
           )
         ) {
           retryTimeoutHandle = window.setTimeout(() => {
@@ -2410,7 +2411,7 @@ export const useContactsMessagingComposition = ({
     let timeoutId: number | undefined;
     const bumpTick = () => setBankPaymentOfferStaggerTick((tick) => tick + 1);
 
-    const nowSec = Math.floor(Date.now() / 1000);
+    const nowSec = nowSeconds();
     const dueRecords: typeof records = [];
     let nextDueAtSec: number | null = null;
     for (const record of records) {
@@ -2468,7 +2469,7 @@ export const useContactsMessagingComposition = ({
                 return;
               }
 
-              const dueNowSec = Math.floor(Date.now() / 1000);
+              const dueNowSec = nowSeconds();
               const sentContactIds: string[] = [];
               for (const recipient of lockedRecord.pending) {
                 if (cancelled) return;
@@ -2596,7 +2597,7 @@ export const useContactsMessagingComposition = ({
       groups.set(info.offerId, group);
     }
 
-    const nowSec = Math.floor(Date.now() / 1e3);
+    const nowSec = nowSeconds();
     const statusPriority: LinkyBankPaymentOfferStatus[] = [
       "bank_paid",
       "bank_details_sent",

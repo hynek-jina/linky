@@ -1,5 +1,6 @@
 import { parseTokenText } from "@linky/linkshu";
 import { normalizeNpubIdentifier } from "./nostrNpub";
+import { safeDecodeURIComponent } from "./url";
 
 interface NativeDeepLinkScanText {
   kind: "scan-text";
@@ -10,16 +11,8 @@ interface NativeDeepLinkScanText {
 const NOSTR_SCHEME_PREFIX = /^nostr:(\/\/)?/i;
 const CASHU_SCHEME_PREFIX = /^cashu:(\/\/)?/i;
 
-const safeDecode = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
 const normalizeCandidate = (value: string): string => {
-  return safeDecode(value).trim();
+  return safeDecodeURIComponent(value).trim();
 };
 
 const normalizeStrictNpub = (value: string): string | null => {
