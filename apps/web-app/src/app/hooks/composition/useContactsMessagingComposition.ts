@@ -67,14 +67,6 @@ import { setStoredPushContactNames } from "../../../utils/pushContactNamesStorag
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
 import {
-  getInitialBankPaymentOfferRecipientCount,
-  getInitialBankPaymentOfferStaggerDelaySec,
-  safeLocalStorageGet,
-  safeLocalStorageGetJson,
-  safeLocalStorageSetJson,
-  withLocalStorageLeaseLock,
-} from "../../../utils/storage";
-import {
   forgetLinkyBankPaymentOfferSpdPayload,
   getLastBankPaymentOfferResponseSecByContactId,
   getLinkyBankPaymentOfferExpiresAtSec,
@@ -149,6 +141,14 @@ import { useMessagesDomain } from "../useMessagesDomain";
 import { usePushRegistrationLifecycle } from "../usePushRegistrationLifecycle";
 import { useRelayDomain } from "../useRelayDomain";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
+import {
+  getInitialBankPaymentOfferRecipientCount,
+  getInitialBankPaymentOfferStaggerDelaySec,
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageSetJson,
+  withLocalStorageLeaseLock,
+} from "../../../utils/storage";
 import { readField } from "../../../utils/unknown";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
@@ -1051,7 +1051,11 @@ export const useContactsMessagingComposition = ({
 
   const unknownContacts = React.useMemo<UnknownChatContact[]>(() => {
     const blockedPubkeys = new Set(
-      safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+      safeLocalStorageGetJson(
+        BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+        Schema.Array(Schema.String),
+        [],
+      )
         .map((entry) => normalizePubkeyHex(entry))
         .filter((entry): entry is string => Boolean(entry)),
     );
@@ -2802,7 +2806,11 @@ export const useContactsMessagingComposition = ({
 
       const mergedBlockedPubkeys = Array.from(
         new Set(
-          safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+          safeLocalStorageGetJson(
+            BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+            Schema.Array(Schema.String),
+            [],
+          )
             .map((entry) => normalizePubkeyHex(entry))
             .filter((entry): entry is string => Boolean(entry))
             .concat(normalizedPubkey),

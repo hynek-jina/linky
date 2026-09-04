@@ -32,8 +32,14 @@ import {
   encodeRotationSnapshot,
   type RotationSnapshot,
 } from "../lib/rotationSnapshot";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageSet,
+  safeLocalStorageSetJson,
+} from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
-import { getUnknownErrorMessage } from "../../utils/unknown";
+import { UnknownRecord, getUnknownErrorMessage } from "../../utils/unknown";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -227,37 +233,20 @@ const upsertOwnerMetaSnapshot = (
     { ownerId },
   );
 
-const parseCounterMap = (raw: string | null): CounterMap => {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return {};
-    const out: CounterMap = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-        out[key] = Math.trunc(value);
-      }
-    }
-    return out;
-  } catch {
-    return {};
-  }
-};
-
 const readCounterMap = (storageKey: string): CounterMap => {
-  try {
-    return parseCounterMap(localStorage.getItem(storageKey));
-  } catch {
-    return {};
+  const out: CounterMap = {};
+  for (const [key, value] of Object.entries(
+    safeLocalStorageGetJson(storageKey, UnknownRecord, {}),
+  )) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      out[key] = Math.trunc(value);
+    }
   }
+  return out;
 };
 
 const writeCounterMap = (storageKey: string, map: CounterMap): void => {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(map));
-  } catch {
-    // ignore
-  }
+  safeLocalStorageSetJson(storageKey, map);
 };
 
 const getCounterValue = (storageKey: string, index: number): number => {
@@ -280,22 +269,14 @@ const hasCounterValue = (storageKey: string, index: number): boolean => {
   return Object.prototype.hasOwnProperty.call(map, String(index));
 };
 
-const getStoredTimestampMs = (storageKey: string): number => {
-  try {
-    const raw = Number(localStorage.getItem(storageKey));
-    if (!Number.isFinite(raw) || raw < 0) return 0;
-    return Math.trunc(raw);
-  } catch {
-    return 0;
-  }
+const readStoredNonNegativeInt = (storageKey: string): number => {
+  const raw = Number(safeLocalStorageGet(storageKey));
+  if (!Number.isFinite(raw) || raw < 0) return 0;
+  return Math.trunc(raw);
 };
 
-const setStoredTimestampMs = (storageKey: string, value: number): void => {
-  try {
-    localStorage.setItem(storageKey, String(Math.max(0, Math.trunc(value))));
-  } catch {
-    // ignore
-  }
+const writeStoredNonNegativeInt = (storageKey: string, value: number): void => {
+  safeLocalStorageSet(storageKey, String(Math.max(0, Math.trunc(value))));
 };
 
 const getCooldownRemainingMs = (
@@ -303,40 +284,18 @@ const getCooldownRemainingMs = (
   nowMs: number,
   cooldownMs: number,
 ): number => {
-  const lastMs = getStoredTimestampMs(storageKey);
+  const lastMs = readStoredNonNegativeInt(storageKey);
   if (lastMs <= 0) return 0;
   const elapsed = Math.max(0, nowMs - lastMs);
   return Math.max(0, cooldownMs - elapsed);
 };
 
-const getStoredIndex = (storageKey: string): number => {
-  try {
-    const raw = Number(localStorage.getItem(storageKey));
-    if (!Number.isFinite(raw) || raw < 0) return 0;
-    return Math.trunc(raw);
-  } catch {
-    return 0;
-  }
-};
-
 const getStoredOptionalIndex = (storageKey: string): number | null => {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw === null) return null;
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < 0) return 0;
-    return Math.trunc(parsed);
-  } catch {
-    return null;
-  }
-};
-
-const setStoredIndex = (storageKey: string, value: number): void => {
-  try {
-    localStorage.setItem(storageKey, String(Math.max(0, Math.trunc(value))));
-  } catch {
-    // ignore
-  }
+  const raw = safeLocalStorageGet(storageKey);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.trunc(parsed);
 };
 
 const toAppOwnerFromMnemonic = (mnemonic: string): Evolu.AppOwner | null => {
@@ -498,7 +457,7 @@ export const useEvoluContactsOwnerRotation = ({
   upsert,
 }: UseEvoluContactsOwnerRotationParams): UseEvoluContactsOwnerRotationResult => {
   const initialContactsOwnerIndex = React.useMemo(
-    () => getStoredIndex(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY),
+    () => readStoredNonNegativeInt(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY),
     [],
   );
   const [contactsOwnerIndex, setContactsOwnerIndex] = React.useState<number>(
@@ -510,11 +469,11 @@ export const useEvoluContactsOwnerRotation = ({
       initialContactsOwnerIndex,
   );
   const [messagesOwnerIndex, setMessagesOwnerIndex] = React.useState<number>(
-    () => getStoredIndex(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY),
+    () => readStoredNonNegativeInt(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY),
   );
   const [transactionsOwnerIndex, setTransactionsOwnerIndex] =
     React.useState<number>(() =>
-      getStoredIndex(EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY),
+      readStoredNonNegativeInt(EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY),
     );
   const [fixedOwnerSyncData, setFixedOwnerSyncData] =
     React.useState<FixedOwnerSyncData | null>(null);
@@ -1128,9 +1087,12 @@ export const useEvoluContactsOwnerRotation = ({
         extra,
       } = params;
       if (nextIndex === currentIndex) return;
-      setStoredIndex(indexStorageKey, nextIndex);
+      writeStoredNonNegativeInt(indexStorageKey, nextIndex);
       setCounterValue(baselineStorageKey, nextIndex, baseline ?? 0);
-      setStoredTimestampMs(lastRotatedStorageKey, rotatedAtMs ?? Date.now());
+      writeStoredNonNegativeInt(
+        lastRotatedStorageKey,
+        rotatedAtMs ?? Date.now(),
+      );
       setCurrentIndex(nextIndex);
       extra?.();
     };
@@ -1208,9 +1170,12 @@ export const useEvoluContactsOwnerRotation = ({
     if (cashuOwnerIndex <= 0) return;
     if (cashuOwnerWriteCount > 0) return;
 
-    setStoredIndex(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, 0);
+    writeStoredNonNegativeInt(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, 0);
     setCounterValue(EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY, 0, 0);
-    setStoredTimestampMs(EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY, 0);
+    writeStoredNonNegativeInt(
+      EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      0,
+    );
     setCashuOwnerIndex(0);
   }, [
     cashuOwnerIndex,
@@ -1415,13 +1380,16 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      setStoredIndex(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY, nextIndex);
+      writeStoredNonNegativeInt(
+        EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+        nextIndex,
+      );
       setCounterValue(
         EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
         nextIndex,
         0,
       );
-      setStoredTimestampMs(
+      writeStoredNonNegativeInt(
         EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
         nowMs,
       );
@@ -1502,7 +1470,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      setStoredIndex(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, nextIndex);
+      writeStoredNonNegativeInt(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, nextIndex);
       const nextOwnerCashuRows = allCashuTokensRows.reduce(
         (count, row) =>
           readRowOwnerId(row) === String(derived.cashuOwner.id).trim()
@@ -1515,7 +1483,7 @@ export const useEvoluContactsOwnerRotation = ({
         nextIndex,
         nextOwnerCashuRows,
       );
-      setStoredTimestampMs(
+      writeStoredNonNegativeInt(
         EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
         nowMs,
       );
@@ -1652,7 +1620,10 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      setStoredIndex(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY, nextIndex);
+      writeStoredNonNegativeInt(
+        EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+        nextIndex,
+      );
       const nextOwnerMessageRows = allNostrMessagesRows.reduce(
         (count, row) =>
           readRowOwnerId(row) === String(derived.messagesOwner.id).trim()
@@ -1672,7 +1643,7 @@ export const useEvoluContactsOwnerRotation = ({
         nextIndex,
         nextOwnerMessageRows + nextOwnerReactionRows,
       );
-      setStoredTimestampMs(
+      writeStoredNonNegativeInt(
         EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
         nowMs,
       );
@@ -1783,7 +1754,10 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      setStoredIndex(EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY, nextIndex);
+      writeStoredNonNegativeInt(
+        EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
+        nextIndex,
+      );
       const nextOwnerTransactionRows = allTransactionsRows.reduce(
         (count, row) =>
           readRowOwnerId(row) === String(derived.transactionsOwner.id).trim()
@@ -1796,7 +1770,7 @@ export const useEvoluContactsOwnerRotation = ({
         nextIndex,
         nextOwnerTransactionRows,
       );
-      setStoredTimestampMs(
+      writeStoredNonNegativeInt(
         EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
         nowMs,
       );

@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { decodeNpub, identityFromNsec, UnixSeconds } from "@linky/linkstr";
 import type { InboxDelivery, WrapInboxEvent } from "@linky/linkstr";
 import {
@@ -10,11 +11,6 @@ import React from "react";
 import type { PushToastOptions } from "../../../hooks/useToasts";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
-import {
-  getInitialNostrIdentitySource,
-  getInitialNostrIdentitySwitchedAtSec,
-  safeLocalStorageGetJson,
-} from "../../../utils/storage";
 import type {
   ContactNameRowLike,
   LocalNostrMessage,
@@ -52,6 +48,11 @@ import {
   type PeerSeenWindow,
   type SeenReceiptInboxContext,
 } from "./seenReceiptInbox";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+  safeLocalStorageGetJson,
+} from "../../../utils/storage";
 import { trimString } from "../../../utils/validation";
 
 // Fallback backfill window for a first session without a persisted cursor.
@@ -60,7 +61,11 @@ const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
 const isBlockedPubkey = (pubkey: string): boolean => {
   const normalizedPubkey = normalizePubkeyHex(pubkey);
   if (!normalizedPubkey) return false;
-  return safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+  return safeLocalStorageGetJson(
+    BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+    Schema.Array(Schema.String),
+    [],
+  )
     .map(normalizePubkeyHex)
     .filter((entry): entry is string => Boolean(entry))
     .includes(normalizedPubkey);

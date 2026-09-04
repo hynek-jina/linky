@@ -1,3 +1,4 @@
+import { Schema as EffectSchema } from "effect";
 import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
@@ -10,6 +11,7 @@ import type { JsonValue } from "./types/json";
 import { base64 } from "@scure/base";
 import { decodeBase64Url } from "./utils/base64";
 import {
+  safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
 } from "./utils/storage";
@@ -20,11 +22,7 @@ const isEvoluLoggingEnabled = (): boolean => {
 
   // Enable only when explicitly requested, because SQL logging is very noisy.
   // Toggle in devtools: localStorage.setItem('linky_debug_evolu_sql', '1')
-  try {
-    return localStorage.getItem("linky_debug_evolu_sql") === "1";
-  } catch {
-    return false;
-  }
+  return safeLocalStorageGet("linky_debug_evolu_sql") === "1";
 };
 
 const EVOLU_SERVERS_STORAGE_KEY = "linky.evoluServers.v1";
@@ -239,8 +237,9 @@ const normalizeUrlList = (
 };
 
 const getEvoluDisabledServerUrls = (): ReadonlyArray<string> => {
-  const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
+  const stored = safeLocalStorageGetJson(
     EVOLU_SERVERS_DISABLED_STORAGE_KEY,
+    EffectSchema.Array(EffectSchema.String),
     [],
   );
   return normalizeUrlList(stored);
@@ -261,16 +260,16 @@ export const setEvoluServerDisabled = (
 };
 
 const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
-  const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
+  const stored = safeLocalStorageGetJson(
     EVOLU_SERVERS_STORAGE_KEY,
+    EffectSchema.Array(EffectSchema.String),
     [],
   );
 
-  const defaultRemoved = Boolean(
-    safeLocalStorageGetJson<boolean>(
-      EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY,
-      false,
-    ),
+  const defaultRemoved = safeLocalStorageGetJson(
+    EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY,
+    EffectSchema.Boolean,
+    false,
   );
 
   const combined = [
@@ -578,15 +577,9 @@ const getEvolu = (mnemonic?: string | null): EvoluInstance => {
 
   if (!globalEvoluInstance) {
     // Try to get mnemonic from storage on first call
-    const storedMnemonic = (() => {
-      if (typeof localStorage === "undefined") return null;
-      try {
-        return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
-      } catch {
-        return null;
-      }
-    })();
-    globalEvoluInstance = createEvoluForUser(storedMnemonic);
+    globalEvoluInstance = createEvoluForUser(
+      safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY),
+    );
   }
 
   return globalEvoluInstance;
@@ -688,13 +681,7 @@ const getEvoluDatabaseInfo = async (): Promise<{
       if (!root) return 0;
 
       // Get current user's mnemonic
-      const mnemonic = (() => {
-        try {
-          return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
-        } catch {
-          return null;
-        }
-      })();
+      const mnemonic = safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY);
 
       const expectedDir = mnemonic
         ? `.${generateDbNameFromMnemonic(mnemonic)}`
@@ -951,13 +938,7 @@ export const loadEvoluCurrentData = async (): Promise<
 };
 
 export const wipeEvoluStorage = (): void => {
-  const storedMnemonic = (() => {
-    try {
-      return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
-    } catch {
-      return null;
-    }
-  })();
+  const storedMnemonic = safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY);
 
   const mnemonicResult = Evolu.Mnemonic.fromUnknown(storedMnemonic);
   if (!mnemonicResult.ok) {

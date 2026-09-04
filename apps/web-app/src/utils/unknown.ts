@@ -1,3 +1,9 @@
+import { Schema } from "effect";
+export const UnknownRecord = Schema.Record({
+  key: Schema.String,
+  value: Schema.Unknown,
+});
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

@@ -17,6 +17,7 @@ import type {
   OptionalText,
 } from "../types/appTypes";
 import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
+import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -423,11 +424,7 @@ export const useContactsDomain = ({
     const ownerKey = String(appOwnerId);
     const migrationKey = `linky.contacts_owner_migrated_v1:${ownerKey}`;
 
-    try {
-      if (localStorage.getItem(migrationKey) === "1") return;
-    } catch {
-      // ignore
-    }
+    if (safeLocalStorageGet(migrationKey) === "1") return;
 
     let okCount = 0;
     let failCount = 0;
@@ -475,11 +472,7 @@ export const useContactsDomain = ({
       else failCount += 1;
     }
 
-    try {
-      localStorage.setItem(migrationKey, "1");
-    } catch {
-      // ignore
-    }
+    safeLocalStorageSet(migrationKey, "1");
 
     console.log("[linky][evolu] migrated contacts to appOwner", {
       ownerId: ownerKey.length > 10 ? `${ownerKey.slice(0, 10)}…` : ownerKey,

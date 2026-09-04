@@ -1,4 +1,10 @@
 import type { LocalNostrMessage } from "../types/appTypes";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageKeys,
+  safeLocalStorageRemove,
+  safeLocalStorageSetJson,
+} from "../../utils/storage";
 import { readField } from "../../utils/unknown";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
@@ -159,12 +165,7 @@ const isExpiredSpdRecord = (
 const readSpdRecordByStorageKey = (
   storageKey: string,
 ): LinkyBankPaymentOfferSpdRecord | null => {
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(storageKey);
-  } catch {
-    return null;
-  }
+  const raw = safeLocalStorageGet(storageKey);
   if (!raw) return null;
 
   try {
@@ -180,32 +181,20 @@ const writeSpdRecord = (
   offerId: string,
   record: LinkyBankPaymentOfferSpdRecord,
 ): void => {
-  try {
-    window.localStorage.setItem(
-      getSpdRecordStorageKey(offerId),
-      JSON.stringify(record),
-    );
-  } catch {
-    // Local storage can be unavailable in privacy-restricted browsers.
-  }
+  safeLocalStorageSetJson(getSpdRecordStorageKey(offerId), record);
 };
 
 const pruneExpiredSpdRecords = (nowSec: number): void => {
-  try {
-    const staleKeys: string[] = [];
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (
-        !key?.startsWith(`${LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX}.`)
-      ) {
-        continue;
-      }
-      const record = readSpdRecordByStorageKey(key);
-      if (!record || isExpiredSpdRecord(record, nowSec)) staleKeys.push(key);
+  for (const key of safeLocalStorageKeys()) {
+    if (
+      !key.startsWith(`${LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX}.`)
+    ) {
+      continue;
     }
-    for (const key of staleKeys) window.localStorage.removeItem(key);
-  } catch {
-    // ignore
+    const record = readSpdRecordByStorageKey(key);
+    if (!record || isExpiredSpdRecord(record, nowSec)) {
+      safeLocalStorageRemove(key);
+    }
   }
 };
 
@@ -263,11 +252,7 @@ export const markLinkyBankPaymentOfferBankDetailsSent = (args: {
 export const forgetLinkyBankPaymentOfferSpdPayload = (
   offerId: string,
 ): void => {
-  try {
-    window.localStorage.removeItem(getSpdRecordStorageKey(offerId));
-  } catch {
-    // ignore
-  }
+  safeLocalStorageRemove(getSpdRecordStorageKey(offerId));
 };
 
 interface LinkyBankPaymentOfferStaggerRecipient {
@@ -348,12 +333,7 @@ const isExpiredStaggerRecord = (
 const readStaggerRecordByStorageKey = (
   storageKey: string,
 ): LinkyBankPaymentOfferStaggerRecord | null => {
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(storageKey);
-  } catch {
-    return null;
-  }
+  const raw = safeLocalStorageGet(storageKey);
   if (!raw) return null;
 
   try {
@@ -368,54 +348,33 @@ const readStaggerRecordByStorageKey = (
 export const forgetLinkyBankPaymentOfferStaggerQueue = (
   offerId: string,
 ): void => {
-  try {
-    window.localStorage.removeItem(getStaggerRecordStorageKey(offerId));
-  } catch {
-    // ignore
-  }
+  safeLocalStorageRemove(getStaggerRecordStorageKey(offerId));
 };
 
 export const rememberLinkyBankPaymentOfferStaggerQueue = (
   record: LinkyBankPaymentOfferStaggerRecord,
 ): void => {
   if (!record.offerId.trim() || record.pending.length === 0) return;
-  try {
-    window.localStorage.setItem(
-      getStaggerRecordStorageKey(record.offerId),
-      JSON.stringify(record),
-    );
-  } catch {
-    // Local storage can be unavailable in privacy-restricted browsers.
-  }
+  safeLocalStorageSetJson(getStaggerRecordStorageKey(record.offerId), record);
 };
 
 export const readLinkyBankPaymentOfferStaggerRecords = (
   ownerPubkey: string,
 ): LinkyBankPaymentOfferStaggerRecord[] => {
   const records: LinkyBankPaymentOfferStaggerRecord[] = [];
-  try {
-    const nowSec = Math.floor(Date.now() / 1000);
-    const staleKeys: string[] = [];
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (
-        !key?.startsWith(
-          `${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.`,
-        )
-      ) {
-        continue;
-      }
-      const record = readStaggerRecordByStorageKey(key);
-      if (!record || isExpiredStaggerRecord(record, nowSec)) {
-        staleKeys.push(key);
-        continue;
-      }
-      if (record.ownerPubkey !== ownerPubkey) continue;
-      records.push(record);
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const key of safeLocalStorageKeys()) {
+    if (
+      !key.startsWith(`${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.`)
+    ) {
+      continue;
     }
-    for (const key of staleKeys) window.localStorage.removeItem(key);
-  } catch {
-    // ignore
+    const record = readStaggerRecordByStorageKey(key);
+    if (!record || isExpiredStaggerRecord(record, nowSec)) {
+      safeLocalStorageRemove(key);
+      continue;
+    }
+    if (record.ownerPubkey === ownerPubkey) records.push(record);
   }
   return records;
 };
