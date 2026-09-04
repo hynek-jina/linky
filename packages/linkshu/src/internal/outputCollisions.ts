@@ -1,5 +1,5 @@
 import { MintOperationError } from "@cashu/cashu-ts";
-import { unknownErrorMessage } from "../mint/internal/loadWallet";
+import { errorMessage } from "./errorMessage";
 
 /**
  * Recognizers for the mint failures the swap loop can recover from by moving
@@ -11,7 +11,7 @@ const mintErrorCode = (error: unknown): number | null =>
   error instanceof MintOperationError ? error.code : null;
 
 const lowercaseMessage = (error: unknown): string =>
-  unknownErrorMessage(error, "").toLowerCase();
+  errorMessage(error, "").toLowerCase();
 
 // NUT-00 currently assigns 11005, but nutshell and compatible mints have
 // also returned 11003 for the same `outputs already signed` condition.
