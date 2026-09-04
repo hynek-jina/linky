@@ -23,12 +23,9 @@ const getGlobalBuffer = (): typeof Buffer | null => {
   return isBufferConstructor(candidate) ? candidate : null;
 };
 
-const getGlobalProcess = (): ProcessLike | null => {
+const hasGlobalProcess = (): boolean => {
   const candidate = Reflect.get(globalThis, "process");
-  if (candidate && typeof candidate === "object") {
-    return candidate as ProcessLike;
-  }
-  return null;
+  return typeof candidate === "object" && candidate !== null;
 };
 
 if (!getGlobalBuffer()) {
@@ -43,7 +40,7 @@ if (!getGlobalBuffer()) {
   }
 }
 
-if (!getGlobalProcess()) {
+if (!hasGlobalProcess()) {
   const processShim: ProcessLike = {
     emitWarning: (message: string, type?: string, code?: string) => {
       if (

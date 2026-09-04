@@ -34,7 +34,7 @@ const getSharedPool = async (): Promise<SiteNostrPool> => {
   return await sharedPoolPromise;
 };
 
-const makeClientId = (): string => {
+export const makeClientId = (): string => {
   if (
     typeof crypto !== "undefined" &&
     typeof crypto.randomUUID === "function"
@@ -60,7 +60,7 @@ const confirmPublishById = async (args: {
   pool: SiteNostrPool;
   relays: readonly string[];
 }): Promise<boolean> => {
-  const eventId = String(args.eventId ?? "").trim();
+  const eventId = args.eventId.trim();
   if (!eventId) return false;
 
   return await new Promise((resolve) => {
@@ -168,7 +168,7 @@ export const publishSiteWrappedEvent = async (args: {
 
   if (publishResult.timedOut) {
     const confirmed = await confirmPublishById({
-      eventId: String(wrapped.id ?? ""),
+      eventId: wrapped.id,
       pool,
       relays: NOSTR_RELAYS,
     });
@@ -182,7 +182,7 @@ export const forwardCashuTokenPrivately = async (args: {
   recipientNpub: string;
   token: string;
 }): Promise<void> => {
-  const token = String(args.token ?? "").trim();
+  const token = args.token.trim();
   if (!token) return;
 
   const baseEvent: UnsignedEvent = {

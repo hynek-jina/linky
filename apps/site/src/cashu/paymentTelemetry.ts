@@ -1,6 +1,7 @@
 import type { UnsignedEvent } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { publishSiteWrappedEvent } from "./nostrGiftWrap";
+import { isRecord } from "../isRecord";
+import { makeClientId, publishSiteWrappedEvent } from "./nostrGiftWrap";
 
 type PaymentTelemetryMethod =
   | "cashu_chat"
@@ -22,23 +23,28 @@ type PaymentTelemetryPhase =
 
 type PaymentTelemetryStatus = "declined" | "error" | "ok";
 
+type PaymentTelemetryDirection = "in" | "out";
+
+type PaymentTelemetryAppRuntime = "pwa" | "web";
+
+type PaymentTelemetryDevicePlatform =
+  | "android"
+  | "iphone"
+  | "ipad"
+  | "linux"
+  | "mac"
+  | "windows"
+  | "unknown";
+
 interface LocalPaymentTelemetryEvent {
   amountBucket: string | null;
   appHost?: string | null;
-  appRuntime?: "native" | "pwa" | "web" | null;
+  appRuntime?: PaymentTelemetryAppRuntime | null;
   appVersion: string;
   attemptCount: number;
   createdAtSec: number;
-  devicePlatform?:
-    | "android"
-    | "iphone"
-    | "ipad"
-    | "linux"
-    | "mac"
-    | "windows"
-    | "unknown"
-    | null;
-  direction: "in" | "out";
+  devicePlatform?: PaymentTelemetryDevicePlatform | null;
+  direction: PaymentTelemetryDirection;
   errorCode: string | null;
   errorDetail: string | null;
   feeBucket: string | null;
@@ -53,7 +59,7 @@ interface LocalPaymentTelemetryEvent {
 
 interface QueuePaymentTelemetryArgs {
   amount?: number | null;
-  direction: "in" | "out";
+  direction: PaymentTelemetryDirection;
   error?: string | null;
   fee?: number | null;
   method: PaymentTelemetryMethod;
@@ -67,7 +73,7 @@ interface PaymentTelemetryLease {
   owner: string;
 }
 
-const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
+export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
   "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 const LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY =
   "linky.site.pendingPaymentTelemetry.v1";
@@ -89,7 +95,7 @@ const getLowercaseUserAgent = (): string => {
     return "";
   }
 
-  return String(navigator.userAgent ?? "").toLowerCase();
+  return navigator.userAgent.toLowerCase();
 };
 
 const getNavigatorStandalone = (): boolean => {
@@ -116,14 +122,12 @@ const getTelemetryAppHost = (): string | null => {
     return null;
   }
 
-  const host = String(window.location.host ?? "")
-    .trim()
-    .toLowerCase();
+  const host = window.location.host.trim().toLowerCase();
 
   return host ? host.slice(0, 255) : null;
 };
 
-const getTelemetryAppRuntime = (): "native" | "pwa" | "web" => {
+const getTelemetryAppRuntime = (): PaymentTelemetryAppRuntime => {
   if (typeof window !== "undefined") {
     try {
       if (window.matchMedia("(display-mode: standalone)").matches) {
@@ -141,14 +145,7 @@ const getTelemetryAppRuntime = (): "native" | "pwa" | "web" => {
   return "web";
 };
 
-const getTelemetryDevicePlatform = ():
-  | "android"
-  | "iphone"
-  | "ipad"
-  | "linux"
-  | "mac"
-  | "windows"
-  | "unknown" => {
+const getTelemetryDevicePlatform = (): PaymentTelemetryDevicePlatform => {
   const userAgent = getLowercaseUserAgent();
   const maxTouchPoints = getNavigatorMaxTouchPoints();
 
@@ -183,10 +180,6 @@ const getTelemetryDevicePlatform = ():
   return "unknown";
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
 const isPaymentTelemetryLease = (
   value: unknown,
 ): value is PaymentTelemetryLease => {
@@ -194,17 +187,6 @@ const isPaymentTelemetryLease = (
   return (
     typeof value.owner === "string" && typeof value.expiresAtMs === "number"
   );
-};
-
-const makeLocalId = (): string => {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-
-  return `site-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
 const clampBucket = (value: number, buckets: readonly number[]): string => {
@@ -230,16 +212,14 @@ const bucketPositiveNumber = (
 };
 
 const normalizeMintUrl = (value: string | null | undefined): string | null => {
-  const normalized = String(value ?? "")
-    .trim()
-    .replace(/\/+$/, "");
+  const normalized = (value ?? "").trim().replace(/\/+$/, "");
   return normalized ? normalized.slice(0, 500) : null;
 };
 
 const normalizePaymentTelemetryErrorDetail = (
   value: string | null | undefined,
 ): string | null => {
-  const text = String(value ?? "").trim();
+  const text = (value ?? "").trim();
   if (!text) return null;
   return text.slice(0, 500);
 };
@@ -247,9 +227,7 @@ const normalizePaymentTelemetryErrorDetail = (
 const classifyPaymentErrorCode = (
   value: string | null | undefined,
 ): string | null => {
-  const text = String(value ?? "")
-    .trim()
-    .toLowerCase();
+  const text = (value ?? "").trim().toLowerCase();
   if (!text) return null;
   if (
     text.includes("short keyset id v2") ||
@@ -300,64 +278,49 @@ const getPaymentTelemetryRetryDelaySec = (attemptCount: number): number => {
   return baseDelay + jitter;
 };
 
-const isTelemetryDirection = (value: unknown): value is "in" | "out" => {
-  return value === "in" || value === "out";
+const isOneOf = <T extends string>(values: readonly T[]) => {
+  return (value: unknown): value is T => {
+    return values.some((candidate) => candidate === value);
+  };
 };
 
-const isTelemetryStatus = (value: unknown): value is PaymentTelemetryStatus => {
-  return value === "declined" || value === "error" || value === "ok";
-};
-
-const isTelemetryMethod = (value: unknown): value is PaymentTelemetryMethod => {
-  return (
-    value === "cashu_chat" ||
-    value === "cashu_receive" ||
-    value === "cashu_restore" ||
-    value === "lightning_address" ||
-    value === "lightning_invoice" ||
-    value === "unknown"
-  );
-};
-
-const isTelemetryPhase = (value: unknown): value is PaymentTelemetryPhase => {
-  return (
-    value === "complete" ||
-    value === "invoice_fetch" ||
-    value === "melt" ||
-    value === "publish" ||
-    value === "receive" ||
-    value === "restore" ||
-    value === "swap" ||
-    value === "unknown"
-  );
-};
-
-const isTelemetryAppRuntime = (
-  value: unknown,
-): value is "native" | "pwa" | "web" => {
-  return value === "native" || value === "pwa" || value === "web";
-};
-
-const isTelemetryDevicePlatform = (
-  value: unknown,
-): value is
-  | "android"
-  | "iphone"
-  | "ipad"
-  | "linux"
-  | "mac"
-  | "windows"
-  | "unknown" => {
-  return (
-    value === "android" ||
-    value === "iphone" ||
-    value === "ipad" ||
-    value === "linux" ||
-    value === "mac" ||
-    value === "windows" ||
-    value === "unknown"
-  );
-};
+const isTelemetryDirection = isOneOf<PaymentTelemetryDirection>(["in", "out"]);
+const isTelemetryStatus = isOneOf<PaymentTelemetryStatus>([
+  "declined",
+  "error",
+  "ok",
+]);
+const isTelemetryMethod = isOneOf<PaymentTelemetryMethod>([
+  "cashu_chat",
+  "cashu_receive",
+  "cashu_restore",
+  "lightning_address",
+  "lightning_invoice",
+  "unknown",
+]);
+const isTelemetryPhase = isOneOf<PaymentTelemetryPhase>([
+  "complete",
+  "invoice_fetch",
+  "melt",
+  "publish",
+  "receive",
+  "restore",
+  "swap",
+  "unknown",
+]);
+const isTelemetryAppRuntime = isOneOf<PaymentTelemetryAppRuntime>([
+  "pwa",
+  "web",
+]);
+const isTelemetryDevicePlatform = isOneOf<PaymentTelemetryDevicePlatform>([
+  "android",
+  "iphone",
+  "ipad",
+  "linux",
+  "mac",
+  "windows",
+  "unknown",
+]);
 
 const isLocalPaymentTelemetryEvent = (
   value: unknown,
@@ -469,7 +432,7 @@ const withPaymentTelemetryLease = async (
     return false;
   }
 
-  const owner = makeLocalId();
+  const owner = makeClientId();
   writePaymentTelemetryLease({
     expiresAtMs: nowMs + PAYMENT_TELEMETRY_LEASE_TTL_MS,
     owner,
@@ -523,39 +486,38 @@ const schedulePaymentTelemetryFlush = (minimumDelayMs = 0): void => {
   }, delayMs);
 };
 
-const createPaymentTelemetryWrappedEvent = (args: {
-  item: LocalPaymentTelemetryEvent;
-}): { baseEvent: UnsignedEvent } => {
-  const baseEvent: UnsignedEvent = {
+const createPaymentTelemetryBaseEvent = (
+  item: LocalPaymentTelemetryEvent,
+  recipientPublicKey: string,
+): UnsignedEvent => {
+  return {
     created_at: Math.ceil(Date.now() / 1e3),
     kind: PAYMENT_TELEMETRY_KIND,
     pubkey: "",
     tags: [
-      ["p", ""],
-      ["client", args.item.id],
+      ["p", recipientPublicKey],
+      ["client", item.id],
       ["linky", PAYMENT_TELEMETRY_VALUE],
     ],
     content: JSON.stringify({
       v: 1,
-      id: args.item.id,
-      createdAtSec: args.item.createdAtSec,
-      direction: args.item.direction,
-      status: args.item.status,
-      method: args.item.method,
-      phase: args.item.phase,
-      mint: args.item.mint,
-      amountBucket: args.item.amountBucket,
-      feeBucket: args.item.feeBucket,
-      errorCode: args.item.errorCode,
-      errorDetail: args.item.errorDetail,
-      appHost: args.item.appHost ?? null,
-      devicePlatform: args.item.devicePlatform ?? null,
-      appRuntime: args.item.appRuntime ?? null,
-      appVersion: args.item.appVersion,
+      id: item.id,
+      createdAtSec: item.createdAtSec,
+      direction: item.direction,
+      status: item.status,
+      method: item.method,
+      phase: item.phase,
+      mint: item.mint,
+      amountBucket: item.amountBucket,
+      feeBucket: item.feeBucket,
+      errorCode: item.errorCode,
+      errorDetail: item.errorDetail,
+      appHost: item.appHost ?? null,
+      devicePlatform: item.devicePlatform ?? null,
+      appRuntime: item.appRuntime ?? null,
+      appVersion: item.appVersion,
     }),
   };
-
-  return { baseEvent };
 };
 
 const createLocalPaymentTelemetryEvent = (
@@ -565,7 +527,7 @@ const createLocalPaymentTelemetryEvent = (
   const errorCode = classifyPaymentErrorCode(args.error);
 
   return {
-    id: makeLocalId(),
+    id: makeClientId(),
     createdAtSec,
     attemptCount: 0,
     lastAttemptAtSec: null,
@@ -627,12 +589,11 @@ export const flushPaymentTelemetryQueue = async (): Promise<void> => {
 
       for (const item of dueItems) {
         try {
-          const event = createPaymentTelemetryWrappedEvent({
-            item,
-          });
-          event.baseEvent.tags[0] = ["p", recipientPublicKey];
           await publishSiteWrappedEvent({
-            baseEvent: event.baseEvent,
+            baseEvent: createPaymentTelemetryBaseEvent(
+              item,
+              recipientPublicKey,
+            ),
             errorMessage: "Failed to publish payment telemetry",
             recipientNpub: PAYMENT_ANALYTICS_RECIPIENT_NPUB,
           });

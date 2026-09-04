@@ -1,41 +1,26 @@
 import {
-  applyProxyHeaders,
   getFirstQueryValue,
   getNpubcashBaseUrl,
   getPublicOrigin,
+  parseJsonObject,
   proxyFixedUrl,
+  sendProxyFailure,
+  sendPublicProxyResult,
   type ApiRequest,
   type ApiResponse,
 } from "../_npubcash.js";
 
-interface LnurlPayResponse {
-  callback?: unknown;
-}
-
-const parseJsonObject = (value: string): Record<string, unknown> | null => {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      Array.isArray(parsed)
-    ) {
-      return null;
-    }
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
 const rewriteLnurlCallback = (
-  payload: Record<string, unknown>,
+  payRequestText: string,
   publicOrigin: string,
   user: string,
 ): string => {
-  const nextPayload: LnurlPayResponse = { ...payload };
-  nextPayload.callback = `${publicOrigin}/.well-known/lnurlp/${encodeURIComponent(user)}`;
-  return JSON.stringify(nextPayload);
+  const payload = parseJsonObject(payRequestText);
+  if (!payload) return payRequestText;
+  return JSON.stringify({
+    ...payload,
+    callback: `${publicOrigin}/.well-known/lnurlp/${encodeURIComponent(user)}`,
+  });
 };
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -61,30 +46,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const proxyResult = await proxyFixedUrl(targetUrl);
-    applyProxyHeaders(res, proxyResult.contentType);
-
-    const shouldRewriteCallback = !amount;
-    if (!shouldRewriteCallback) {
-      res.status(proxyResult.status).send(proxyResult.text);
-      return;
-    }
-
-    const payload = parseJsonObject(proxyResult.text);
-    if (!payload) {
-      res.status(proxyResult.status).send(proxyResult.text);
-      return;
-    }
-
-    const rewrittenPayload = rewriteLnurlCallback(
-      payload,
-      getPublicOrigin(req),
-      user,
-    );
-    res.status(proxyResult.status).send(rewrittenPayload);
-  } catch (error) {
-    res.status(502).json({
-      error: "Proxy fetch failed",
-      detail: String(error ?? "unknown"),
+    const isPayRequest = !amount;
+    sendPublicProxyResult(res, {
+      ...proxyResult,
+      text: isPayRequest
+        ? rewriteLnurlCallback(proxyResult.text, getPublicOrigin(req), user)
+        : proxyResult.text,
     });
+  } catch (error) {
+    sendProxyFailure(res, error);
   }
 }
