@@ -150,11 +150,11 @@ const updateSW = registerSW({
   immediate: true,
   onOfflineReady() {
     console.log("[linky][pwa] offline ready");
-    void appendPushDebugLog("client", "pwa offline ready");
+    appendPushDebugLog("client", "pwa offline ready");
   },
   onNeedRefresh() {
     console.log("[linky][pwa] update available");
-    void appendPushDebugLog("client", "pwa update available");
+    appendPushDebugLog("client", "pwa update available");
     void handlePwaUpdateAvailable();
   },
   onRegisteredSW(swUrl, registration) {
@@ -165,7 +165,7 @@ const updateSW = registerSW({
       hasWaiting: Boolean(registration?.waiting),
       hasInstalling: Boolean(registration?.installing),
     });
-    void appendPushDebugLog("client", "pwa sw registered", {
+    appendPushDebugLog("client", "pwa sw registered", {
       hasActive: Boolean(registration?.active),
       hasInstalling: Boolean(registration?.installing),
       hasWaiting: Boolean(registration?.waiting),
@@ -209,7 +209,7 @@ const updateSW = registerSW({
   },
   onRegisterError(error) {
     console.log("[linky][pwa] sw register error", { error });
-    void appendPushDebugLog("client", "pwa sw register error", { error });
+    appendPushDebugLog("client", "pwa sw register error", { error });
   },
 });
 recordPwaRegistered(updateSW);
@@ -219,13 +219,13 @@ if ("serviceWorker" in navigator) {
   console.log("[linky][pwa] controller", {
     hasController: hadControllerAtLoad,
   });
-  void appendPushDebugLog("client", "pwa controller snapshot", {
+  appendPushDebugLog("client", "pwa controller snapshot", {
     hasController: hadControllerAtLoad,
   });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
     console.log("[linky][pwa] sw message", event.data);
-    void appendPushDebugLog("client", "pwa sw message", {
+    appendPushDebugLog("client", "pwa sw message", {
       data: event.data,
     });
   });
@@ -235,7 +235,7 @@ if ("serviceWorker" in navigator) {
     console.log("[linky][pwa] controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
-    void appendPushDebugLog("client", "pwa controller change", {
+    appendPushDebugLog("client", "pwa controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
     // An update accepted in another tab activated a new SW for every tab.
@@ -253,7 +253,7 @@ if ("serviceWorker" in navigator) {
         scope: reg.scope,
         hasActive: Boolean(reg.active),
       });
-      await appendPushDebugLog("client", "pwa sw ready", {
+      appendPushDebugLog("client", "pwa sw ready", {
         hasActive: Boolean(reg.active),
         scope: reg.scope,
       });
@@ -264,14 +264,14 @@ if ("serviceWorker" in navigator) {
           (k) => k.includes("workbox") || k.includes("linky"),
         );
         console.log("[linky][pwa] cache keys", { keys: relevant });
-        await appendPushDebugLog("client", "pwa cache keys", {
+        appendPushDebugLog("client", "pwa cache keys", {
           keys: relevant,
         });
       }
     })
     .catch((error) => {
       console.log("[linky][pwa] sw ready error", { error });
-      void appendPushDebugLog("client", "pwa sw ready error", { error });
+      appendPushDebugLog("client", "pwa sw ready error", { error });
     });
 }
 

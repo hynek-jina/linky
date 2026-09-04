@@ -236,7 +236,7 @@ export const useSendChatMessage = <
           rumorId: exit.value.rumorId,
         });
 
-        void appendPushDebugLog("client", "chat send enqueued", {
+        appendPushDebugLog("client", "chat send enqueued", {
           clientId,
           rumorId: exit.value.rumorId,
         });

@@ -173,6 +173,52 @@ export const buildTopbar = ({
   };
 };
 
+// Routes whose right button is decided above are narrowed away before the
+// lookup, so adding a route kind forces a decision here.
+const SHOWS_MENU_BUTTON: Record<
+  Exclude<
+    Route["kind"],
+    "chat" | "contact" | "contactNew" | "evoluServers" | "nostrRelays" | "topup"
+  >,
+  boolean
+> = {
+  advanced: false,
+  advancedAutoPayLimit: false,
+  advancedInspector: false,
+  advancedInspectorTimeline: false,
+  advancedPushDebug: false,
+  bankPayment: false,
+  bankPaymentOffer: false,
+  cashuToken: false,
+  cashuTokenEmit: false,
+  cashuTokenNew: false,
+  cashuTokens: false,
+  contactEdit: false,
+  contactPay: true,
+  contacts: true,
+  evoluCurrentData: false,
+  evoluData: false,
+  evoluHistoryData: false,
+  evoluServer: true,
+  evoluServerNew: true,
+  lnAddressPay: true,
+  manualPay: false,
+  mint: true,
+  mints: false,
+  nostrRelay: true,
+  nostrRelayNew: true,
+  profile: true,
+  profileEdit: false,
+  settings: false,
+  settingsLanguage: false,
+  settingsMasterKeys: false,
+  settingsUnits: false,
+  topupInvoice: false,
+  topupNoAmount: false,
+  transactions: false,
+  wallet: true,
+};
+
 export const buildTopbarRight = ({
   chatEditContactId,
   isProfileEditing,
@@ -254,90 +300,61 @@ export const buildTopbarRight = ({
     };
   }
 
-  if (
-    route.kind === "settings" ||
-    route.kind === "settingsLanguage" ||
-    route.kind === "settingsUnits" ||
-    route.kind === "settingsMasterKeys" ||
-    route.kind === "advanced" ||
-    route.kind === "advancedAutoPayLimit" ||
-    route.kind === "advancedInspector" ||
-    route.kind === "advancedInspectorTimeline" ||
-    route.kind === "advancedPushDebug" ||
-    route.kind === "mints" ||
-    route.kind === "topupNoAmount" ||
-    route.kind === "topupInvoice" ||
-    route.kind === "manualPay" ||
-    route.kind === "bankPaymentOffer" ||
-    route.kind === "cashuTokens" ||
-    route.kind === "cashuTokenNew" ||
-    route.kind === "cashuTokenEmit" ||
-    route.kind === "cashuToken" ||
-    route.kind === "transactions" ||
-    route.kind === "evoluData" ||
-    route.kind === "evoluCurrentData" ||
-    route.kind === "evoluHistoryData" ||
-    route.kind === "contactEdit" ||
-    route.kind === "profileEdit"
-  ) {
-    return null;
-  }
+  return SHOWS_MENU_BUTTON[route.kind]
+    ? { icon: "☰", label: t("menu"), onClick: toggleMenu }
+    : null;
+};
 
-  return {
-    icon: "☰",
-    label: t("menu"),
-    onClick: toggleMenu,
-  };
+const TOPBAR_TITLE_KEY: Record<
+  Exclude<Route["kind"], "advancedPushDebug">,
+  string
+> = {
+  advanced: "settings",
+  advancedAutoPayLimit: "lightningInvoiceAutoPayLimit",
+  advancedInspector: "nostrInspector",
+  advancedInspectorTimeline: "nostrInspector",
+  bankPayment: "spdPaymentTitle",
+  bankPaymentOffer: "bankPaymentOfferIncomingTitle",
+  cashuToken: "cashuToken",
+  cashuTokenEmit: "cashuEmit",
+  cashuTokenNew: "cashuAddToken",
+  cashuTokens: "tokens",
+  chat: "messagesTitle",
+  contact: "contact",
+  contactEdit: "contactEditTitle",
+  contactNew: "newContact",
+  contactPay: "contactPayTitle",
+  contacts: "contactsTitle",
+  evoluCurrentData: "evoluData",
+  evoluData: "evoluData",
+  evoluHistoryData: "evoluHistory",
+  evoluServer: "evoluServer",
+  evoluServerNew: "evoluAddServerLabel",
+  evoluServers: "evoluServer",
+  lnAddressPay: "pay",
+  manualPay: "manualPayTitle",
+  mint: "mints",
+  mints: "mints",
+  nostrRelay: "nostrRelay",
+  nostrRelayNew: "nostrRelay",
+  nostrRelays: "nostrRelay",
+  profile: "profile",
+  profileEdit: "profile",
+  settings: "settings",
+  settingsLanguage: "language",
+  settingsMasterKeys: "masterKeys",
+  settingsUnits: "unit",
+  topup: "topupTitle",
+  topupInvoice: "topupInvoiceTitle",
+  topupNoAmount: "topupNoAmountTitle",
+  transactions: "transactionsTitle",
+  wallet: "wallet",
 };
 
 export const buildTopbarTitle = (
   route: Route,
   t: (key: string) => string,
-): string | null => {
-  if (route.kind === "contacts") return t("contactsTitle");
-  if (route.kind === "settings") return t("settings");
-  if (route.kind === "settingsLanguage") return t("language");
-  if (route.kind === "settingsUnits") return t("unit");
-  if (route.kind === "settingsMasterKeys") return t("masterKeys");
-  if (route.kind === "wallet") return t("wallet");
-  if (route.kind === "transactions") return t("transactionsTitle");
-  if (route.kind === "topup") return t("topupTitle");
-  if (route.kind === "topupNoAmount") return t("topupNoAmountTitle");
-  if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
-  if (route.kind === "manualPay") return t("manualPayTitle");
-  if (route.kind === "bankPayment") return t("spdPaymentTitle");
-  if (route.kind === "bankPaymentOffer")
-    return t("bankPaymentOfferIncomingTitle");
-  if (route.kind === "lnAddressPay") return t("pay");
-  if (route.kind === "cashuTokens") return t("tokens");
-  if (route.kind === "cashuTokenEmit") return t("cashuEmit");
-  if (route.kind === "cashuTokenNew") return t("cashuAddToken");
-  if (route.kind === "cashuToken") return t("cashuToken");
-  if (route.kind === "advanced") return t("settings");
-  if (route.kind === "advancedAutoPayLimit") {
-    return t("lightningInvoiceAutoPayLimit");
-  }
-  if (route.kind === "advancedInspector") return t("nostrInspector");
-  if (route.kind === "advancedInspectorTimeline") return t("nostrInspector");
+): string => {
   if (route.kind === "advancedPushDebug") return "Push Debug";
-  if (route.kind === "mints") return t("mints");
-  if (route.kind === "mint") return t("mints");
-  if (route.kind === "profile" || route.kind === "profileEdit") {
-    return t("profile");
-  }
-  if (route.kind === "nostrRelays") return t("nostrRelay");
-  if (route.kind === "nostrRelay") return t("nostrRelay");
-  if (route.kind === "nostrRelayNew") return t("nostrRelay");
-  if (route.kind === "evoluServers") return t("evoluServer");
-  if (route.kind === "evoluServer") return t("evoluServer");
-  if (route.kind === "evoluServerNew") return t("evoluAddServerLabel");
-  if (route.kind === "evoluData") return t("evoluData");
-  if (route.kind === "evoluCurrentData") return t("evoluData");
-  if (route.kind === "evoluHistoryData") return t("evoluHistory");
-  if (route.kind === "contactNew") return t("newContact");
-  if (route.kind === "contact") return t("contact");
-  if (route.kind === "contactEdit") return t("contactEditTitle");
-  if (route.kind === "contactPay") return t("contactPayTitle");
-  if (route.kind === "chat") return t("messagesTitle");
-  return null;
+  return t(TOPBAR_TITLE_KEY[route.kind]);
 };

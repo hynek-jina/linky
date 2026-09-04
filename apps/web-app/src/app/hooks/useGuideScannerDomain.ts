@@ -146,7 +146,7 @@ export const useGuideScannerDomain = ({
   const logScanDebug = React.useCallback(
     (message: string, details?: Record<string, unknown>) => {
       console.log("[linky][scan]", message, formatScanDebugDetails(details));
-      void appendPushDebugLog("client", `scan ${message}`, details);
+      appendPushDebugLog("client", `scan ${message}`, details);
     },
     [],
   );

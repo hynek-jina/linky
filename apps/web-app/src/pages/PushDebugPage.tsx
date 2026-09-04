@@ -248,7 +248,7 @@ export function PushDebugPage(): React.ReactElement {
     setIsBusy(true);
     try {
       await clearPushDebugLog();
-      await appendPushDebugLog("client", "debug log cleared from UI");
+      appendPushDebugLog("client", "debug log cleared from UI");
       setStatus("Debug log cleared");
       await refreshReport();
     } finally {

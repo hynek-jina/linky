@@ -12,12 +12,11 @@ import { formatShortNpub } from "../../../utils/formatting";
 import {
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferMessageText,
-  getLinkyBankPaymentOfferText,
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
   isLinkyBankPaymentOfferWholeOfferTerminalStatus,
 } from "../../lib/bankPaymentOffer";
-import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
+import { extractCashuTokenFromText } from "../../lib/tokenText";
 import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
 import {
   isOpenBankPaymentOffer,
@@ -104,7 +103,7 @@ export const notifyInsertedChatMessage = (
   inserted: InsertedChatMessage,
   ctx: InboxNotificationsContext,
 ): void => {
-  if (isCashuNotificationMessage(inserted.content)) return;
+  if (extractCashuTokenFromText(inserted.content) !== null) return;
   if (isOpenChatForContact(ctx.route, inserted.contactId)) return;
 
   const formattedPreview = formatChatMessagePreviewText({
@@ -150,7 +149,7 @@ const hasStoredIncomingCashuToken = (
       Number.isFinite(message.createdAtSec) &&
       Math.abs(message.createdAtSec - createdAtSec) <=
         PAYMENT_NOTICE_MATCH_WINDOW_SECONDS &&
-      isCashuNotificationMessage(message.content),
+      extractCashuTokenFromText(message.content) !== null,
   );
 
 export const handlePaymentNoticeReceived = (
@@ -223,7 +222,7 @@ export const handleBankOfferSnapshotReceived = (
 ): void => {
   const content = bankOfferContentFromSnapshot(event);
   const offerInfo = getLinkyBankPaymentOfferInfo(content);
-  const offerText = getLinkyBankPaymentOfferText(content);
+  const offerText = offerInfo?.text ?? null;
   if (!offerText) return;
   const offerId = trimString(offerInfo?.offerId);
   const isTerminalOffer = offerInfo

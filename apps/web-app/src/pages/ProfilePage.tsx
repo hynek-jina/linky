@@ -5,8 +5,8 @@ import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
 import {
-  parseProfileGeneralStatusText,
   type ProfileStatusCurrency,
+  parseProfileGeneralStatus,
 } from "../nostrStatus";
 import {
   formatShortLightningAddress,
@@ -127,7 +127,7 @@ export function ProfilePage({
   const [inlineClaimPreview, setInlineClaimPreview] =
     React.useState<OwnLightningClaimAvailableResult | null>(null);
   const inlineClaimRequestSeqRef = React.useRef(0);
-  const profileStatusText = parseProfileGeneralStatusText(profileStatus);
+  const profileStatusText = parseProfileGeneralStatus(profileStatus).text;
   const restoreLightningAddress = React.useMemo(() => {
     for (const lightningAddress of ownedLightningAddresses) {
       const normalized = String(lightningAddress ?? "")

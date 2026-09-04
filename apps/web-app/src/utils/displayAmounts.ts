@@ -62,17 +62,8 @@ const getRateForCurrency = (
 
 const fiatFormatters = new Map<string, Intl.NumberFormat>();
 
-const isDisplayCurrency = (value: unknown): value is DisplayCurrency => {
-  return (
-    value === "sat" ||
-    value === "btc" ||
-    value === "czk" ||
-    value === "eur" ||
-    value === "chf" ||
-    value === "usd" ||
-    value === "hidden"
-  );
-};
+const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
+  DISPLAY_CURRENCIES.some((currency) => currency === value);
 
 export const parseDisplayCurrency = (
   value: string | null | undefined,

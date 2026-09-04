@@ -2,7 +2,7 @@ import type { OwnerId } from "@evolu/common";
 import React from "react";
 import type { CashuTokenRow } from "../../evolu";
 import {
-  getGenericMintIconUrl,
+  GENERIC_MINT_ICON_DATA_URL,
   getMintIconOverride,
   getMintOriginAndHost,
   normalizeMintUrl,
@@ -80,7 +80,7 @@ export const useMintDomain = ({
       if (!origin) {
         return {
           origin: null,
-          url: getGenericMintIconUrl(),
+          url: GENERIC_MINT_ICON_DATA_URL,
           host,
           failed: false,
         };

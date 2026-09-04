@@ -3,7 +3,6 @@ import {
   deriveCashuMnemonicFromMasterSecret,
   deriveOwnerMnemonicsFromMasterSecret,
   IdentityProvider,
-  looksLikeSlip39Share,
   MasterSecretProvider,
   parseOwnerLaneIndex,
   parseSlip39Share,
@@ -37,9 +36,6 @@ const pendingOwnerMnemonicRequests = new Map<
 const parseShare = async (rawText: string) => {
   return Effect.runPromise(parseSlip39Share(rawText));
 };
-
-export const looksLikeSlip39Seed = (rawText: string): boolean =>
-  looksLikeSlip39Share(rawText);
 
 export const deriveNostrKeysFromSlip39 = async (
   rawText: string,

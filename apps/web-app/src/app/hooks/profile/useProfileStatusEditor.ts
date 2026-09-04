@@ -4,10 +4,9 @@ import { Exit } from "effect";
 import React from "react";
 import {
   buildProfileGeneralStatus,
-  parseProfileExchangeStatusCurrencies,
-  parseProfileGeneralStatusText,
   PROFILE_STATUS_CURRENCIES,
   type ProfileStatusCurrency,
+  parseProfileGeneralStatus,
 } from "../../../nostrStatus";
 import { saveCachedStatus } from "../../../profileCache";
 import { nowSeconds } from "../../../utils/time";
@@ -44,7 +43,7 @@ export const useProfileStatusEditor = ({
   const publishStatus = useAtomSet(publishStatusAtom, { mode: "promiseExit" });
 
   const selectedProfileStatusCurrencies = React.useMemo(
-    () => parseProfileExchangeStatusCurrencies(myProfileStatus),
+    () => parseProfileGeneralStatus(myProfileStatus).currencies,
     [myProfileStatus],
   );
 
@@ -57,13 +56,13 @@ export const useProfileStatusEditor = ({
       }
 
       const currentSelection =
-        parseProfileExchangeStatusCurrencies(myProfileStatus);
+        parseProfileGeneralStatus(myProfileStatus).currencies;
       const nextSelection = currentSelection.includes(currency)
         ? currentSelection.filter((value) => value !== currency)
         : [...currentSelection, currency];
       const nextStatus = buildProfileGeneralStatus({
         currencies: nextSelection,
-        text: parseProfileGeneralStatusText(myProfileStatus),
+        text: parseProfileGeneralStatus(myProfileStatus).text,
       });
       const previousStatus = myProfileStatus;
 

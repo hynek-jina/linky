@@ -29,7 +29,7 @@ export const CASHU_SEEN_MINTS_STORAGE_KEY = "linky.cashu.seenMints.v1";
 const GENERIC_MINT_ICON_SVG =
   "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='%2314b8a6'/><stop offset='100%' stop-color='%230ea5e9'/></linearGradient></defs><rect width='64' height='64' rx='32' fill='url(%23g)'/><path d='M21 44V20h6l5 10 5-10h6v24h-5V29l-4.5 8h-3L26 29v15z' fill='white'/></svg>";
 
-const GENERIC_MINT_ICON_DATA_URL = `data:image/svg+xml,${GENERIC_MINT_ICON_SVG}`;
+export const GENERIC_MINT_ICON_DATA_URL = `data:image/svg+xml,${GENERIC_MINT_ICON_SVG}`;
 
 interface MintStructuredValue {
   toString(): string;
@@ -132,15 +132,11 @@ export const isTestMintUrl = (mint: MintStringInput): boolean => {
   );
 };
 
-export const getGenericMintIconUrl = (): string => {
-  return GENERIC_MINT_ICON_DATA_URL;
-};
-
 export const getNextMintIconUrl = (
   currentUrl: string | null,
   origin: string | null,
 ): string | null => {
-  const genericUrl = getGenericMintIconUrl();
+  const genericUrl = GENERIC_MINT_ICON_DATA_URL;
   const cleanedCurrentUrl = String(currentUrl ?? "").trim() || null;
   const faviconUrl = origin ? `${origin}/favicon.ico` : null;
 
