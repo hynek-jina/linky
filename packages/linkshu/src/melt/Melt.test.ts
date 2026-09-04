@@ -6,7 +6,7 @@ import type {
   SendResponse,
 } from "@cashu/cashu-ts";
 import { Amount, getEncodedToken, MintOperationError } from "@cashu/cashu-ts";
-import { Effect, Exit, Layer, Stream } from "effect";
+import { Effect, Exit, Layer, Stream, TestClock, TestContext } from "effect";
 import {
   Bolt11Invoice,
   CurrencyUnit,
@@ -24,6 +24,7 @@ import { inMemoryTokenStore } from "../ports/inMemoryTokenStore";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { NewTokenRow, TokenStore } from "../ports/TokenStore";
 import type { StoredTokenRow } from "../ports/TokenStore";
+import { runOnTestClock } from "../testing/clock";
 import { parseTokenText } from "../token/codec";
 import type { TokenState } from "../token/domain";
 import { MeltDraft } from "./domain";
@@ -513,7 +514,16 @@ describe("Melt.melt", () => {
     });
     const { run } = makeHarness(wallet);
 
-    const exit = await run(meltAndInspect([tokenA, tokenB]));
+    const exit = await run(
+      Effect.gen(function* () {
+        // Row timestamps are positive unix seconds; the TestClock starts at 0.
+        yield* TestClock.adjust("1000 seconds");
+        return yield* runOnTestClock(
+          meltAndInspect([tokenA, tokenB]),
+          "500 millis",
+        );
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.receipt._tag).toBe("Left");
@@ -523,7 +533,7 @@ describe("Melt.melt", () => {
     const reserved = rowsByState(exit.value.rows, "reserved");
     expect(reserved).toHaveLength(1);
     expect(amountOf(reserved[0])).toBe(13);
-  }, 10_000);
+  });
 
   it("reclaims a lost melt response when the quote reports PAID", async () => {
     const { wallet, restoreCalls } = makeWallet({
