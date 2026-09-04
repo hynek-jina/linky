@@ -8,7 +8,7 @@ import {
 } from "./_npubcash.js";
 import { isAllowedTarget, safeFetch } from "./_safeFetch.js";
 
-const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:]+\.[^@\s/:]+$/;
+const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:?#\\%]+\.[^@\s/:?#\\%]+$/;
 const MILLISAT_AMOUNT_PATTERN = /^\d{1,15}$/;
 const MAX_COMMENT_LENGTH = 1000;
 
@@ -17,10 +17,14 @@ const getLnurlpEndpoint = (lightningAddress: string): URL | null => {
   const atIndex = lightningAddress.lastIndexOf("@");
   const user = lightningAddress.slice(0, atIndex);
   const domain = lightningAddress.slice(atIndex + 1);
-  const endpoint = new URL(
-    `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`,
-  );
-  return isAllowedTarget(endpoint) ? endpoint : null;
+  try {
+    const endpoint = new URL(
+      `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`,
+    );
+    return isAllowedTarget(endpoint) ? endpoint : null;
+  } catch {
+    return null;
+  }
 };
 
 const readCallbackUrl = (payRequestText: string): URL | null => {
