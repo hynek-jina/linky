@@ -1,24 +1,27 @@
 import { decodeNprofilePubkey } from "@linky/linkstr";
 import { decode, encode } from "cbor-x";
+import { Schema } from "effect";
 import { decodeBase64Url, encodeBase64Url } from "../../utils/base64";
-import { isRecord } from "../../utils/unknown";
 import { trimString } from "../../utils/validation";
 
-type PaymentRequestTransport = {
-  a: string;
-  g?: string[][];
-  t: string;
-};
+const PaymentRequestTransport = Schema.Struct({
+  a: Schema.String,
+  g: Schema.optional(Schema.Array(Schema.Array(Schema.String))),
+  t: Schema.String,
+});
 
-type PaymentRequestPayload = {
-  a?: number;
-  d?: string;
-  i?: string;
-  m?: string[];
-  s?: boolean;
-  t?: PaymentRequestTransport[];
-  u?: string;
-};
+const PaymentRequestPayload = Schema.Struct({
+  a: Schema.optional(Schema.Number),
+  d: Schema.optional(Schema.String),
+  i: Schema.optional(Schema.String),
+  m: Schema.optional(Schema.Array(Schema.String)),
+  s: Schema.optional(Schema.Boolean),
+  t: Schema.optional(Schema.Array(PaymentRequestTransport)),
+  u: Schema.optional(Schema.String),
+});
+type PaymentRequestPayload = typeof PaymentRequestPayload.Type;
+
+const isPaymentRequestPayload = Schema.is(PaymentRequestPayload);
 
 export interface CashuPaymentRequestMessageInfo {
   amount: number;
@@ -35,44 +38,6 @@ export interface CashuPaymentRequestMessageInfo {
 const CASHU_PAYMENT_REQUEST_PREFIX = "creqA";
 const LINKY_PAYMENT_REQUEST_DECLINE_PREFIX = "linky:req-decline:v1";
 
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
-
-const isTransportTagArray = (value: unknown): value is string[][] =>
-  Array.isArray(value) &&
-  value.every(
-    (entry) =>
-      Array.isArray(entry) && entry.every((item) => typeof item === "string"),
-  );
-
-const isPaymentRequestTransport = (
-  value: unknown,
-): value is PaymentRequestTransport => {
-  if (!isRecord(value)) return false;
-  if (typeof value.t !== "string" || typeof value.a !== "string") return false;
-  if (value.g === undefined) return true;
-  return isTransportTagArray(value.g);
-};
-
-const isPaymentRequestPayload = (
-  value: unknown,
-): value is PaymentRequestPayload => {
-  if (!isRecord(value)) return false;
-  if (value.i !== undefined && typeof value.i !== "string") return false;
-  if (value.a !== undefined && typeof value.a !== "number") return false;
-  if (value.u !== undefined && typeof value.u !== "string") return false;
-  if (value.s !== undefined && typeof value.s !== "boolean") return false;
-  if (value.d !== undefined && typeof value.d !== "string") return false;
-  if (value.m !== undefined && !isStringArray(value.m)) return false;
-  if (
-    value.t !== undefined &&
-    (!Array.isArray(value.t) || !value.t.every(isPaymentRequestTransport))
-  ) {
-    return false;
-  }
-  return true;
-};
-
 export const buildCashuPaymentRequestMessage = (args: {
   amount: number;
   description?: string | null;
@@ -80,6 +45,8 @@ export const buildCashuPaymentRequestMessage = (args: {
   recipientNprofile: string;
   requestId?: string | null;
 }): string => {
+  const requestId = trimString(args.requestId);
+  const description = trimString(args.description);
   const payload: PaymentRequestPayload = {
     a: args.amount,
     u: "sat",
@@ -92,13 +59,9 @@ export const buildCashuPaymentRequestMessage = (args: {
         g: [["n", "17"]],
       },
     ],
+    ...(requestId ? { i: requestId } : {}),
+    ...(description ? { d: description } : {}),
   };
-
-  const requestId = trimString(args.requestId);
-  if (requestId) payload.i = requestId;
-
-  const description = trimString(args.description);
-  if (description) payload.d = description;
 
   return `${CASHU_PAYMENT_REQUEST_PREFIX}${encodeBase64Url(encode(payload))}`;
 };

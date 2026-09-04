@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import { isRecord } from "./unknown";
 import type { JsonRecord, JsonValue } from "../types/json";
 import { sleep } from "./time";
@@ -15,6 +16,16 @@ export interface PushDebugLogEntry {
   source: string;
   timestamp: string;
 }
+
+const StoredPushDebugLogEntry = Schema.Struct({
+  details: Schema.optional(Schema.Unknown),
+  message: Schema.String,
+  source: Schema.String,
+  timestamp: Schema.String,
+});
+const decodeStoredPushDebugLogEntry = Schema.decodeUnknownOption(
+  StoredPushDebugLogEntry,
+);
 
 function normalizeJsonValue(value: unknown): JsonValue {
   if (
@@ -64,24 +75,11 @@ async function readStoredLog(): Promise<PushDebugLogEntry[]> {
 
     const entries: PushDebugLogEntry[] = [];
     for (const entry of json) {
-      if (!isRecord(entry)) {
-        continue;
-      }
-      const timestamp = entry.timestamp;
-      const source = entry.source;
-      const message = entry.message;
-      const details = entry.details;
-      if (
-        typeof timestamp !== "string" ||
-        typeof source !== "string" ||
-        typeof message !== "string"
-      ) {
-        continue;
-      }
+      const decoded = decodeStoredPushDebugLogEntry(entry);
+      if (Option.isNone(decoded)) continue;
+      const { details, ...rest } = decoded.value;
       entries.push({
-        timestamp,
-        source,
-        message,
+        ...rest,
         ...(details === undefined
           ? {}
           : { details: normalizeJsonValue(details) }),

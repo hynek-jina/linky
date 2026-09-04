@@ -26,7 +26,7 @@ import {
   dedupeNostrMessagesByPriority,
   getLocalNostrMessageRumorKey,
 } from "./messages/messageHelpers";
-import { UnknownRecord } from "../../utils/unknown";
+import { UnknownRecord } from "../../utils/schema";
 import {
   safeLocalStorageGet,
   safeLocalStorageGetJson,

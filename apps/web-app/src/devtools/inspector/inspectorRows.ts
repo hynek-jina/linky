@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import { isRecord } from "../../utils/unknown";
 // Shared contract between the reporter (app side), the Vite collector
 // middleware (server/inspectorCollector.ts), and the standalone inspector page
@@ -32,9 +33,30 @@ export interface CollectedInspectorRow extends InspectorRow {
   client: string;
 }
 
-export const isInspectorChannel = (value: unknown): value is string =>
-  typeof value === "string" &&
-  /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/.test(value);
+const InspectorChannel = Schema.String.pipe(
+  Schema.pattern(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/),
+);
+
+export const isInspectorChannel = Schema.is(InspectorChannel);
+
+const InspectorRowWire = Schema.Struct({
+  at: Schema.Finite,
+  channel: InspectorChannel,
+  context: Schema.optional(Schema.Unknown),
+  links: Schema.optional(Schema.Unknown),
+  payload: Schema.optional(Schema.Unknown),
+  summary: Schema.String,
+  tag: Schema.NonEmptyString,
+});
+const decodeInspectorRowWire = Schema.decodeUnknownOption(InspectorRowWire);
+
+const CollectedInspectorRowWire = Schema.Struct({
+  client: Schema.String,
+  id: Schema.Finite,
+});
+const decodeCollectedInspectorRowWire = Schema.decodeUnknownOption(
+  CollectedInspectorRowWire,
+);
 
 const parseLinkValue = (value: unknown): string | string[] | null => {
   if (typeof value === "string") return value.length > 0 ? value : null;
@@ -105,12 +127,9 @@ const parseInspectorRowContext = (
 };
 
 export const parseInspectorRow = (value: unknown): InspectorRow | null => {
-  if (!isRecord(value)) return null;
-  const { at, channel, tag, summary, links, context, payload } = value;
-  if (typeof at !== "number" || !Number.isFinite(at)) return null;
-  if (!isInspectorChannel(channel)) return null;
-  if (typeof tag !== "string" || !tag) return null;
-  if (typeof summary !== "string") return null;
+  const wire = Option.getOrNull(decodeInspectorRowWire(value));
+  if (!wire) return null;
+  const { at, channel, tag, summary, links, context, payload } = wire;
   const parsedContext = parseInspectorRowContext(context, links);
   return {
     at,
@@ -126,13 +145,9 @@ export const parseInspectorRow = (value: unknown): InspectorRow | null => {
 export const parseCollectedInspectorRow = (
   value: unknown,
 ): CollectedInspectorRow | null => {
-  if (!isRecord(value)) return null;
-  const { id, client } = value;
-  if (typeof id !== "number" || !Number.isFinite(id)) return null;
-  if (typeof client !== "string") return null;
-  const row = parseInspectorRow(value);
-  if (!row) return null;
-  return { ...row, id, client };
+  const wire = Option.getOrNull(decodeCollectedInspectorRowWire(value));
+  const row = wire && parseInspectorRow(value);
+  return wire && row ? { ...row, ...wire } : null;
 };
 
 export const inspectorLinkIds = (
