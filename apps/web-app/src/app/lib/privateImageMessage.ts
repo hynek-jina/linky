@@ -5,6 +5,8 @@ import {
 } from "@linky/linkstr";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { Schema } from "effect";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { decodeBase64Url, encodeBase64Url } from "../../utils/base64";
 import { getUnknownErrorMessage, isRecord } from "../../utils/unknown";
 import { asNonEmptyString } from "../../utils/validation";
 
@@ -98,59 +100,23 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const isNostrSecretKey = Schema.is(NostrSecretKey);
 
-const bytesToHex = (bytes: Uint8Array): string =>
-  Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-
-const hexToBytes = (hex: string): Uint8Array | null => {
-  const normalized = hex.trim().toLowerCase();
-  if (!/^[0-9a-f]+$/.test(normalized)) return null;
-  if (normalized.length % 2 !== 0) return null;
-
-  const bytes = new Uint8Array(normalized.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) {
-    const value = Number.parseInt(
-      normalized.slice(index * 2, index * 2 + 2),
-      16,
-    );
-    if (!Number.isFinite(value)) return null;
-    bytes[index] = value;
-  }
-  return bytes;
-};
-
-const sha256Hex = (bytes: Uint8Array): string => bytesToHex(sha256(bytes));
-
-const bytesToBase64Url = (bytes: Uint8Array): string => {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-};
-
-const base64UrlToBytes = (value: string): Uint8Array | null => {
-  const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+const hexToBytesOrNull = (hex: string): Uint8Array | null => {
   try {
-    const binary = atob(`${normalized}${padding}`);
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return hexToBytes(hex.trim());
   } catch {
     return null;
   }
 };
 
+const sha256Hex = (bytes: Uint8Array): string => bytesToHex(sha256(bytes));
+
 const base64UrlToText = (value: string): string | null => {
-  const bytes = base64UrlToBytes(value);
+  const bytes = decodeBase64Url(value);
   return bytes ? textDecoder.decode(bytes) : null;
 };
 
 const textToBase64Url = (value: string): string =>
-  bytesToBase64Url(textEncoder.encode(value));
+  encodeBase64Url(textEncoder.encode(value));
 
 const randomHex = (byteLength: number): string => {
   const bytes = new Uint8Array(byteLength);
@@ -308,8 +274,8 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
     : await resizeImageToJpegBytes(file);
   const key = randomHex(32);
   const nonce = randomHex(12);
-  const keyBytes = hexToBytes(key);
-  const nonceBytes = hexToBytes(nonce);
+  const keyBytes = hexToBytesOrNull(key);
+  const nonceBytes = hexToBytesOrNull(nonce);
   if (!keyBytes || !nonceBytes) throw new Error("chat-image-encryption-failed");
 
   const cryptoKey = await crypto.subtle.importKey(
@@ -325,7 +291,7 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
     copyToArrayBuffer(source.bytes),
   );
   const encryptedBytes = new Uint8Array(encryptedBuffer);
-  const storedBytes = textEncoder.encode(bytesToBase64Url(encryptedBytes));
+  const storedBytes = textEncoder.encode(encodeBase64Url(encryptedBytes));
 
   return {
     encryptedBytes: storedBytes,
@@ -604,12 +570,12 @@ export const decryptPrivateImageMessage = async (
   }
   const encryptedBytes =
     payload.storageEncoding === "base64"
-      ? base64UrlToBytes(textDecoder.decode(storedBytes))
+      ? decodeBase64Url(textDecoder.decode(storedBytes))
       : storedBytes;
   if (!encryptedBytes) throw new Error("chat-image-invalid-encoding");
 
-  const keyBytes = hexToBytes(payload.key);
-  const nonceBytes = hexToBytes(payload.nonce);
+  const keyBytes = hexToBytesOrNull(payload.key);
+  const nonceBytes = hexToBytesOrNull(payload.nonce);
   if (!keyBytes || !nonceBytes) throw new Error("chat-image-invalid-key");
 
   const cryptoKey = await crypto.subtle.importKey(

@@ -27,6 +27,7 @@ import {
   recordPwaControllerChange,
   recordPwaRegistered,
 } from "./utils/pwaUpdate";
+import { decodeBase64Url, encodeBase64Url } from "./utils/base64";
 import { getUnknownErrorMessage, isRecord } from "./utils/unknown";
 
 type BufferFromArgs =
@@ -110,15 +111,6 @@ if (!getGlobalProcess()) {
   const patchMarker = "__linkyBase64UrlPatched";
   if (Reflect.get(B.prototype, patchMarker) === true) return;
 
-  const toBase64Url = (base64: string) =>
-    base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-
-  const fromBase64Url = (base64url: string) => {
-    const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-    const pad = base64.length % 4;
-    return pad === 0 ? base64 : base64 + "=".repeat(4 - pad);
-  };
-
   const origToString = B.prototype.toString;
   Object.defineProperty(B.prototype, "toString", {
     configurable: true,
@@ -129,7 +121,7 @@ if (!getGlobalProcess()) {
       end?: number,
     ) {
       if (encoding === "base64url") {
-        return toBase64Url(origToString.call(this, "base64", start, end));
+        return encodeBase64Url(this.subarray(start, end));
       }
       return origToString.call(this, encoding, start, end);
     },
@@ -142,7 +134,9 @@ if (!getGlobalProcess()) {
     value: function (this: typeof Buffer, ...args: BufferFromArgs) {
       const [value, encodingOrOffset] = args;
       if (typeof value === "string" && encodingOrOffset === "base64url") {
-        return Reflect.apply(origFrom, this, [fromBase64Url(value), "base64"]);
+        return Reflect.apply(origFrom, this, [
+          decodeBase64Url(value) ?? new Uint8Array(0),
+        ]);
       }
       return Reflect.apply(origFrom, this, args);
     },

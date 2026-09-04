@@ -7,6 +7,8 @@ import { useDeferredOnlineReady } from "./hooks/useDeferredOnlineReady";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import { shouldUseInMemoryEvoluStorage } from "./platform/evoluWebStorage";
 import type { JsonValue } from "./types/json";
+import { base64 } from "@scure/base";
+import { decodeBase64Url } from "./utils/base64";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
@@ -765,17 +767,8 @@ const getEvoluDatabaseInfo = async (): Promise<{
   return { bytes, tableCounts, historyCount };
 };
 
-// Helper to convert Uint8Array to base64
-const uint8ArrayToBase64 = (bytes: unknown): string => {
-  const arr = toByteArray(bytes);
-  if (arr.length === 0) return "";
-  try {
-    const binString = arr.map((x) => String.fromCharCode(x)).join("");
-    return btoa(binString);
-  } catch {
-    return "";
-  }
-};
+const uint8ArrayToBase64 = (bytes: unknown): string =>
+  base64.encode(Uint8Array.from(toByteArray(bytes)));
 
 const timestampToMs = (timestampBytes: unknown): number | null => {
   const arr = toByteArray(timestampBytes);
@@ -826,22 +819,6 @@ interface EvoluHistoryMutationCountRequest {
   tables: readonly string[];
 }
 
-const base64ToUint8Array = (value: string): Uint8Array | null => {
-  const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
-  if (!normalized) return null;
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    "=",
-  );
-
-  try {
-    const decoded = atob(padded);
-    return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
-  } catch {
-    return null;
-  }
-};
-
 const timestampAfterMs = (timestampMs: number): Uint8Array => {
   const bytes = new Uint8Array(16);
   let value = Math.max(0, Math.trunc(timestampMs) + 1);
@@ -860,11 +837,11 @@ export const loadEvoluHistoryMutationCounts = async (
 
   await Promise.all(
     requests.map(async (request) => {
-      const ownerId = base64ToUint8Array(request.ownerId);
+      const ownerId = decodeBase64Url(request.ownerId);
       const tables = request.tables
         .map((table) => table.trim())
         .filter(Boolean);
-      if (!ownerId || tables.length === 0) {
+      if (!ownerId?.length || tables.length === 0) {
         counts[request.key] = 0;
         return;
       }

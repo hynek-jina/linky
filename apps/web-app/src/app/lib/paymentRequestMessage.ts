@@ -1,5 +1,6 @@
 import { decodeNprofilePubkey } from "@linky/linkstr";
 import { decode, encode } from "cbor-x";
+import { decodeBase64Url, encodeBase64Url } from "../../utils/base64";
 import { isRecord } from "../../utils/unknown";
 import { trimString } from "../../utils/validation";
 
@@ -72,34 +73,6 @@ const isPaymentRequestPayload = (
   return true;
 };
 
-const bytesToBase64Url = (bytes: Uint8Array): string => {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-};
-
-const base64UrlToBytes = (input: string): Uint8Array | null => {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-
-  try {
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let idx = 0; idx < binary.length; idx += 1) {
-      bytes[idx] = binary.charCodeAt(idx);
-    }
-    return bytes;
-  } catch {
-    return null;
-  }
-};
-
 export const buildCashuPaymentRequestMessage = (args: {
   amount: number;
   description?: string | null;
@@ -127,7 +100,7 @@ export const buildCashuPaymentRequestMessage = (args: {
   const description = trimString(args.description);
   if (description) payload.d = description;
 
-  return `${CASHU_PAYMENT_REQUEST_PREFIX}${bytesToBase64Url(encode(payload))}`;
+  return `${CASHU_PAYMENT_REQUEST_PREFIX}${encodeBase64Url(encode(payload))}`;
 };
 
 export const parseCashuPaymentRequestMessage = (
@@ -136,7 +109,7 @@ export const parseCashuPaymentRequestMessage = (
   const normalized = trimString(value);
   if (!normalized.startsWith(CASHU_PAYMENT_REQUEST_PREFIX)) return null;
 
-  const bytes = base64UrlToBytes(
+  const bytes = decodeBase64Url(
     normalized.slice(CASHU_PAYMENT_REQUEST_PREFIX.length),
   );
   if (!bytes) return null;

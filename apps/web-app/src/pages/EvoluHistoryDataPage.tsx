@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
 import { loadEvoluHistoryData, type EvoluHistoryRow } from "../evolu";
+import { base64 } from "@scure/base";
+import { decodeBase64Url } from "../utils/base64";
 
 const BATCH_SIZE = 50;
 
@@ -16,14 +18,8 @@ export function EvoluHistoryDataPage(): React.ReactElement {
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
 
   const normalizeOwnerId = useCallback((value: string): string => {
-    const raw = String(value ?? "").trim();
-    if (!raw) return "";
-
-    const replaced = raw.replace(/-/g, "+").replace(/_/g, "/");
-    const remainder = replaced.length % 4;
-    if (remainder === 0) return replaced;
-    if (remainder === 1) return replaced;
-    return replaced.padEnd(replaced.length + (4 - remainder), "=");
+    const bytes = decodeBase64Url(value);
+    return bytes?.length ? base64.encode(bytes) : value.trim();
   }, []);
 
   const allowedOwnerIds = useMemo(() => {
