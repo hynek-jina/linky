@@ -21,7 +21,6 @@ interface UseProfileStatusEditorParams {
 }
 
 interface UseProfileStatusEditorResult {
-  profileStatusText: string | null;
   profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
   selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
@@ -45,11 +44,6 @@ export const useProfileStatusEditor = ({
 
   const selectedProfileStatusCurrencies = React.useMemo(
     () => parseProfileExchangeStatusCurrencies(myProfileStatus),
-    [myProfileStatus],
-  );
-
-  const profileStatusText = React.useMemo(
-    () => parseProfileGeneralStatusText(myProfileStatus),
     [myProfileStatus],
   );
 
@@ -105,7 +99,6 @@ export const useProfileStatusEditor = ({
   );
 
   return {
-    profileStatusText,
     profileStatusCurrencies: PROFILE_STATUS_CURRENCIES,
     profileStatusIsSaving,
     selectedProfileStatusCurrencies,

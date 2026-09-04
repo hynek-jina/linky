@@ -38,7 +38,6 @@ interface UseMintInfoStoreResult {
     mintUrl: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;
   isMintDeleted: (mintUrl: string) => boolean;
-  mintInfoAll: LocalMintInfoRow[];
   mintInfoByUrl: Map<string, LocalMintInfoRow>;
   mintInfoDeduped: Array<{ canonicalUrl: string; row: LocalMintInfoRow }>;
   refreshMintInfo: (mintUrl: string) => Promise<void>;
@@ -443,7 +442,6 @@ export const useMintInfoStore = ({
   return {
     getMintRuntime,
     isMintDeleted,
-    mintInfoAll,
     mintInfoByUrl,
     mintInfoDeduped,
     refreshMintInfo,

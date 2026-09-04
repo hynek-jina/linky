@@ -30,7 +30,6 @@ interface UseMintDomainResult {
     mintUrl: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;
   isMintDeleted: (mintUrl: string) => boolean;
-  mintIconUrlByMint: Record<string, string | null>;
   mintInfoByUrl: Map<string, LocalMintInfoRow>;
   mintInfoDeduped: Array<{ canonicalUrl: string; row: LocalMintInfoRow }>;
   refreshMintInfo: (mintUrl: string) => Promise<void>;
@@ -121,7 +120,6 @@ export const useMintDomain = ({
     getMintIconUrl,
     getMintRuntime,
     isMintDeleted,
-    mintIconUrlByMint,
     mintInfoByUrl,
     mintInfoDeduped,
     refreshMintInfo,

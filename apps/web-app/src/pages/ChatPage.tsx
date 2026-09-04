@@ -17,7 +17,6 @@ import {
   isLinkyBankPaymentOfferMinimized,
   setLinkyBankPaymentOfferMinimized,
   type LinkyBankPaymentOfferInfo,
-  type LinkyBankPaymentOfferStatus,
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
@@ -99,7 +98,6 @@ interface ChatPageProps {
     failed: boolean;
   };
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
-  isBankPaymentOfferCanceled: (offerId: string) => boolean;
   lang: string;
   mentionContacts: MessageMentionContact[];
   onCancelEdit: () => void;
@@ -110,15 +108,6 @@ interface ChatPageProps {
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
-  onRespondBankPaymentOffer: (
-    message: LocalNostrMessage,
-    nextStatus: LinkyBankPaymentOfferStatus,
-    options?: {
-      expiresAtSec?: number | null;
-      extensionSec?: number | null;
-      withPush?: boolean;
-    },
-  ) => Promise<boolean>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
   onOpenNpubContact: (npub: string) => void;

@@ -505,7 +505,6 @@ export const useProfileEditor = ({
     setProfileEditLnAddress,
     setProfileEditName,
     setProfileEditStatus,
-    setProfileEditPicture,
     toggleProfileEditing,
   };
 };

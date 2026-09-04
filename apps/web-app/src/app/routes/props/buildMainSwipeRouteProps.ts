@@ -4,7 +4,6 @@ interface BuildMainSwipeRoutePropsParams {
   activeGroup: MainSwipeRoutesProps["mainSwipeProps"]["activeGroup"];
   bottomTabActive: MainSwipeRoutesProps["mainSwipeProps"]["bottomTabActive"];
   canAddContact: MainSwipeRoutesProps["mainSwipeProps"]["canAddContact"];
-  cashuBalance: MainSwipeRoutesProps["mainSwipeProps"]["cashuBalance"];
   cashuTotalBalance: MainSwipeRoutesProps["mainSwipeProps"]["cashuTotalBalance"];
   bankPaymentOfferMessages: MainSwipeRoutesProps["mainSwipeProps"]["bankPaymentOfferMessages"];
   contactsOnboardingCelebrating: MainSwipeRoutesProps["mainSwipeProps"]["contactsOnboardingCelebrating"];
@@ -39,7 +38,6 @@ export const buildMainSwipeRouteProps = ({
   activeGroup,
   bottomTabActive,
   canAddContact,
-  cashuBalance,
   cashuTotalBalance,
   bankPaymentOfferMessages,
   contactsOnboardingCelebrating,
@@ -74,7 +72,6 @@ export const buildMainSwipeRouteProps = ({
       activeGroup,
       bottomTabActive,
       canAddContact,
-      cashuBalance,
       cashuTotalBalance,
       bankPaymentOfferMessages,
       contactsOnboardingCelebrating,

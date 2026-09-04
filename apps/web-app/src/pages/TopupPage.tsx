@@ -9,8 +9,6 @@ import { useNavigation } from "../hooks/useRouting";
 interface TopupPageProps {
   currentNpub: string | null;
   displayUnit: string;
-  effectiveProfileName: string | null;
-  effectiveProfilePicture: string | null;
   setTopupAmount: (value: string | ((prev: string) => string)) => void;
   t: (key: string) => string;
   topupAmount: string;

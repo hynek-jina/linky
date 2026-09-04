@@ -126,8 +126,4 @@ export const usePaymentsDomain = <TContact extends ContactIdentityRowLike>({
   React.useEffect(() => {
     void flushPendingPayments();
   }, [currentNsec, contacts, pendingPayments.length, flushPendingPayments]);
-
-  return {
-    flushPendingPayments,
-  };
 };

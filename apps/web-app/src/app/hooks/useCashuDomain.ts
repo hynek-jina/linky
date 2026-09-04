@@ -140,7 +140,6 @@ export const useCashuDomain = ({
   );
 
   return {
-    cashuTokensAllRef,
     cashuTokensHydratedRef,
     isCashuTokenKnownAny,
     isCashuTokenStored,

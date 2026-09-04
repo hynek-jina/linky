@@ -31,12 +31,6 @@ export const EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.messages_owner_baseline_count.v1";
 export const EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.transactions_owner_baseline_count.v1";
-export const EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY =
-  "linky.evolu.contacts_owner_edit_count.v1";
-export const EVOLU_MESSAGES_OWNER_EDIT_COUNT_STORAGE_KEY =
-  "linky.evolu.messages_owner_edit_count.v1";
-export const EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY =
-  "linky.evolu.transactions_owner_edit_count.v1";
 export const EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
   "linky.evolu.contacts_owner_last_rotated_at_ms.v1";
 export const EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =

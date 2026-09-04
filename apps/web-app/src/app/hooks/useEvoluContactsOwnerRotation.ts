@@ -97,10 +97,8 @@ interface UseEvoluContactsOwnerRotationResult {
   cashuOwnerId: Evolu.OwnerId | null;
   cashuOwnerEditsUntilRotation: number;
   cashuOwnerIndex: number;
-  cashuOwnerPointer: string;
   cashuSyncOwner: Evolu.SyncOwner | null;
   cashuVisibleOwnerIds: Evolu.OwnerId[];
-  contactsBackupOwnerId: Evolu.OwnerId | null;
   contactsOwnerEditCount: number;
   contactsOwnerEditsUntilRotation: number;
   contactsOwnerId: Evolu.OwnerId | null;
@@ -116,10 +114,8 @@ interface UseEvoluContactsOwnerRotationResult {
   legacyMessagesIdentityOwnerId: Evolu.OwnerId | null;
   metaOwnerId: Evolu.OwnerId | null;
   metaSyncOwner: Evolu.SyncOwner | null;
-  messagesBackupOwnerId: Evolu.OwnerId | null;
   messagesOwnerId: Evolu.OwnerId | null;
   messagesOwnerIndex: number;
-  messagesOwnerPointer: string;
   messagesOwnerEditsUntilRotation: number;
   messagesSyncOwner: Evolu.SyncOwner | null;
   messagesVisibleOwnerIds: Evolu.OwnerId[];
@@ -131,7 +127,6 @@ interface UseEvoluContactsOwnerRotationResult {
   rotateContactsOwnerIsBusy: boolean;
   rotateMessagesOwnerIsBusy: boolean;
   rotateTransactionsOwnerIsBusy: boolean;
-  transactionsBackupOwnerId: Evolu.OwnerId | null;
   transactionsOwnerEditsUntilRotation: number;
   transactionsOwnerId: Evolu.OwnerId | null;
   transactionsOwnerIndex: number;
@@ -554,12 +549,6 @@ export const useEvoluContactsOwnerRotation = ({
     React.useState<Evolu.OwnerId[]>([]);
   const [historicalBootstrapSyncOwners, setHistoricalBootstrapSyncOwners] =
     React.useState<Evolu.SyncOwner[]>([]);
-  const [contactsBackupOwnerId, setContactsBackupOwnerId] =
-    React.useState<Evolu.OwnerId | null>(null);
-  const [messagesBackupOwnerId, setMessagesBackupOwnerId] =
-    React.useState<Evolu.OwnerId | null>(null);
-  const [transactionsBackupOwnerId, setTransactionsBackupOwnerId] =
-    React.useState<Evolu.OwnerId | null>(null);
   const [rotateContactsOwnerIsBusy, setRotateContactsOwnerIsBusy] =
     React.useState(false);
   const [rotateCashuOwnerIsBusy, setRotateCashuOwnerIsBusy] =
@@ -997,9 +986,6 @@ export const useEvoluContactsOwnerRotation = ({
       setMessagesVisibleOwnerIds([]);
       setTransactionsVisibleOwnerIds([]);
       setHistoricalBootstrapSyncOwners([]);
-      setContactsBackupOwnerId(null);
-      setMessagesBackupOwnerId(null);
-      setTransactionsBackupOwnerId(null);
       return;
     }
 
@@ -1011,9 +997,6 @@ export const useEvoluContactsOwnerRotation = ({
       setMessagesVisibleOwnerIds([]);
       setTransactionsVisibleOwnerIds([]);
       setHistoricalBootstrapSyncOwners([]);
-      setContactsBackupOwnerId(null);
-      setMessagesBackupOwnerId(null);
-      setTransactionsBackupOwnerId(null);
       return;
     }
 
@@ -1053,36 +1036,6 @@ export const useEvoluContactsOwnerRotation = ({
         resolvedTransactionsOwnerIndex,
         deriveOwnerMnemonic,
       ),
-      resolvedContactsOwnerIndex > 0
-        ? deriveOwnerSyncDataFromSeed(
-            normalizedSeed,
-            resolvedContactsOwnerIndex - 1,
-            resolvedCashuOwnerIndex,
-            resolvedMessagesOwnerIndex,
-            resolvedTransactionsOwnerIndex,
-            deriveOwnerMnemonic,
-          )
-        : Promise.resolve(null),
-      resolvedMessagesOwnerIndex > 0
-        ? deriveOwnerSyncDataFromSeed(
-            normalizedSeed,
-            resolvedContactsOwnerIndex,
-            resolvedCashuOwnerIndex,
-            resolvedMessagesOwnerIndex - 1,
-            resolvedTransactionsOwnerIndex,
-            deriveOwnerMnemonic,
-          )
-        : Promise.resolve(null),
-      resolvedTransactionsOwnerIndex > 0
-        ? deriveOwnerSyncDataFromSeed(
-            normalizedSeed,
-            resolvedContactsOwnerIndex,
-            resolvedCashuOwnerIndex,
-            resolvedMessagesOwnerIndex,
-            resolvedTransactionsOwnerIndex - 1,
-            deriveOwnerMnemonic,
-          )
-        : Promise.resolve(null),
     ]).then(
       ([
         derived,
@@ -1090,9 +1043,6 @@ export const useEvoluContactsOwnerRotation = ({
         visibleContactOwners,
         visibleMessagesOwners,
         visibleTransactionsOwners,
-        contactsBackup,
-        messagesBackup,
-        transactionsBackup,
       ]) => {
         if (cancelled) return;
         setOwnerSyncData(derived);
@@ -1113,11 +1063,6 @@ export const useEvoluContactsOwnerRotation = ({
             ) === index,
         );
         setHistoricalBootstrapSyncOwners(uniqueHistoricalOwners);
-        setContactsBackupOwnerId(contactsBackup?.contactsOwner.id ?? null);
-        setMessagesBackupOwnerId(messagesBackup?.messagesOwner.id ?? null);
-        setTransactionsBackupOwnerId(
-          transactionsBackup?.transactionsOwner.id ?? null,
-        );
       },
     );
 
@@ -1132,10 +1077,6 @@ export const useEvoluContactsOwnerRotation = ({
     resolvedTransactionsOwnerIndex,
     slip39Seed,
   ]);
-
-  // Cashu writes stay on the active cashu owner only. Older duplicates can
-  // remain from earlier versions, but new writes no longer mirror into a
-  // contacts-aligned legacy lane.
 
   React.useEffect(() => {
     if (!fixedOwnerSyncData) return;
@@ -2055,12 +1996,10 @@ export const useEvoluContactsOwnerRotation = ({
       : appOwnerId,
     cashuOwnerEditsUntilRotation,
     cashuOwnerIndex: resolvedCashuOwnerIndex,
-    cashuOwnerPointer: `cashu-${resolvedCashuOwnerIndex}`,
     cashuSyncOwner: isSeedLogin ? (ownerSyncData?.cashuOwner ?? null) : null,
     cashuVisibleOwnerIds: isSeedLogin
       ? cashuVisibleOwnerIds
       : nonSeedVisibleOwnerIds,
-    contactsBackupOwnerId: isSeedLogin ? contactsBackupOwnerId : null,
     contactsOwnerEditCount,
     contactsOwnerEditsUntilRotation,
     contactsSyncOwner: isSeedLogin
@@ -2094,12 +2033,10 @@ export const useEvoluContactsOwnerRotation = ({
       ? (fixedOwnerSyncData?.metaOwner.id ?? null)
       : null,
     metaSyncOwner: isSeedLogin ? (fixedOwnerSyncData?.metaOwner ?? null) : null,
-    messagesBackupOwnerId: isSeedLogin ? messagesBackupOwnerId : null,
     messagesOwnerId: isSeedLogin
       ? (ownerSyncData?.messagesOwner.id ?? null)
       : appOwnerId,
     messagesOwnerIndex: resolvedMessagesOwnerIndex,
-    messagesOwnerPointer: `messages-${resolvedMessagesOwnerIndex}`,
     messagesOwnerEditsUntilRotation,
     messagesSyncOwner: isSeedLogin
       ? (ownerSyncData?.messagesOwner ?? null)
@@ -2115,7 +2052,6 @@ export const useEvoluContactsOwnerRotation = ({
     rotateContactsOwnerIsBusy,
     rotateMessagesOwnerIsBusy,
     rotateTransactionsOwnerIsBusy,
-    transactionsBackupOwnerId: isSeedLogin ? transactionsBackupOwnerId : null,
     transactionsOwnerEditsUntilRotation,
     transactionsOwnerId: isSeedLogin
       ? (ownerSyncData?.transactionsOwner.id ?? null)

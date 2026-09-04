@@ -41,7 +41,6 @@ interface BuildPeopleRoutePropsParams {
   groupNames: PeopleRoutesProps["contactEditProps"]["groupNames"];
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
   isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
-  isBankPaymentOfferCanceled: PeopleRoutesProps["chatProps"]["isBankPaymentOfferCanceled"];
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
@@ -57,7 +56,9 @@ interface BuildPeopleRoutePropsParams {
   contactsGroupAssignment: PeopleRoutesProps["chatProps"]["contactsGroupAssignment"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
-  onRespondBankPaymentOffer: PeopleRoutesProps["chatProps"]["onRespondBankPaymentOffer"];
+  onRespondBankPaymentOffer: ReturnType<
+    PeopleRoutesProps["bankPaymentOfferDetailProps"]
+  >["onRespondBankPaymentOffer"];
   onSettleBankPaymentOffer: PeopleRoutesProps["chatProps"]["onSettleBankPaymentOffer"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
   onOpenNpubContact: PeopleRoutesProps["chatProps"]["onOpenNpubContact"];
@@ -156,7 +157,6 @@ export const buildPeopleRouteProps = ({
   groupNames,
   handleSaveContact,
   isProfileEditing,
-  isBankPaymentOfferCanceled,
   isSavingContact,
   blockArchivedContact,
   lang,
@@ -274,7 +274,6 @@ export const buildPeopleRouteProps = ({
       getCashuTokenMessageInfo,
       getMintIconUrl,
       getNpubMessageContactInfo,
-      isBankPaymentOfferCanceled,
       onReply,
       onEdit,
       onReact,
@@ -291,7 +290,6 @@ export const buildPeopleRouteProps = ({
       onOpenNpubContact,
       onPayPaymentRequest,
       onDeclinePaymentRequest,
-      onRespondBankPaymentOffer,
       onSettleBankPaymentOffer,
       t,
     },

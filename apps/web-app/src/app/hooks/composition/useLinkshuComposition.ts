@@ -552,7 +552,6 @@ export const useLinkshuComposition = ({
     cashuTokenLifecycle: operations?.cashuTokenLifecycle ?? null,
     checkAllCashuTokens: operations?.checkAllCashuTokens ?? null,
     checkCashuTokenRow: operations?.checkCashuTokenRow ?? null,
-    linkshuRuntime,
     meltCashuInvoice: operations?.meltCashuInvoice ?? null,
     probeLightningFee: operations?.probeLightningFee ?? null,
     receiveCashuToken: operations?.receiveCashuToken ?? null,
