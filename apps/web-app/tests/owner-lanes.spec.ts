@@ -10,6 +10,8 @@ import { createSeedIdentity, setSeedLoginStorage } from "./helpers/identity";
 import { stubFiatRates, stubThirdPartyAssets } from "./helpers/network";
 import { topUp } from "./helpers/wallet";
 
+test.use({ actionTimeout: 20_000 });
+
 test("contact, message and transaction rotations preserve old rows and sync new writes", async ({
   browser,
 }, testInfo) => {
@@ -77,6 +79,28 @@ test("contact, message and transaction rotations preserve old rows and sync new 
       }
     });
 
+    await test.step("edit an old-lane contact and create a new-lane contact", async () => {
+      await source.page.goto(`/#contact/${contactId}/edit`);
+      await source.page
+        .locator(".form-grid input")
+        .first()
+        .fill("Updated after rotation");
+      await source.page
+        .getByRole("button", { name: "Save changes", exact: true })
+        .click();
+      const nextPeer = await createSeedIdentity();
+      await addContactByNpub(source.page, nextPeer.npub);
+      await follower.page.goto("/#contacts");
+      await expect(
+        follower.page.locator('[data-guide="contact-card"]'),
+      ).toHaveCount(2);
+      await expect(
+        follower.page
+          .locator('[data-guide="contact-card"]')
+          .filter({ hasText: "Updated after rotation" }),
+      ).toHaveCount(1);
+    });
+
     await test.step("new messages and topups coexist with old-lane history", async () => {
       await source.page.goto(`/#chat/${contactId}`);
       await source.page
@@ -90,7 +114,7 @@ test("contact, message and transaction rotations preserve old rows and sync new 
         await device.page.goto("/#contacts");
         await expect(
           device.page.locator('[data-guide="contact-card"]'),
-        ).toHaveCount(1);
+        ).toHaveCount(2);
         await device.page.goto(`/#chat/${contactId}`);
         for (const text of ["Before owner rotation", "After owner rotation"])
           await expect(

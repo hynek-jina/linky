@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 import { generateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { generateSecretKey, nip19 } from "nostr-tools";
+import { setBaseStorage, MOBILE_VIEWPORT } from "./helpers/appState";
+import { createSeedIdentity, setSeedLoginStorage } from "./helpers/identity";
+import { addContactByNpub } from "./helpers/contacts";
+import { watchAppErrors } from "./helpers/diagnostics";
+import { stubFiatRates } from "./helpers/network";
 
 test("recovers once when the main bundle cannot start", async ({ page }) => {
   let mainBundleRequests = 0;
@@ -100,3 +105,44 @@ test("recovers when the authenticated app never commits", async ({ page }) => {
   ).toBeVisible({ timeout: 15_000 });
   expect(databaseWorkerRequests).toBeGreaterThanOrEqual(1);
 });
+
+for (const channelState of ["missing", "blocked"]) {
+  test(`boots and persists contacts with ${channelState} BroadcastChannel and no Web Locks`, async ({
+    page,
+  }) => {
+    const errors = watchAppErrors(page, `compat ${channelState}`);
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    page.setDefaultTimeout(20_000);
+    await setBaseStorage(page);
+    await setSeedLoginStorage(page, await createSeedIdentity());
+    await stubFiatRates(page);
+    await page.addInitScript((state) => {
+      Object.defineProperty(navigator, "locks", {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(window, "BroadcastChannel", {
+        configurable: true,
+        writable: true,
+        value:
+          state === "missing"
+            ? undefined
+            : class {
+                constructor() {
+                  throw new DOMException("Blocked", "SecurityError");
+                }
+              },
+      });
+    }, channelState);
+    await page.goto("/#wallet");
+    await expect(page.getByLabel("Available balance")).toBeVisible();
+    const contact = await createSeedIdentity();
+    const id = await addContactByNpub(page, contact.npub);
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`#chat/${id}$`));
+    await expect(page.locator('[data-guide="chat-input"]')).toBeVisible();
+    await page.goto("/#contacts");
+    await expect(page.locator('[data-guide="contact-card"]')).toHaveCount(1);
+    errors.assertClean();
+  });
+}
