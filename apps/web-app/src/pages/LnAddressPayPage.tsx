@@ -107,7 +107,7 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
             <div className="contact-avatar is-large" aria-hidden="true">
               <Avatar
                 pictureUrl={knownContactPictureUrl}
-                fallback={getInitials((knownContact.name ?? ""))}
+                fallback={getInitials(knownContact.name ?? "")}
                 fallbackClassName="contact-avatar-fallback"
                 loading="lazy"
               />

@@ -131,7 +131,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
           <div className="contact-avatar is-large" aria-hidden="true">
             <Avatar
               pictureUrl={url}
-              fallback={getInitials((selectedContact.name ?? ""))}
+              fallback={getInitials(selectedContact.name ?? "")}
               fallbackClassName="contact-avatar-fallback"
               loading="lazy"
             />

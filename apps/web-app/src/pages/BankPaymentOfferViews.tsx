@@ -50,10 +50,7 @@ interface PaymentConfirmationProps {
   t: Translate;
 }
 
-const PaymentConfirmation = ({
-  confirmation,
-  t,
-}: PaymentConfirmationProps) => {
+const PaymentConfirmation = ({ confirmation, t }: PaymentConfirmationProps) => {
   const rumorId = (confirmation.message.rumorId ?? "").trim() || null;
   return (
     <div className="bank-payment-offer-confirmation">
@@ -115,10 +112,7 @@ interface RecipientProgressProps {
   t: Translate;
 }
 
-const RecipientProgress = ({
-  status,
-  t,
-}: RecipientProgressProps) => {
+const RecipientProgress = ({ status, t }: RecipientProgressProps) => {
   const hasAccepted =
     status === "accepted" ||
     status === "bank_details_sent" ||
@@ -277,12 +271,11 @@ export function OwnerOfferView({
 
       <div className="bank-payment-offer-recipient-list">
         {offerEntries.map((offerEntry) => {
-          const contactId = (offerEntry.message.contactId).trim();
+          const contactId = offerEntry.message.contactId.trim();
           const contact = contacts.find(
             (candidate) => (candidate.id ?? "").trim() === contactId,
           );
-          const name =
-            (contact?.name ?? "").trim() || t("unknownContactTitle");
+          const name = (contact?.name ?? "").trim() || t("unknownContactTitle");
           const npub = normalizeNpubIdentifier(contact?.npub ?? "");
           const pictureUrl = npub ? (nostrPictureByNpub[npub] ?? null) : null;
           return (
@@ -301,11 +294,9 @@ export function OwnerOfferView({
         })}
         {queuedRecipients.map((recipient) => {
           const contact = contacts.find(
-            (candidate) =>
-              (candidate.id ?? "").trim() === recipient.contactId,
+            (candidate) => (candidate.id ?? "").trim() === recipient.contactId,
           );
-          const name =
-            (contact?.name ?? "").trim() || t("unknownContactTitle");
+          const name = (contact?.name ?? "").trim() || t("unknownContactTitle");
           const npub = normalizeNpubIdentifier(contact?.npub ?? "");
           const pictureUrl = npub ? (nostrPictureByNpub[npub] ?? null) : null;
           return (

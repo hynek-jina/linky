@@ -50,7 +50,7 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     isUnknownContact = false,
   }) => {
     const { formatDisplayedAmountText, t } = useAppShellCore();
-    const initials = getInitials((contact.name ?? ""));
+    const initials = getInitials(contact.name ?? "");
     const contactStatus = formatDisplayGeneralStatus({
       status: statusText,
       providesLabel: t("contactStatusProvides"),
