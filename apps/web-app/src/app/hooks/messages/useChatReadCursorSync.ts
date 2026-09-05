@@ -51,10 +51,10 @@ export const useChatReadCursorSync = ({
     // A chat open in a background tab does not count as read.
     if (!documentVisible) return;
     if (route.kind !== "chat" || !selectedContact) return;
-    const contactId = String(selectedContact.id).trim();
-    if (!contactId || contactId !== String(route.id ?? "").trim()) return;
+    const contactId = selectedContact.id.trim();
+    if (!contactId || contactId !== (route.id ?? "").trim()) return;
 
-    const storedAtSec = Number(selectedContact.chatLastSeenAtSec ?? 0);
+    const storedAtSec = selectedContact.chatLastSeenAtSec ?? 0;
     const lastSeenAtSec = Math.max(
       Number.isFinite(storedAtSec) && storedAtSec > 0 ? storedAtSec : 0,
       lastWrittenAtSecByContactIdRef.current.get(contactId) ?? 0,

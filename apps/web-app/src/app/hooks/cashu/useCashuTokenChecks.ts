@@ -55,7 +55,7 @@ export const useCashuTokenChecks = ({
         return;
       }
       try {
-        await forgetCashuToken(String(id));
+        await forgetCashuToken(id);
       } catch (error) {
         setStatus(`${t("errorPrefix")}: ${String(error)}`);
         return;
@@ -79,7 +79,7 @@ export const useCashuTokenChecks = ({
       setCashuIsBusy(true);
       setStatus(t("cashuChecking"));
       try {
-        const outcome = await checkCashuTokenRow(String(id));
+        const outcome = await checkCashuTokenRow(id);
         if (Either.isLeft(outcome)) {
           pushToast(t("errorPrefix"));
           return "skipped";

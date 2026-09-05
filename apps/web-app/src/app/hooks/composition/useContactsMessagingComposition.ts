@@ -145,7 +145,6 @@ import {
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../../utils/storage";
-import { readField } from "../../../utils/unknown";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { nowSeconds } from "../../../utils/time";
@@ -176,7 +175,7 @@ const INLINE_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
 
 const extractMentionedNpubs = (content: string): string[] => {
-  const matches = String(content ?? "").match(INLINE_NPUB_PATTERN);
+  const matches = content.match(INLINE_NPUB_PATTERN);
   if (!matches) return [];
 
   const seen = new Set<string>();
@@ -204,11 +203,8 @@ const hasPendingBankPaymentOfferResponderWork = (
     { hasPendingAccepted: boolean; wholeOfferTerminal: boolean }
   >();
   for (const message of messages) {
-    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
-    if (
-      !info ||
-      String(info.offererPublicKey ?? "").trim() !== offererPubkeyHex
-    ) {
+    const info = getLinkyBankPaymentOfferInfo(message.content);
+    if (!info || (info.offererPublicKey ?? "").trim() !== offererPubkeyHex) {
       continue;
     }
 
@@ -220,11 +216,7 @@ const hasPendingBankPaymentOfferResponderWork = (
       entry.wholeOfferTerminal = true;
     } else if (
       info.status === "accepted" &&
-      !isLinkyBankPaymentOfferExpired(
-        info,
-        Number(message.createdAtSec ?? 0),
-        nowSec,
-      )
+      !isLinkyBankPaymentOfferExpired(info, message.createdAtSec, nowSec)
     ) {
       entry.hasPendingAccepted = true;
     }
@@ -317,7 +309,7 @@ const reportContactsAddedToGroup = (
   pending: PendingContactsGroupAssignment,
   group: string,
 ): void => {
-  const contactIds = pending.savedContacts.map(({ id }) => String(id));
+  const contactIds = pending.savedContacts.map(({ id }) => id);
   reportAppLog({
     tag: "contacts.addToGroup",
     summary: `${contactIds.length} contacts from a chat message added to group "${group}"`,
@@ -532,7 +524,7 @@ export const useContactsMessagingComposition = ({
 
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
 
-  const activeChatRouteId = route.kind === "chat" ? String(route.id ?? "") : "";
+  const activeChatRouteId = route.kind === "chat" ? route.id : "";
 
   React.useEffect(() => {
     if (route.kind === "chat") return;
@@ -603,13 +595,12 @@ export const useContactsMessagingComposition = ({
 
   const upsertBankPaymentOfferMessage = React.useCallback(
     (message: LocalNostrMessage) => {
-      const messageContactId = String(message.contactId ?? "").trim();
-      const messageWrapId = String(message.wrapId ?? "").trim();
-      const messageClientId = String(message.clientId ?? "").trim();
-      const messageId = String(message.id ?? "").trim();
+      const messageContactId = message.contactId.trim();
+      const messageWrapId = message.wrapId.trim();
+      const messageClientId = (message.clientId ?? "").trim();
+      const messageId = message.id.trim();
       const messageOfferId =
-        getLinkyBankPaymentOfferInfo(String(message.content ?? ""))?.offerId ??
-        "";
+        getLinkyBankPaymentOfferInfo(message.content)?.offerId ?? "";
       const messageOfferKey =
         messageOfferId && messageContactId
           ? `${messageContactId}:${messageOfferId}`
@@ -618,9 +609,9 @@ export const useContactsMessagingComposition = ({
       setBankPaymentOfferMessages((prev) => {
         const existingOfferMessage = messageOfferKey
           ? (prev.find((existing) => {
-              const existingContactId = String(existing.contactId ?? "").trim();
+              const existingContactId = existing.contactId.trim();
               const existingOfferId = getLinkyBankPaymentOfferInfo(
-                String(existing.content ?? ""),
+                existing.content,
               )?.offerId;
               return (
                 `${existingContactId}:${existingOfferId ?? ""}` ===
@@ -629,9 +620,9 @@ export const useContactsMessagingComposition = ({
             }) ?? null)
           : null;
         const next = prev.filter((existing) => {
-          const existingContactId = String(existing.contactId ?? "").trim();
+          const existingContactId = existing.contactId.trim();
           const existingOfferId = getLinkyBankPaymentOfferInfo(
-            String(existing.content ?? ""),
+            existing.content,
           )?.offerId;
           if (
             messageOfferKey &&
@@ -640,9 +631,9 @@ export const useContactsMessagingComposition = ({
             return false;
           }
 
-          const existingWrapId = String(existing.wrapId ?? "").trim();
-          const existingClientId = String(existing.clientId ?? "").trim();
-          const existingId = String(existing.id ?? "").trim();
+          const existingWrapId = existing.wrapId.trim();
+          const existingClientId = (existing.clientId ?? "").trim();
+          const existingId = existing.id.trim();
 
           if (messageWrapId && existingWrapId === messageWrapId) return false;
           if (messageClientId && existingClientId === messageClientId) {
@@ -655,14 +646,11 @@ export const useContactsMessagingComposition = ({
         const mergedMessage = existingOfferMessage
           ? (() => {
               const existingInfo = getLinkyBankPaymentOfferInfo(
-                String(existingOfferMessage.content ?? ""),
+                existingOfferMessage.content,
               );
-              const messageInfo = getLinkyBankPaymentOfferInfo(
-                String(message.content ?? ""),
-              );
-              const existingCreatedAt =
-                Number(existingOfferMessage.createdAtSec ?? 0) || 0;
-              const messageCreatedAt = Number(message.createdAtSec ?? 0) || 0;
+              const messageInfo = getLinkyBankPaymentOfferInfo(message.content);
+              const existingCreatedAt = existingOfferMessage.createdAtSec || 0;
+              const messageCreatedAt = message.createdAtSec || 0;
               const existingUpdatedAt =
                 existingInfo?.statusUpdatedAtSec ?? existingCreatedAt;
               const messageUpdatedAt =
@@ -706,8 +694,8 @@ export const useContactsMessagingComposition = ({
 
         next.push(mergedMessage);
         next.sort((a, b) => {
-          const createdA = Number(a.createdAtSec ?? 0);
-          const createdB = Number(b.createdAtSec ?? 0);
+          const createdA = a.createdAtSec;
+          const createdB = b.createdAtSec;
           return createdA - createdB;
         });
         return next;
@@ -725,8 +713,8 @@ export const useContactsMessagingComposition = ({
 
   const visibleMessageOwnerIds = React.useMemo(() => {
     const ids = [
-      String(appOwnerId ?? "").trim(),
-      ...messagesVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
+      (appOwnerId ?? "").trim(),
+      ...messagesVisibleOwnerIds.map((ownerId) => ownerId.trim()),
     ].filter(Boolean);
     return Array.from(new Set(ids));
   }, [appOwnerId, messagesVisibleOwnerIds]);
@@ -785,8 +773,8 @@ export const useContactsMessagingComposition = ({
     const records = [];
 
     for (const contact of contacts) {
-      const name = String(contact.name ?? "").trim();
-      const npub = normalizeNpubIdentifier(contact.npub);
+      const name = (contact.name ?? "").trim();
+      const npub = normalizeNpubIdentifier(contact.npub ?? "");
       if (!name || !npub) continue;
 
       const pubkey = decodeNpub(npub);
@@ -832,8 +820,8 @@ export const useContactsMessagingComposition = ({
 
   const reassignNostrConversationContactId = React.useCallback(
     (fromContactId: string, toContactId: string): number => {
-      const normalizedFrom = String(fromContactId ?? "").trim();
-      const normalizedTo = String(toContactId ?? "").trim();
+      const normalizedFrom = fromContactId.trim();
+      const normalizedTo = toContactId.trim();
       if (!normalizedFrom || !normalizedTo || normalizedFrom === normalizedTo) {
         return 0;
       }
@@ -845,7 +833,7 @@ export const useContactsMessagingComposition = ({
       setBankPaymentOfferMessages((previous) => {
         let changed = false;
         const next = previous.map((message) => {
-          if (String(message.contactId ?? "").trim() !== normalizedFrom) {
+          if (message.contactId.trim() !== normalizedFrom) {
             return message;
           }
           changed = true;
@@ -897,7 +885,7 @@ export const useContactsMessagingComposition = ({
       metaOwnerId,
       transactionsOwnerId,
     ]
-      .map((value) => String(value ?? "").trim())
+      .map((value) => (value ?? "").trim())
       .filter(Boolean)
       .join("|");
   }, [
@@ -1010,7 +998,7 @@ export const useContactsMessagingComposition = ({
   const buildUnknownDisplayName = React.useCallback(
     (name: string | null, npub: string | null) => {
       const prefix = t("unknownContactNamePrefix");
-      const normalizedName = String(name ?? "").trim();
+      const normalizedName = (name ?? "").trim();
       const fallback = npub ? formatShortNpub(npub) : t("unknownContactTitle");
       return `${prefix} ${normalizedName || fallback}`.trim();
     },
@@ -1019,7 +1007,7 @@ export const useContactsMessagingComposition = ({
 
   const buildSavedContactName = React.useCallback(
     (name: string | null, npub: string | null) => {
-      const normalizedName = String(name ?? "").trim();
+      const normalizedName = (name ?? "").trim();
       return (
         normalizedName ||
         (npub ? formatShortNpub(npub) : t("unknownContactTitle"))
@@ -1042,7 +1030,7 @@ export const useContactsMessagingComposition = ({
     const unknownById = new Map<string, UnknownChatContact>();
 
     for (const [contactId, lastMessage] of lastVisibleMessageByContactId) {
-      const normalizedContactId = String(contactId ?? "").trim();
+      const normalizedContactId = contactId.trim();
       if (!normalizedContactId) continue;
       if (!isUnknownContactId(normalizedContactId)) continue;
 
@@ -1050,10 +1038,7 @@ export const useContactsMessagingComposition = ({
       const candidatePubkeyFromId =
         readUnknownContactIdPubkey(normalizedContactId);
       const candidatePubkeyFromThread = nostrMessagesLocal
-        .filter(
-          (message) =>
-            String(message.contactId ?? "").trim() === normalizedContactId,
-        )
+        .filter((message) => message.contactId.trim() === normalizedContactId)
         .map((message) => normalizePubkeyHex(message.pubkey))
         .find((pubkey) => {
           if (!pubkey) return false;
@@ -1104,21 +1089,21 @@ export const useContactsMessagingComposition = ({
     // only considers active contacts; a direct npub match also reclaims
     // threads of archived contacts.
     const activeContacts = contacts.filter((contact) => {
-      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      const archivedAtSec = contact.archivedAtSec ?? 0;
       return !Number.isFinite(archivedAtSec) || archivedAtSec <= 0;
     });
 
     for (const unknownContact of unknownContacts) {
-      const unknownContactId = String(unknownContact.id ?? "").trim();
-      const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
+      const unknownContactId = unknownContact.id.trim();
+      const unknownNpub = normalizeNpubIdentifier(unknownContact.npub ?? "");
       if (!unknownContactId || !unknownNpub) continue;
 
       let knownContact = contacts.find((contact) => {
-        const knownContactId = String(contact.id ?? "").trim();
+        const knownContactId = contact.id.trim();
         if (!knownContactId || knownContactId === unknownContactId) {
           return false;
         }
-        return normalizeNpubIdentifier(contact.npub) === unknownNpub;
+        return normalizeNpubIdentifier(contact.npub ?? "") === unknownNpub;
       });
 
       let matchedByLightningAddress = false;
@@ -1127,8 +1112,8 @@ export const useContactsMessagingComposition = ({
         matchedMetadata = loadCachedProfile(unknownNpub)?.metadata ?? null;
         const profileLightningAddress = matchedMetadata
           ? omitSyntheticContactLightningAddress(
-              String(matchedMetadata.lud16 ?? "").trim() ||
-                String(matchedMetadata.lud06 ?? "").trim(),
+              (matchedMetadata.lud16 ?? "").trim() ||
+                (matchedMetadata.lud06 ?? "").trim(),
               unknownNpub,
             )
           : "";
@@ -1142,7 +1127,7 @@ export const useContactsMessagingComposition = ({
         }
       }
 
-      const knownContactId = String(knownContact?.id ?? "").trim();
+      const knownContactId = (knownContact?.id ?? "").trim();
       if (!knownContactId) continue;
 
       if (matchedByLightningAddress && knownContact) {
@@ -1160,7 +1145,7 @@ export const useContactsMessagingComposition = ({
         const payload = {
           id: knownContact.id,
           npub: parsedNpub.value,
-          ...(!String(knownContact.name ?? "").trim() && parsedName?.ok
+          ...(!(knownContact.name ?? "").trim() && parsedName?.ok
             ? { name: parsedName.value }
             : {}),
         };
@@ -1186,7 +1171,7 @@ export const useContactsMessagingComposition = ({
     const npubs: string[] = [];
 
     for (const contact of unknownContacts) {
-      const npub = normalizeNpubIdentifier(contact.npub);
+      const npub = normalizeNpubIdentifier(contact.npub ?? "");
       if (!npub) continue;
       if (seen.has(npub)) continue;
       seen.add(npub);
@@ -1201,7 +1186,7 @@ export const useContactsMessagingComposition = ({
     const npubs: string[] = [];
 
     for (const message of chatMessages) {
-      for (const npub of extractMentionedNpubs(String(message.content ?? ""))) {
+      for (const npub of extractMentionedNpubs(message.content)) {
         if (seen.has(npub)) continue;
         seen.add(npub);
         npubs.push(npub);
@@ -1301,7 +1286,7 @@ export const useContactsMessagingComposition = ({
   const displayContactById = React.useMemo(() => {
     const byId = new Map<string, DisplayContact>();
     for (const contact of displayContacts) {
-      const id = String(contact.id ?? "").trim();
+      const id = (contact.id ?? "").trim();
       if (!id) continue;
       byId.set(id, contact);
     }
@@ -1311,32 +1296,30 @@ export const useContactsMessagingComposition = ({
   const selectedChatContact = React.useMemo<ChatSelectedContact | null>(() => {
     if (route.kind !== "chat" && route.kind !== "bankPaymentOffer") return null;
 
-    const chatId = String(
-      route.kind === "chat" ? route.id : route.chatId,
-    ).trim();
+    const chatId = (route.kind === "chat" ? route.id : route.chatId).trim();
     if (!chatId) return null;
 
     const source = displayContactById.get(chatId) ?? null;
     if (!source) return null;
 
-    const normalizedId = String(source.id ?? "").trim();
+    const normalizedId = (source.id ?? "").trim();
     if (!normalizedId) return null;
 
-    const normalizedNpub = normalizeNpubIdentifier(source.npub);
+    const normalizedNpub = normalizeNpubIdentifier(source.npub ?? "");
     const normalizedUnknownPubkeyHex = normalizePubkeyHex(
-      readField(source, "unknownPubkeyHex"),
+      source.unknownPubkeyHex,
     );
-    const sourceGroupName = String(source.groupName ?? "").trim();
-    const isUnknownContact = readField(source, "isUnknownContact") === true;
+    const sourceGroupName = (source.groupName ?? "").trim();
+    const isUnknownContact = source.isUnknownContact === true;
 
     return {
       id: normalizedId,
       ...(sourceGroupName ? { groupName: sourceGroupName } : {}),
       ...(source.name !== undefined
-        ? { name: String(source.name ?? "").trim() || null }
+        ? { name: (source.name ?? "").trim() || null }
         : {}),
       ...(source.lnAddress !== undefined
-        ? { lnAddress: String(source.lnAddress ?? "").trim() || null }
+        ? { lnAddress: (source.lnAddress ?? "").trim() || null }
         : {}),
       ...(normalizedNpub ? { npub: normalizedNpub } : {}),
       ...(normalizedUnknownPubkeyHex
@@ -1346,8 +1329,8 @@ export const useContactsMessagingComposition = ({
       ...(selectedContact?.chatPeerSeenSinceSec != null &&
       selectedContact.chatPeerSeenAtSec != null
         ? {
-            chatPeerSeenSinceSec: Number(selectedContact.chatPeerSeenSinceSec),
-            chatPeerSeenAtSec: Number(selectedContact.chatPeerSeenAtSec),
+            chatPeerSeenSinceSec: selectedContact.chatPeerSeenSinceSec,
+            chatPeerSeenAtSec: selectedContact.chatPeerSeenAtSec,
           }
         : {}),
     };
@@ -1355,9 +1338,9 @@ export const useContactsMessagingComposition = ({
 
   const displayContactsSearchData = React.useMemo(() => {
     return displayContacts.map((contact) => {
-      const idKey = String(contact.id ?? "").trim();
+      const idKey = (contact.id ?? "").trim();
       const groupNames = getContactGroups(contact);
-      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub ?? "");
       const statusFilterValues = normalizedNpub
         ? parseProfileGeneralStatus(nostrStatusByNpub[normalizedNpub])
             .currencies
@@ -1370,11 +1353,7 @@ export const useContactsMessagingComposition = ({
         contact.unknownPubkeyHex,
         ...statusFilterValues,
       ]
-        .map((value) =>
-          String(value ?? "")
-            .trim()
-            .toLowerCase(),
-        )
+        .map((value) => (value ?? "").trim().toLowerCase())
         .filter(Boolean)
         .join(" ");
 
@@ -1392,8 +1371,8 @@ export const useContactsMessagingComposition = ({
     const currencyCounts = new Map<string, number>();
 
     for (const contact of displayContacts) {
-      if (Number(contact.archivedAtSec ?? 0) > 0) continue;
-      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      if ((contact.archivedAtSec ?? 0) > 0) continue;
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub ?? "");
       if (!normalizedNpub) continue;
 
       for (const currency of parseProfileGeneralStatus(
@@ -1425,7 +1404,7 @@ export const useContactsMessagingComposition = ({
       });
     }
     const archivedCount = displayContacts.filter(
-      (contact) => Number(contact.archivedAtSec ?? 0) > 0,
+      (contact) => (contact.archivedAtSec ?? 0) > 0,
     ).length;
     if (archivedCount > 0) {
       options.push({
@@ -1495,8 +1474,8 @@ export const useContactsMessagingComposition = ({
   const chatLastSeenAtSecByContactId = React.useMemo(() => {
     const byContactId = new Map<string, number>();
     for (const contact of contacts) {
-      const contactId = String(contact.id ?? "").trim();
-      const lastSeenAtSec = Number(contact.chatLastSeenAtSec ?? 0);
+      const contactId = contact.id.trim();
+      const lastSeenAtSec = contact.chatLastSeenAtSec ?? 0;
       if (!contactId || !Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
         continue;
       }
@@ -1549,7 +1528,7 @@ export const useContactsMessagingComposition = ({
       ...visibleContacts.others,
     ];
     return sortedContacts.flatMap((contact) => {
-      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub ?? "");
       if (!normalizedNpub) return [];
       if (
         !parseProfileGeneralStatus(
@@ -1564,7 +1543,7 @@ export const useContactsMessagingComposition = ({
           ...contact,
           lastBankPaymentResponseSec:
             lastBankPaymentOfferResponseSecByContactId.get(
-              String(contact.id ?? "").trim(),
+              (contact.id ?? "").trim(),
             ) ?? null,
           pictureUrl: nostrPictureByNpub[normalizedNpub] ?? null,
         },
@@ -1580,7 +1559,9 @@ export const useContactsMessagingComposition = ({
     visibleContacts.others,
   ]);
 
-  const selectedContactNpub = normalizeNpubIdentifier(selectedContact?.npub);
+  const selectedContactNpub = normalizeNpubIdentifier(
+    selectedContact?.npub ?? "",
+  );
   // Memoized for identity stability: the cache fallback would otherwise
   // produce a fresh object every render and retrigger effects downstream.
   const selectedContactMetadata = React.useMemo(() => {
@@ -1649,9 +1630,9 @@ export const useContactsMessagingComposition = ({
     setContactNewPrefill(null);
     if (prefill) {
       setForm({
-        name: String(prefill.suggestedName ?? ""),
-        npub: String(prefill.npub ?? ""),
-        lnAddress: String(prefill.lnAddress ?? ""),
+        name: prefill.suggestedName ?? "",
+        npub: prefill.npub ?? "",
+        lnAddress: prefill.lnAddress,
         groups: [],
       });
     }
@@ -1738,7 +1719,7 @@ export const useContactsMessagingComposition = ({
     async (args: {
       amountSat?: unknown;
       amountText: string;
-      contacts: readonly { id?: unknown; name?: unknown; npub?: unknown }[];
+      contacts: readonly ContactRowLike[];
       spdPayload?: unknown;
       staggerDelaySec?: unknown;
     }): Promise<{ chatId: string; offerId: string } | null> => {
@@ -1747,7 +1728,7 @@ export const useContactsMessagingComposition = ({
         Number.isFinite(amountSatRaw) && amountSatRaw > 0
           ? Math.round(amountSatRaw)
           : null;
-      const amountText = String(args.amountText ?? "").trim();
+      const amountText = args.amountText.trim();
       const spdPayload = String(args.spdPayload ?? "").trim();
       const staggerDelaySec = clampBankPaymentOfferStaggerDelaySec(
         Number(args.staggerDelaySec ?? 0),
@@ -1775,8 +1756,8 @@ export const useContactsMessagingComposition = ({
           contactPubHex: string;
         }[] = [];
         for (const contact of args.contacts) {
-          const contactId = String(contact.id ?? "").trim();
-          const contactNpub = normalizeNpubIdentifier(contact.npub);
+          const contactId = (contact.id ?? "").trim();
+          const contactNpub = normalizeNpubIdentifier(contact.npub ?? "");
           if (!contactId || !contactNpub) continue;
 
           const contactPubHex = decodeNpub(contactNpub);
@@ -1892,9 +1873,7 @@ export const useContactsMessagingComposition = ({
         withPush?: boolean;
       },
     ): Promise<boolean> => {
-      const offerInfo = getLinkyBankPaymentOfferInfo(
-        String(message.content ?? ""),
-      );
+      const offerInfo = getLinkyBankPaymentOfferInfo(message.content);
       if (!offerInfo) {
         setStatus(t("spdPaymentOfferFailed"));
         return false;
@@ -1908,30 +1887,27 @@ export const useContactsMessagingComposition = ({
         const identity = identityFromNsec(currentNsec);
         if (!identity) throw new Error("invalid nsec");
         const myPubHex = identity.pubkey;
-        const messageDirection = String(message.direction ?? "").trim();
+        const messageDirection = message.direction.trim();
         const offererPublicKey =
-          String(offerInfo.offererPublicKey ?? "").trim() ||
-          (messageDirection === "out"
-            ? myPubHex
-            : String(message.pubkey ?? "").trim());
+          (offerInfo.offererPublicKey ?? "").trim() ||
+          (messageDirection === "out" ? myPubHex : message.pubkey.trim());
 
         if (!isPubkey(offererPublicKey)) {
           setStatus(t("spdPaymentOfferFailed"));
           return false;
         }
 
-        const messageContactId = String(message.contactId ?? "").trim();
+        const messageContactId = message.contactId.trim();
         const messageContact =
-          contacts.find(
-            (contact) => String(contact.id ?? "").trim() === messageContactId,
-          ) ?? null;
-        const contactNpub = normalizeNpubIdentifier(messageContact?.npub);
+          contacts.find((contact) => contact.id.trim() === messageContactId) ??
+          null;
+        const contactNpub = normalizeNpubIdentifier(messageContact?.npub ?? "");
         let contactPubkey: string | null = null;
         if (contactNpub) {
           contactPubkey = decodeNpub(contactNpub);
         }
 
-        const messagePubkey = String(message.pubkey ?? "").trim();
+        const messagePubkey = message.pubkey.trim();
         const recipientPublicKey =
           offererPublicKey === myPubHex
             ? (contactPubkey ??
@@ -1951,7 +1927,7 @@ export const useContactsMessagingComposition = ({
 
         const clientId = ClientId.make(makeLocalId());
         const initiatedAtSec = positiveUnixSeconds(
-          offerInfo.initiatedAtSec ?? Number(message.createdAtSec ?? 0),
+          offerInfo.initiatedAtSec ?? message.createdAtSec,
         );
         const bankPaidAtSec = positiveUnixSeconds(
           offerInfo.bankPaidAtSec ??
@@ -1962,8 +1938,10 @@ export const useContactsMessagingComposition = ({
         const expiresAtSec = positiveUnixSeconds(options?.expiresAtSec);
         const extensionSec = positiveInt(options?.extensionSec);
         const amountSat = positiveInt(offerInfo.amountSat);
-        const spdPayload = String(
-          options?.spdPayload ?? offerInfo.spdPayload ?? "",
+        const spdPayload = (
+          options?.spdPayload ??
+          offerInfo.spdPayload ??
+          ""
         ).trim();
         const text = getLinkyBankPaymentOfferMessageText(
           amountText,
@@ -2002,7 +1980,7 @@ export const useContactsMessagingComposition = ({
 
         upsertBankPaymentOfferMessage({
           clientId,
-          contactId: String(message.contactId ?? "").trim(),
+          contactId: message.contactId.trim(),
           content: exit.value.content,
           createdAtSec: exit.value.sentAt,
           direction: offererPublicKey === myPubHex ? "out" : "in",
@@ -2034,23 +2012,18 @@ export const useContactsMessagingComposition = ({
 
   const getBankPaymentOfferGroupMessages = React.useCallback(
     (message: LocalNostrMessage): LocalNostrMessage[] => {
-      const offerInfo = getLinkyBankPaymentOfferInfo(
-        String(message.content ?? ""),
-      );
+      const offerInfo = getLinkyBankPaymentOfferInfo(message.content);
       if (!offerInfo) return [message];
 
       const group = bankPaymentOfferMessages.filter((candidate) => {
-        const candidateInfo = getLinkyBankPaymentOfferInfo(
-          String(candidate.content ?? ""),
-        );
+        const candidateInfo = getLinkyBankPaymentOfferInfo(candidate.content);
         return candidateInfo?.offerId === offerInfo.offerId;
       });
 
       if (
         !group.some(
           (candidate) =>
-            String(candidate.contactId ?? "").trim() ===
-            String(message.contactId ?? "").trim(),
+            candidate.contactId.trim() === message.contactId.trim(),
         )
       ) {
         group.push(message);
@@ -2063,13 +2036,11 @@ export const useContactsMessagingComposition = ({
 
   const isBankPaymentOfferCanceled = React.useCallback(
     (offerId: string): boolean => {
-      const normalizedOfferId = String(offerId ?? "").trim();
+      const normalizedOfferId = offerId.trim();
       if (!normalizedOfferId) return false;
 
       return bankPaymentOfferMessages.some((message) => {
-        const info = getLinkyBankPaymentOfferInfo(
-          String(message.content ?? ""),
-        );
+        const info = getLinkyBankPaymentOfferInfo(message.content);
         return (
           info?.offerId === normalizedOfferId && info.status === "canceled"
         );
@@ -2098,9 +2069,7 @@ export const useContactsMessagingComposition = ({
         nextStatus === "canceled"
           ? (group
               .filter((candidate) => {
-                const info = getLinkyBankPaymentOfferInfo(
-                  String(candidate.content ?? ""),
-                );
+                const info = getLinkyBankPaymentOfferInfo(candidate.content);
                 return (
                   info?.status === "accepted" ||
                   info?.status === "bank_details_sent" ||
@@ -2108,12 +2077,8 @@ export const useContactsMessagingComposition = ({
                 );
               })
               .sort((left, right) => {
-                const leftInfo = getLinkyBankPaymentOfferInfo(
-                  String(left.content ?? ""),
-                );
-                const rightInfo = getLinkyBankPaymentOfferInfo(
-                  String(right.content ?? ""),
-                );
+                const leftInfo = getLinkyBankPaymentOfferInfo(left.content);
+                const rightInfo = getLinkyBankPaymentOfferInfo(right.content);
                 const rank = (status: LinkyBankPaymentOfferStatus): number =>
                   status === "bank_paid"
                     ? 0
@@ -2125,17 +2090,15 @@ export const useContactsMessagingComposition = ({
                   rank(rightInfo?.status ?? "accepted");
                 if (rankDifference !== 0) return rankDifference;
                 return (
-                  Number(leftInfo?.statusUpdatedAtSec ?? left.createdAtSec) -
-                  Number(rightInfo?.statusUpdatedAtSec ?? right.createdAtSec)
+                  (leftInfo?.statusUpdatedAtSec ?? left.createdAtSec) -
+                  (rightInfo?.statusUpdatedAtSec ?? right.createdAtSec)
                 );
               })[0]?.contactId ?? null)
           : null;
       let sentAny = false;
 
       for (const groupMessage of group) {
-        const info = getLinkyBankPaymentOfferInfo(
-          String(groupMessage.content ?? ""),
-        );
+        const info = getLinkyBankPaymentOfferInfo(groupMessage.content);
         if (!info) continue;
         if (info.status === nextStatus) {
           sentAny = true;
@@ -2149,8 +2112,8 @@ export const useContactsMessagingComposition = ({
             : {}),
           withPush:
             nextStatus === "canceled" &&
-            String(groupMessage.contactId ?? "").trim() ===
-              String(cancellationPushContactId ?? "").trim(),
+            groupMessage.contactId.trim() ===
+              (cancellationPushContactId ?? "").trim(),
         });
         sentAny = sentAny || sent;
       }
@@ -2181,11 +2144,9 @@ export const useContactsMessagingComposition = ({
         >();
 
         for (const message of bankPaymentOfferMessages) {
-          const info = getLinkyBankPaymentOfferInfo(
-            String(message.content ?? ""),
-          );
+          const info = getLinkyBankPaymentOfferInfo(message.content);
           if (!info) continue;
-          if (String(info.offererPublicKey ?? "").trim() !== myPubHex) {
+          if ((info.offererPublicKey ?? "").trim() !== myPubHex) {
             continue;
           }
 
@@ -2213,9 +2174,9 @@ export const useContactsMessagingComposition = ({
           const notifyNonWinningCandidates = async (
             winner: LocalNostrMessage,
           ): Promise<void> => {
-            const winnerContactId = String(winner.contactId ?? "").trim();
+            const winnerContactId = winner.contactId.trim();
             for (const entry of group) {
-              const contactId = String(entry.message.contactId ?? "").trim();
+              const contactId = entry.message.contactId.trim();
               if (!contactId || contactId === winnerContactId) continue;
               if (
                 entry.info?.status !== "offered" &&
@@ -2239,11 +2200,9 @@ export const useContactsMessagingComposition = ({
             )
             .sort((left, right) => {
               const leftSec =
-                left.info?.statusUpdatedAtSec ??
-                Number(left.message.createdAtSec ?? 0);
+                left.info?.statusUpdatedAtSec ?? left.message.createdAtSec;
               const rightSec =
-                right.info?.statusUpdatedAtSec ??
-                Number(right.message.createdAtSec ?? 0);
+                right.info?.statusUpdatedAtSec ?? right.message.createdAtSec;
               return leftSec - rightSec;
             })[0];
           if (activeBankDetails) {
@@ -2264,22 +2223,16 @@ export const useContactsMessagingComposition = ({
           const accepted = group
             .filter((entry) => entry.info?.status === "accepted")
             .sort((a, b) => {
-              const aSec =
-                a.info?.statusUpdatedAtSec ??
-                Number(a.message.createdAtSec ?? 0);
-              const bSec =
-                b.info?.statusUpdatedAtSec ??
-                Number(b.message.createdAtSec ?? 0);
+              const aSec = a.info?.statusUpdatedAtSec ?? a.message.createdAtSec;
+              const bSec = b.info?.statusUpdatedAtSec ?? b.message.createdAtSec;
               if (aSec !== bSec) return aSec - bSec;
-              return String(a.message.contactId ?? "").localeCompare(
-                String(b.message.contactId ?? ""),
-              );
+              return a.message.contactId.localeCompare(b.message.contactId);
             });
 
           const candidate = accepted[0] ?? null;
           if (!candidate?.info) continue;
 
-          const candidateKey = `${offerId}:${String(candidate.message.contactId ?? "").trim()}`;
+          const candidateKey = `${offerId}:${candidate.message.contactId.trim()}`;
           const record = readLinkyBankPaymentOfferSpdRecord({
             offerId,
             ownerPubkey: myPubHex,
@@ -2372,12 +2325,12 @@ export const useContactsMessagingComposition = ({
     const closedOfferIds = new Set<string>();
     const offeredContactIdsByOfferId = new Map<string, Set<string>>();
     for (const message of bankPaymentOfferMessages) {
-      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      const info = getLinkyBankPaymentOfferInfo(message.content);
       if (!info) continue;
       if (!bankPaymentOfferStaggerQueueStillWanted(info.status)) {
         closedOfferIds.add(info.offerId);
       }
-      const contactId = String(message.contactId ?? "").trim();
+      const contactId = message.contactId.trim();
       if (contactId) {
         const contactIds =
           offeredContactIdsByOfferId.get(info.offerId) ?? new Set<string>();
@@ -2563,10 +2516,10 @@ export const useContactsMessagingComposition = ({
       }[]
     >();
     for (const message of bankPaymentOfferMessages) {
-      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      const info = getLinkyBankPaymentOfferInfo(message.content);
       if (
         !info ||
-        String(info.offererPublicKey ?? "").trim() !== myPubHex ||
+        (info.offererPublicKey ?? "").trim() !== myPubHex ||
         isLinkyBankPaymentOfferTerminalStatus(info.status)
       ) {
         continue;
@@ -2596,7 +2549,7 @@ export const useContactsMessagingComposition = ({
             (entry) =>
               getLinkyBankPaymentOfferExpiresAtSec(
                 entry.info,
-                Number(entry.message.createdAtSec ?? 0),
+                entry.message.createdAtSec,
               ) ?? nowSec,
           ),
       );
@@ -2659,15 +2612,14 @@ export const useContactsMessagingComposition = ({
   });
 
   const contactsOnboardingHasSentMessage = useMemo(() => {
-    return nostrMessagesRecent.some((m) => String(m.direction ?? "") === "out");
+    return nostrMessagesRecent.some((m) => m.direction === "out");
   }, [nostrMessagesRecent]);
 
   const handleDelete = (id: ContactId) => {
-    const normalizedContactId = String(id ?? "").trim();
+    const normalizedContactId = id.trim();
     const contactToArchive =
-      contacts.find(
-        (contact) => String(contact.id ?? "").trim() === normalizedContactId,
-      ) ?? null;
+      contacts.find((contact) => contact.id.trim() === normalizedContactId) ??
+      null;
 
     const archivedAtSec = Math.ceil(Date.now() / 1e3);
     const storedContactOwnerId = contactToArchive
@@ -2681,7 +2633,7 @@ export const useContactsMessagingComposition = ({
       archivedAtSec,
       chatLastSeenAtSec: Math.max(
         archivedAtSec,
-        Number(contactToArchive?.chatLastSeenAtSec ?? 0) || 0,
+        (contactToArchive?.chatLastSeenAtSec ?? 0) || 0,
       ),
     };
     const result = archiveOwnerId
@@ -2712,13 +2664,15 @@ export const useContactsMessagingComposition = ({
         : update("contact", { id, archivedAtSec: null });
 
       if (result.ok) {
-        const restoredNpub = normalizeNpubIdentifier(contactToRestore?.npub);
+        const restoredNpub = normalizeNpubIdentifier(
+          contactToRestore?.npub ?? "",
+        );
         if (restoredNpub) {
           const unknownContactId = buildUnknownContactId(
             decodeNpub(restoredNpub),
           );
           if (unknownContactId) {
-            reassignNostrConversationContactId(unknownContactId, String(id));
+            reassignNostrConversationContactId(unknownContactId, id);
           }
         }
       }
@@ -2807,9 +2761,9 @@ export const useContactsMessagingComposition = ({
   // An incoming message newer than the archive brings the contact back.
   React.useEffect(() => {
     for (const contact of contacts) {
-      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      const archivedAtSec = contact.archivedAtSec ?? 0;
       if (!Number.isFinite(archivedAtSec) || archivedAtSec <= 0) continue;
-      const contactId = String(contact.id ?? "").trim();
+      const contactId = contact.id.trim();
       if (!contactId) continue;
       const newestIncomingAtSec = unreadByContactId.get(contactId) ?? 0;
       if (newestIncomingAtSec <= archivedAtSec) continue;
@@ -2821,7 +2775,7 @@ export const useContactsMessagingComposition = ({
     if (route.kind !== "contactEdit") return;
     if (!selectedContact?.id) return;
 
-    const normalizedNpub = normalizeNpubIdentifier(selectedContact.npub);
+    const normalizedNpub = normalizeNpubIdentifier(selectedContact.npub ?? "");
     if (!normalizedNpub) {
       setStatus(t("chatMissingContactNpub"));
       return;
@@ -2839,7 +2793,7 @@ export const useContactsMessagingComposition = ({
 
     await blockPubkeyAndPublishMuteList(blockedPubkey);
 
-    const contactId = String(selectedContact.id ?? "").trim();
+    const contactId = selectedContact.id.trim();
     if (contactId) {
       removeLocalNostrMessagesByContactId(contactId);
     }
@@ -2888,8 +2842,7 @@ export const useContactsMessagingComposition = ({
       intent: "pay" | "request" = "pay",
     ) => {
       const knownContact =
-        contacts.find((row) => String(row.id ?? "").trim() === contactId) ??
-        null;
+        contacts.find((row) => row.id.trim() === contactId) ?? null;
       if (!knownContact) return;
 
       contactPayBackToChatRef.current = fromChat ? knownContact.id : null;
@@ -2901,7 +2854,7 @@ export const useContactsMessagingComposition = ({
 
   const openContactDetail = React.useCallback(
     (contact: DisplayContact) => {
-      const contactId = String(contact.id ?? "").trim();
+      const contactId = (contact.id ?? "").trim();
       if (!contactId) return;
 
       setPendingDeleteId(null);
@@ -2913,15 +2866,14 @@ export const useContactsMessagingComposition = ({
       }
 
       const knownContact =
-        contacts.find((row) => String(row.id ?? "").trim() === contactId) ??
-        null;
+        contacts.find((row) => row.id.trim() === contactId) ?? null;
       if (!knownContact) {
         navigateTo({ route: "contacts" });
         return;
       }
 
-      const npub = String(knownContact.npub ?? "").trim();
-      const ln = String(knownContact.lnAddress ?? "").trim();
+      const npub = (knownContact.npub ?? "").trim();
+      const ln = (knownContact.lnAddress ?? "").trim();
       if (!npub) {
         if (ln) {
           openContactPay(knownContact.id);
@@ -2930,7 +2882,7 @@ export const useContactsMessagingComposition = ({
         navigateTo({ route: "contact", id: knownContact.id });
         return;
       }
-      navigateTo({ route: "chat", id: String(knownContact.id) });
+      navigateTo({ route: "chat", id: knownContact.id });
     },
     [contactPayBackToChatRef, contacts, openContactPay],
   );
@@ -2939,21 +2891,21 @@ export const useContactsMessagingComposition = ({
     if (route.kind !== "chat") return;
     if (!selectedChatContact?.isUnknownContact) return;
 
-    const contactId = String(selectedChatContact.id ?? "").trim();
-    const npub = normalizeNpubIdentifier(selectedChatContact.npub);
+    const contactId = selectedChatContact.id.trim();
+    const npub = normalizeNpubIdentifier(selectedChatContact.npub ?? "");
     if (!contactId || !npub) {
       setStatus(t("chatUnknownContactAddFailed"));
       return;
     }
 
     const existing = contacts.find(
-      (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+      (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
     );
 
     if (existing?.id) {
       reassignNostrConversationContactId(contactId, existing.id);
       setStatus(t("contactSaved"));
-      navigateTo({ route: "chat", id: String(existing.id) });
+      navigateTo({ route: "chat", id: existing.id });
       return;
     }
 
@@ -3007,7 +2959,7 @@ export const useContactsMessagingComposition = ({
     const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
     if (!confirmed) return;
 
-    const contactId = String(selectedChatContact.id ?? "").trim();
+    const contactId = selectedChatContact.id.trim();
     if (!contactId) return;
 
     const unknownPubkeyHex = (() => {
@@ -3016,7 +2968,9 @@ export const useContactsMessagingComposition = ({
       );
       if (directPubkey) return directPubkey;
 
-      const normalizedNpub = normalizeNpubIdentifier(selectedChatContact.npub);
+      const normalizedNpub = normalizeNpubIdentifier(
+        selectedChatContact.npub ?? "",
+      );
       if (!normalizedNpub) return null;
 
       return decodeNpub(normalizedNpub);
@@ -3045,13 +2999,11 @@ export const useContactsMessagingComposition = ({
 
       const knownContact =
         contacts.find(
-          (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+          (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
         ) ?? null;
       const derivedProfile = deriveDefaultProfile(npub, lang);
       const displayName = buildSavedContactName(
-        String(knownContact?.name ?? "").trim() ||
-          unknownNameByNpub[npub] ||
-          null,
+        (knownContact?.name ?? "").trim() || unknownNameByNpub[npub] || null,
         npub,
       );
       const pictureUrl =
@@ -3061,7 +3013,7 @@ export const useContactsMessagingComposition = ({
         displayName,
         isSaved:
           Boolean(knownContact) ||
-          normalizeNpubIdentifier(currentNpub) === npub,
+          normalizeNpubIdentifier(currentNpub ?? "") === npub,
         npub,
         pictureUrl,
       };
@@ -3079,10 +3031,10 @@ export const useContactsMessagingComposition = ({
   const mentionContacts = React.useMemo(
     () =>
       contacts.flatMap((contact) => {
-        const name = String(contact.name ?? "").trim();
-        const npub = normalizeNpubIdentifier(contact.npub);
+        const name = (contact.name ?? "").trim();
+        const npub = normalizeNpubIdentifier(contact.npub ?? "");
         if (!name || !npub) return [];
-        const groupName = String(contact.groupName ?? "").trim();
+        const groupName = (contact.groupName ?? "").trim();
         const groupNames = getContactGroups(contact);
         return [
           {
@@ -3104,14 +3056,14 @@ export const useContactsMessagingComposition = ({
       if (!npub) return;
 
       const existing = contacts.find(
-        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+        (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
       );
       if (existing?.id) {
         navigateTo({ route: "contact", id: existing.id });
         return;
       }
 
-      const myNpub = normalizeNpubIdentifier(currentNpub);
+      const myNpub = normalizeNpubIdentifier(currentNpub ?? "");
       if (myNpub && myNpub === npub) {
         navigateTo({ route: "profile" });
         return;
@@ -3180,11 +3132,11 @@ export const useContactsMessagingComposition = ({
     (rawNpubs: readonly string[], messageId: string) => {
       const savedNpubs = new Set(
         contacts.flatMap((contact) => {
-          const npub = normalizeNpubIdentifier(contact.npub);
+          const npub = normalizeNpubIdentifier(contact.npub ?? "");
           return npub ? [npub] : [];
         }),
       );
-      const myNpub = normalizeNpubIdentifier(currentNpub);
+      const myNpub = normalizeNpubIdentifier(currentNpub ?? "");
       if (myNpub) savedNpubs.add(myNpub);
 
       const newNpubs: string[] = [];
@@ -3323,7 +3275,7 @@ export const useContactsMessagingComposition = ({
 
     const existing = contacts.find(
       (contact) =>
-        normalizeNpubIdentifier(contact.npub) === pending.targetNpub &&
+        normalizeNpubIdentifier(contact.npub ?? "") === pending.targetNpub &&
         Boolean(contact.id),
     );
     if (!existing?.id) return;
@@ -3331,7 +3283,7 @@ export const useContactsMessagingComposition = ({
     pendingUnknownContactAddRef.current = null;
     reassignNostrConversationContactId(pending.sourceContactId, existing.id);
     setStatus(t("contactSaved"));
-    navigateTo({ route: "chat", id: String(existing.id) });
+    navigateTo({ route: "chat", id: existing.id });
   }, [contacts, reassignNostrConversationContactId, setStatus, t]);
 
   const sendChatMessage = useSendChatMessage({
@@ -3393,7 +3345,7 @@ export const useContactsMessagingComposition = ({
   const sendChatImage = React.useCallback(
     async (file: File, replyToMessage?: LocalNostrMessage) => {
       if (editContext) return;
-      const replyToId = String(replyToMessage?.rumorId ?? "").trim();
+      const replyToId = (replyToMessage?.rumorId ?? "").trim();
       await sendChatMessage({
         clearDraft: false,
         imageFile: file,
@@ -3402,10 +3354,8 @@ export const useContactsMessagingComposition = ({
               replyContext: {
                 replyToId,
                 rootMessageId:
-                  String(replyToMessage?.rootMessageId ?? "").trim() ||
-                  replyToId,
-                replyToContent:
-                  String(replyToMessage?.content ?? "").trim() || null,
+                  (replyToMessage?.rootMessageId ?? "").trim() || replyToId,
+                replyToContent: (replyToMessage?.content ?? "").trim() || null,
               },
             }
           : {}),
@@ -3416,41 +3366,40 @@ export const useContactsMessagingComposition = ({
 
   const onReplyToChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
-      const rumorId = String(message.rumorId ?? "").trim();
+      const rumorId = (message.rumorId ?? "").trim();
       if (!rumorId) return;
       setEditContext(null);
       setReplyContext({
         replyToId: rumorId,
-        rootMessageId: String(message.rootMessageId ?? "").trim() || rumorId,
-        replyToContent: String(message.content ?? "").trim() || null,
+        rootMessageId: (message.rootMessageId ?? "").trim() || rumorId,
+        replyToContent: message.content.trim() || null,
       });
     },
     [],
   );
 
   const onEditChatMessage = React.useCallback((message: LocalNostrMessage) => {
-    const isOut = String(message.direction ?? "") === "out";
+    const isOut = message.direction === "out";
     if (!isOut) return;
-    const rumorId = String(message.rumorId ?? "").trim();
+    const rumorId = (message.rumorId ?? "").trim();
     if (!rumorId) return;
-    const messageId = String(message.id ?? "").trim();
+    const messageId = message.id.trim();
     if (!messageId) return;
 
     setReplyContext(null);
-    const content = String(message.content ?? "");
+    const content = message.content;
     setEditContext({
       messageId,
       rumorId,
-      originalContent:
-        String(message.originalContent ?? "").trim() || content || "",
+      originalContent: (message.originalContent ?? "").trim() || content || "",
     });
     setChatDraft(content);
   }, []);
 
   const onReactToChatMessage = React.useCallback(
     (message: LocalNostrMessage, emoji: string) => {
-      const messageRumorId = String(message.rumorId ?? "").trim();
-      const messageAuthorPubkey = String(message.pubkey ?? "").trim();
+      const messageRumorId = (message.rumorId ?? "").trim();
+      const messageAuthorPubkey = message.pubkey.trim();
       if (!messageRumorId || !messageAuthorPubkey) return;
       void sendReaction({
         emoji,
@@ -3466,7 +3415,7 @@ export const useContactsMessagingComposition = ({
 
   const onCopyChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
-      const content = String(message.content ?? "");
+      const content = message.content;
       const privateImage = parsePrivateImageMessage(content);
       const copyContent = privateImage
         ? privateImagePreviewText(t, privateImage)
@@ -3478,16 +3427,15 @@ export const useContactsMessagingComposition = ({
 
   const onDeclineChatPaymentRequest = React.useCallback(
     async (message: LocalNostrMessage) => {
-      const requestRumorId = String(message.rumorId ?? "").trim();
+      const requestRumorId = (message.rumorId ?? "").trim();
       if (!requestRumorId) return;
 
       await sendChatMessage({
         clearDraft: false,
         replyContext: {
           replyToId: requestRumorId,
-          rootMessageId:
-            String(message.rootMessageId ?? "").trim() || requestRumorId,
-          replyToContent: String(message.content ?? "").trim() || null,
+          rootMessageId: (message.rootMessageId ?? "").trim() || requestRumorId,
+          replyToContent: message.content.trim() || null,
         },
         text: buildLinkyPaymentRequestDeclineMessage(requestRumorId),
       });
@@ -3506,9 +3454,9 @@ export const useContactsMessagingComposition = ({
 
   const openInboxMessageToast = React.useCallback(
     (params: { contactId: string; messageId?: string }) => {
-      const contactId = String(params.contactId ?? "").trim();
+      const contactId = params.contactId.trim();
       if (!contactId) return;
-      const messageId = String(params.messageId ?? "").trim();
+      const messageId = (params.messageId ?? "").trim();
 
       navigateTo({ route: "chat", id: contactId });
       triggerChatScrollToBottom(messageId || undefined);
@@ -3525,7 +3473,7 @@ export const useContactsMessagingComposition = ({
 
   const recordSentSeenReceipt = React.useCallback(
     (peerPubkey: string, seenUpToSec: number) => {
-      const key = String(peerPubkey).trim();
+      const key = peerPubkey.trim();
       if (!key) return;
       const sent = peerSeenSentUpToSecByPubkeyRef.current;
       if (seenUpToSec > (sent.get(key) ?? 0)) sent.set(key, seenUpToSec);
@@ -3536,10 +3484,10 @@ export const useContactsMessagingComposition = ({
   const getPeerSeenWindow = React.useCallback(
     (contactId: string): PeerSeenWindow | null => {
       const row = contactsLatestRef.current.find(
-        (contact) => String(contact.id).trim() === contactId,
+        (contact) => contact.id.trim() === contactId,
       );
-      const sinceSec = Number(row?.chatPeerSeenSinceSec ?? 0);
-      const seenUpToSec = Number(row?.chatPeerSeenAtSec ?? 0);
+      const sinceSec = row?.chatPeerSeenSinceSec ?? 0;
+      const seenUpToSec = row?.chatPeerSeenAtSec ?? 0;
       const stored =
         sinceSec > 0 && seenUpToSec > sinceSec
           ? { sinceSec, seenUpToSec }
@@ -3556,7 +3504,7 @@ export const useContactsMessagingComposition = ({
   const advanceContactPeerSeen = React.useCallback(
     (contactId: string, seenWindow: PeerSeenWindow) => {
       const row = contactsLatestRef.current.find(
-        (contact) => String(contact.id).trim() === contactId,
+        (contact) => contact.id.trim() === contactId,
       );
       if (!row) return;
       const ownerId =
@@ -3607,36 +3555,32 @@ export const useContactsMessagingComposition = ({
   const chatMessagesWithBankPaymentOffers = React.useMemo(() => {
     if (route.kind !== "chat") return chatMessages;
 
-    const activeContactId = String(route.id ?? "").trim();
+    const activeContactId = route.id.trim();
     if (!activeContactId) return chatMessages;
 
     const offerMessages = bankPaymentOfferMessages.filter(
-      (message) => String(message.contactId ?? "").trim() === activeContactId,
+      (message) => message.contactId.trim() === activeContactId,
     );
     if (offerMessages.length === 0) return chatMessages;
 
     const seenKeys = new Set<string>();
     for (const message of chatMessages) {
-      const offerId = getLinkyBankPaymentOfferInfo(
-        String(message.content ?? ""),
-      )?.offerId;
+      const offerId = getLinkyBankPaymentOfferInfo(message.content)?.offerId;
       if (offerId) seenKeys.add(`offer:${offerId}`);
-      const wrapId = String(message.wrapId ?? "").trim();
+      const wrapId = message.wrapId.trim();
       if (wrapId) seenKeys.add(`wrap:${wrapId}`);
-      const clientId = String(message.clientId ?? "").trim();
+      const clientId = (message.clientId ?? "").trim();
       if (clientId) seenKeys.add(`client:${clientId}`);
-      const id = String(message.id ?? "").trim();
+      const id = message.id.trim();
       if (id) seenKeys.add(`id:${id}`);
     }
 
     const merged = [...chatMessages];
     for (const message of offerMessages) {
-      const offerId = getLinkyBankPaymentOfferInfo(
-        String(message.content ?? ""),
-      )?.offerId;
-      const wrapId = String(message.wrapId ?? "").trim();
-      const clientId = String(message.clientId ?? "").trim();
-      const id = String(message.id ?? "").trim();
+      const offerId = getLinkyBankPaymentOfferInfo(message.content)?.offerId;
+      const wrapId = message.wrapId.trim();
+      const clientId = (message.clientId ?? "").trim();
+      const id = message.id.trim();
       if (offerId && seenKeys.has(`offer:${offerId}`)) continue;
       if (wrapId && seenKeys.has(`wrap:${wrapId}`)) continue;
       if (clientId && seenKeys.has(`client:${clientId}`)) continue;
@@ -3650,10 +3594,10 @@ export const useContactsMessagingComposition = ({
     }
 
     merged.sort((a, b) => {
-      const createdA = Number(a.createdAtSec ?? 0);
-      const createdB = Number(b.createdAtSec ?? 0);
+      const createdA = a.createdAtSec;
+      const createdB = b.createdAtSec;
       if (createdA !== createdB) return createdA - createdB;
-      return String(a.id ?? "").localeCompare(String(b.id ?? ""));
+      return a.id.localeCompare(b.id);
     });
 
     return merged;

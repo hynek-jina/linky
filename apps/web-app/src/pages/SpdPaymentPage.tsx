@@ -1,3 +1,4 @@
+import type { ContactRowLike } from "../app/types/appTypes";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useFiatRates } from "../app/hooks/useFiatRates";
@@ -27,21 +28,14 @@ interface SpdPaymentPageProps {
   initialOfferContactCount: number;
   initialOfferDelaySec: number;
   isEditing: boolean;
-  offerContacts: {
-    id?: unknown;
-    lastBankPaymentResponseSec?: unknown;
-    name?: unknown;
-    npub?: unknown;
-    pictureUrl?: unknown;
-  }[];
+  offerContacts: readonly (ContactRowLike & {
+    lastBankPaymentResponseSec?: number | null;
+    pictureUrl?: string | null;
+  })[];
   onRequestReimbursement: (args: {
     amountSat: number | null;
     amountText: string;
-    contacts: {
-      id?: unknown;
-      name?: unknown;
-      npub?: unknown;
-    }[];
+    contacts: ContactRowLike[];
     spdPayload: string;
     staggerDelaySec: number;
   }) => Promise<{ chatId: string; offerId: string } | null>;
@@ -55,7 +49,7 @@ interface SpdPaymentFieldRow {
 }
 
 const getSpdField = (payment: BankPayment, key: string): string =>
-  String(payment.fields[key] ?? "").trim();
+  (payment.fields[key] ?? "").trim();
 
 // Czech and Slovak accounts are shown the way their banks display them.
 const getDisplayedFieldValue = (payment: BankPayment, key: string): string => {
@@ -65,13 +59,10 @@ const getDisplayedFieldValue = (payment: BankPayment, key: string): string => {
 
 const SATS_PER_BTC = 100_000_000;
 
-const getOfferContactKey = (contact: {
-  id?: unknown;
-  npub?: unknown;
-}): string => {
-  const id = String(contact.id ?? "").trim();
+const getOfferContactKey = (contact: ContactRowLike): string => {
+  const id = (contact.id ?? "").trim();
   if (id) return `id:${id}`;
-  return `npub:${String(contact.npub ?? "").trim()}`;
+  return `npub:${(contact.npub ?? "").trim()}`;
 };
 
 // Selection keeps insertion order: the offer is extended to recipients in
@@ -529,9 +520,9 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
               contact.lastBankPaymentResponseSec >= 0
                 ? contact.lastBankPaymentResponseSec
                 : null;
-            const name = String(contact.name ?? "").trim();
-            const npub = String(contact.npub ?? "").trim();
-            const pictureUrl = String(contact.pictureUrl ?? "").trim();
+            const name = (contact.name ?? "").trim();
+            const npub = (contact.npub ?? "").trim();
+            const pictureUrl = (contact.pictureUrl ?? "").trim();
             const orderIndex = selectedOfferContactKeys.indexOf(key);
             const isSelected = orderIndex !== -1;
 

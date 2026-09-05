@@ -99,20 +99,20 @@ export function EvoluCurrentDataPage(): React.ReactElement {
   }, [copiedCellKey]);
 
   const filteredCurrentData = React.useMemo(() => {
-    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeContactsOwnerId = (evoluContactsOwnerId ?? "").trim();
     const visibleCashuOwnerIds = new Set(
       [evoluCashuOwnerId, ...evoluCashuVisibleOwnerIds]
-        .map((ownerId) => String(ownerId ?? "").trim())
+        .map((ownerId) => (ownerId ?? "").trim())
         .filter(Boolean),
     );
     const visibleMessageOwnerIds = new Set(
       [evoluMessagesOwnerId, ...evoluMessagesVisibleOwnerIds]
-        .map((ownerId) => String(ownerId ?? "").trim())
+        .map((ownerId) => (ownerId ?? "").trim())
         .filter(Boolean),
     );
     const visibleTransactionOwnerIds = new Set(
       [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
-        .map((ownerId) => String(ownerId ?? "").trim())
+        .map((ownerId) => (ownerId ?? "").trim())
         .filter(Boolean),
     );
 

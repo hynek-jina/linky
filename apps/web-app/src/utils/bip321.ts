@@ -65,8 +65,8 @@ const parseAmountBtcToSat = (raw: string | null): number | null => {
  * the parsed components. Unknown extension params land in `extensions` so
  * future BIP 321 add-ons can be inspected without re-parsing.
  */
-export const parseBip321Uri = (input: unknown): Bip321Parsed | null => {
-  const value = String(input ?? "").trim();
+export const parseBip321Uri = (input: string): Bip321Parsed | null => {
+  const value = input.trim();
   if (!BIP321_SCHEME_RE.test(value)) return null;
 
   const body = value.slice("bitcoin:".length);
@@ -128,8 +128,8 @@ export const buildBip321PaymentUri = (args: {
   lightning?: string | null;
 }): string | null => {
   const params = new URLSearchParams();
-  const lightning = String(args.lightning ?? "").trim();
-  const creq = String(args.creq ?? "").trim();
+  const lightning = (args.lightning ?? "").trim();
+  const creq = (args.creq ?? "").trim();
 
   if (lightning) params.set("lightning", stripLightningPrefix(lightning));
   if (creq) params.set("creq", creq);

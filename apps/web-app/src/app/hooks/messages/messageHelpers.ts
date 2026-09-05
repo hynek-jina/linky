@@ -22,7 +22,7 @@ const pickPreferredMessage = (
     const hasWrap = trimString(message.wrapId) ? 4 : 0;
     const hasClient = trimString(message.clientId) ? 2 : 0;
     const hasRumor = getLocalNostrMessageRumorKey(message) ? 1 : 0;
-    const sent = String(message.status ?? "sent") === "sent" ? 1 : 0;
+    const sent = (message.status ?? "sent") === "sent" ? 1 : 0;
     return hasWrap + hasClient + hasRumor + sent;
   };
 
@@ -227,7 +227,7 @@ export const dedupeChatMessages = (
 
     if (!wrapId && !clientId) {
       const content = trimString(message.content);
-      const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+      const createdAtSec = message.createdAtSec || 0;
       const direction = trimString(message.direction);
       const fallbackKey = `${direction}|${createdAtSec}|${content}`;
 
@@ -267,8 +267,8 @@ export const dedupeChatMessages = (
     }
     if (candidateEditedWeight < currentEditedWeight) continue;
 
-    const currentEditedAt = Number(current.editedAtSec ?? 0) || 0;
-    const candidateEditedAt = Number(message.editedAtSec ?? 0) || 0;
+    const currentEditedAt = (current.editedAtSec ?? 0) || 0;
+    const candidateEditedAt = (message.editedAtSec ?? 0) || 0;
     if (candidateEditedAt > currentEditedAt) {
       visibleByBaseKey.set(baseKey, message);
       continue;

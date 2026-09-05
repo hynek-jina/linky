@@ -176,7 +176,7 @@ export const useNpubCashClaim = ({
         const existing = mintInfoByUrl.get(cleanedMint);
         touchMintInfo(cleanedMint, nowSec);
 
-        const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+        const lastChecked = (existing?.lastCheckedAtSec ?? 0) || 0;
         if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
       }
 

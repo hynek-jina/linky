@@ -45,14 +45,16 @@ export interface BankPaymentConfirmation {
   payload: PrivateImageMessagePayload;
 }
 
+interface PaymentConfirmationProps {
+  confirmation: BankPaymentConfirmation;
+  t: Translate;
+}
+
 const PaymentConfirmation = ({
   confirmation,
   t,
-}: {
-  confirmation: BankPaymentConfirmation;
-  t: Translate;
-}) => {
-  const rumorId = String(confirmation.message.rumorId ?? "").trim() || null;
+}: PaymentConfirmationProps) => {
+  const rumorId = (confirmation.message.rumorId ?? "").trim() || null;
   return (
     <div className="bank-payment-offer-confirmation">
       <strong>{t("bankPaymentOfferConfirmation")}</strong>
@@ -80,13 +82,15 @@ export interface PendingConfirmation {
   imageUrl: string | null;
 }
 
+interface PendingPaymentConfirmationProps {
+  pending: PendingConfirmation;
+  t: Translate;
+}
+
 const PendingPaymentConfirmation = ({
   pending,
   t,
-}: {
-  pending: PendingConfirmation;
-  t: Translate;
-}) => (
+}: PendingPaymentConfirmationProps) => (
   <div className="bank-payment-offer-confirmation">
     <strong>{t("bankPaymentOfferConfirmation")}</strong>
     {pending.imageUrl ? (
@@ -106,13 +110,15 @@ const PendingPaymentConfirmation = ({
   </div>
 );
 
+interface RecipientProgressProps {
+  status: LinkyBankPaymentOfferStatus;
+  t: Translate;
+}
+
 const RecipientProgress = ({
   status,
   t,
-}: {
-  status: LinkyBankPaymentOfferStatus;
-  t: Translate;
-}) => {
+}: RecipientProgressProps) => {
   const hasAccepted =
     status === "accepted" ||
     status === "bank_details_sent" ||
@@ -170,19 +176,21 @@ const RecipientProgress = ({
   );
 };
 
+interface RequesterIntroProps {
+  amountText: string;
+  canCycleAmount: boolean;
+  requesterName: string;
+  status: LinkyBankPaymentOfferStatus;
+  t: Translate;
+}
+
 const RequesterIntro = ({
   amountText,
   canCycleAmount,
   requesterName,
   status,
   t,
-}: {
-  amountText: string;
-  canCycleAmount: boolean;
-  requesterName: string;
-  status: LinkyBankPaymentOfferStatus;
-  t: Translate;
-}) => (
+}: RequesterIntroProps) => (
   <div className="bank-payment-offer-requester-intro">
     <strong>
       {t("bankPaymentOfferRequestedBy").replace("{name}", requesterName)}
@@ -269,13 +277,13 @@ export function OwnerOfferView({
 
       <div className="bank-payment-offer-recipient-list">
         {offerEntries.map((offerEntry) => {
-          const contactId = String(offerEntry.message.contactId ?? "").trim();
+          const contactId = (offerEntry.message.contactId).trim();
           const contact = contacts.find(
-            (candidate) => String(candidate.id ?? "").trim() === contactId,
+            (candidate) => (candidate.id ?? "").trim() === contactId,
           );
           const name =
-            String(contact?.name ?? "").trim() || t("unknownContactTitle");
-          const npub = normalizeNpubIdentifier(contact?.npub);
+            (contact?.name ?? "").trim() || t("unknownContactTitle");
+          const npub = normalizeNpubIdentifier(contact?.npub ?? "");
           const pictureUrl = npub ? (nostrPictureByNpub[npub] ?? null) : null;
           return (
             <OfferRecipientRow
@@ -294,11 +302,11 @@ export function OwnerOfferView({
         {queuedRecipients.map((recipient) => {
           const contact = contacts.find(
             (candidate) =>
-              String(candidate.id ?? "").trim() === recipient.contactId,
+              (candidate.id ?? "").trim() === recipient.contactId,
           );
           const name =
-            String(contact?.name ?? "").trim() || t("unknownContactTitle");
-          const npub = normalizeNpubIdentifier(contact?.npub);
+            (contact?.name ?? "").trim() || t("unknownContactTitle");
+          const npub = normalizeNpubIdentifier(contact?.npub ?? "");
           const pictureUrl = npub ? (nostrPictureByNpub[npub] ?? null) : null;
           return (
             <OfferRecipientRow

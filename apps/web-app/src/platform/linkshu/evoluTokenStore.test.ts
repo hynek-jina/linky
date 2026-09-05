@@ -38,7 +38,7 @@ const makeFakeCashuTable = ({ lagging = false } = {}) => {
   const keyOf = (ownerId: string, id: string) => `${ownerId}|${id}`;
 
   const seed = (row: CashuTokenRow): void => {
-    rows.set(keyOf(String(row.ownerId), String(row.id)), row);
+    rows.set(keyOf(row.ownerId, row.id), row);
   };
   const sync = (): void => {
     snapshot = [...rows.values()];
@@ -49,7 +49,7 @@ const makeFakeCashuTable = ({ lagging = false } = {}) => {
     loadTokenRows: () =>
       Promise.resolve(lagging ? snapshot : [...rows.values()]),
     update: (_table, payload, options) => {
-      const key = keyOf(String(options.ownerId), String(payload.id));
+      const key = keyOf(options.ownerId, payload.id);
       const existing = rows.get(key);
       if (existing === undefined) return { ok: true };
       rows.set(key, {
@@ -64,14 +64,14 @@ const makeFakeCashuTable = ({ lagging = false } = {}) => {
       return { ok: true };
     },
     upsert: (_table, payload, options) => {
-      const key = keyOf(String(options.ownerId), String(payload.id));
+      const key = keyOf(options.ownerId, payload.id);
       const existing = rows.get(key);
       const base =
         existing ??
         createCashuTokenRowFixture({
           createdAt: new Date().toISOString(),
-          ownerId: String(options.ownerId),
-          token: String(payload.token),
+          ownerId: options.ownerId,
+          token: payload.token,
         });
       rows.set(key, {
         ...base,
@@ -366,7 +366,7 @@ describe("makeEvoluTokenStore", () => {
     const { seed, store } = makeFakeCashuTable();
     seed(
       createCashuTokenRowFixture({
-        ownerId: String(oldOwnerId),
+        ownerId: oldOwnerId,
         state: "accepted",
         token: "cashuAoldLane",
       }),

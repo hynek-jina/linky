@@ -48,7 +48,7 @@ export function MintDetailPage() {
     );
   }
 
-  const feesJson = String(row.feesJson ?? "").trim();
+  const feesJson = (row.feesJson ?? "").trim();
 
   const runtime = getMintRuntime(cleaned);
   const lastCheckedAtSec = runtime?.lastCheckedAtSec ?? 0;
@@ -142,9 +142,7 @@ export function MintDetailPage() {
                 if (ownerId) {
                   setMintInfoAll((prev) => {
                     const next = prev.map((mintInfoRow) => {
-                      const url = normalizeMintUrl(
-                        String(mintInfoRow.url ?? ""),
-                      );
+                      const url = normalizeMintUrl(mintInfoRow.url);
                       if (url !== cleaned) return mintInfoRow;
                       return {
                         ...mintInfoRow,
@@ -152,7 +150,7 @@ export function MintDetailPage() {
                       };
                     });
                     safeLocalStorageSetJson(
-                      `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+                      `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${ownerId}`,
                       next,
                     );
                     return next;

@@ -2,13 +2,12 @@ import type { TokenRowId, WalletToken } from "@linky/linkshu";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenUnavailableState } from "../app/lib/cashuTokenState";
-import type { MintUrlInput } from "../app/types/appTypes";
 import type { MintIcon } from "../utils/mint";
 import { getNextMintIconUrl } from "../utils/mint";
 
 interface WalletTokenPillProps {
   ariaLabel: string;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   isError?: boolean;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;

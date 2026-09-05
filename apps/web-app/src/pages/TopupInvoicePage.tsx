@@ -190,14 +190,14 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
     topupInvoiceQr,
   );
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
-  const mintDisplay = String(topupMintUrl ?? "")
+  const mintDisplay = (topupMintUrl ?? "")
     .trim()
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "");
   const universalPayload =
-    String(topupInvoiceQrPayload ?? topupInvoice ?? "").trim() || null;
-  const cashuPayload = String(topupInvoiceCashuRequest ?? "").trim() || null;
-  const lightningPayload = String(topupInvoice ?? "").trim() || null;
+    (topupInvoiceQrPayload ?? topupInvoice ?? "").trim() || null;
+  const cashuPayload = (topupInvoiceCashuRequest ?? "").trim() || null;
+  const lightningPayload = (topupInvoice ?? "").trim() || null;
   const selectedPayload =
     qrMode === "cashu"
       ? cashuPayload
@@ -252,7 +252,7 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
   ]);
 
   const handleCopyInvoice = () => {
-    const copyValue = String(selectedPayload ?? "").trim();
+    const copyValue = (selectedPayload ?? "").trim();
     if (!copyValue) return;
     void copyText(copyValue);
   };

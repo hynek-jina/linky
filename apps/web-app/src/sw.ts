@@ -177,7 +177,7 @@ function truncateNotificationBody(value: string): string {
 }
 
 function formatNotificationPeerLabel(pubkeyHex: string): string {
-  const normalized = String(pubkeyHex ?? "").trim();
+  const normalized = pubkeyHex.trim();
   if (!normalized) return "";
 
   const pubkey = parsePubkey(normalized);
@@ -189,7 +189,7 @@ function buildNotificationTitle(
   decryptedMessage: DecryptedPushMessage | null,
   senderContactName: string | null,
 ): string {
-  const contactName = String(senderContactName ?? "").trim();
+  const contactName = (senderContactName ?? "").trim();
   if (contactName) return `Linky - ${contactName}`;
 
   const senderLabel = decryptedMessage
@@ -235,7 +235,7 @@ async function fetchWrapInboxEvent(
   envelope: PushNotificationEnvelope,
   secretKey: NostrSecretKey,
 ): Promise<WrapInboxEvent | null> {
-  const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
+  const outerEventId = (envelope.data?.outerEventId ?? "").trim();
   if (!isWrapId(outerEventId)) {
     logSw("sw decrypt fetch skipped because push envelope is incomplete", {
       data: envelope.data ?? {},

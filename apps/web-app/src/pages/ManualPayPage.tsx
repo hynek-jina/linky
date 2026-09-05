@@ -25,14 +25,12 @@ const scanLikePrefix =
 const linkyAliasPattern = /^[a-z0-9._-]+$/i;
 
 const normalizeSearch = (value: string | null | undefined): string =>
-  String(value ?? "")
-    .trim()
-    .toLocaleLowerCase();
+  (value ?? "").trim().toLocaleLowerCase();
 
 const getLightningLocalPart = (
   value: string | null | undefined,
 ): string | null => {
-  const normalized = String(value ?? "").trim();
+  const normalized = (value ?? "").trim();
   const at = normalized.indexOf("@");
   if (at <= 0) return null;
   return normalized.slice(0, at);
@@ -49,13 +47,13 @@ const shouldTryLinkyAlias = (raw: string): boolean => {
 };
 
 const contactSearchFields = (contact: ManualPayContact): string[] => {
-  const lnAddress = String(contact.lnAddress ?? "").trim();
+  const lnAddress = (contact.lnAddress ?? "").trim();
   const lnLocal = getLightningLocalPart(lnAddress);
   return [
-    String(contact.name ?? "").trim(),
+    (contact.name ?? "").trim(),
     lnAddress,
-    String(lnLocal ?? "").trim(),
-    String(contact.npub ?? "").trim(),
+    (lnLocal ?? "").trim(),
+    (contact.npub ?? "").trim(),
   ].filter((field) => field.length > 0);
 };
 
@@ -168,17 +166,17 @@ export const ManualPayPage: FC<ManualPayPageProps> = ({
           </div>
           <div className="contact-list">
             {suggestions.map((contact) => {
-              const npub = normalizeNpubIdentifier(contact.npub);
+              const npub = normalizeNpubIdentifier(contact.npub ?? "");
               const pictureUrl = npub
                 ? (nostrPictureByNpub[npub] ?? null)
                 : null;
-              const name = String(contact.name ?? "").trim();
-              const lnAddress = String(contact.lnAddress ?? "").trim();
-              const subtitle = lnAddress || String(contact.npub ?? "").trim();
+              const name = (contact.name ?? "").trim();
+              const lnAddress = (contact.lnAddress ?? "").trim();
+              const subtitle = lnAddress || (contact.npub ?? "").trim();
 
               return (
                 <button
-                  key={String(contact.id)}
+                  key={contact.id}
                   type="button"
                   className="contact-card is-clickable manual-pay-contact"
                   onClick={() =>

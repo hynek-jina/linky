@@ -78,8 +78,8 @@ export function AdvancedPage(): React.ReactElement {
     "copyNostr" | "pasteNostr" | null
   >(null);
   const armTimeoutRef = useRef<number | null>(null);
-  const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
-  const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
+  const hasSeedMnemonic = (seedMnemonic ?? "").trim().length > 0;
+  const hasCurrentNsec = (currentNsec ?? "").trim().length > 0;
   const appVersionLabel = __APP_COMMIT_SHA__
     ? `${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
     : `${__APP_VERSION__}`;
@@ -233,7 +233,7 @@ export function AdvancedPage(): React.ReactElement {
           pushToast(t("notificationsRegistered"));
         } else {
           setPushNotificationsDisabledByUser(true);
-          pushToast(String(result.error ?? t("notificationsError")));
+          pushToast(result.error ?? t("notificationsError"));
         }
         return;
       }

@@ -129,9 +129,7 @@ export function ProfilePage({
   const profileStatusText = parseProfileGeneralStatus(profileStatus).text;
   const restoreLightningAddress = React.useMemo(() => {
     for (const lightningAddress of ownedLightningAddresses) {
-      const normalized = String(lightningAddress ?? "")
-        .trim()
-        .toLowerCase();
+      const normalized = lightningAddress.trim().toLowerCase();
       if (normalized) return normalized;
     }
 

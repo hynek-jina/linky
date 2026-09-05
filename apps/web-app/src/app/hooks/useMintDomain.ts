@@ -8,7 +8,7 @@ import {
   getMintOriginAndHost,
   normalizeMintUrl,
 } from "../../utils/mint";
-import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
+import type { LocalMintInfoRow } from "../types/appTypes";
 import { getMintInfoIconUrl } from "./mint/mintInfoHelpers";
 import { useMintInfoStore } from "./mint/useMintInfoStore";
 
@@ -17,11 +17,11 @@ interface UseMintDomainParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   cashuTokensAll: readonly CashuTokenRow[];
   defaultMintUrl: string | null;
-  rememberSeenMint: (mintUrl: MintUrlInput) => void;
+  rememberSeenMint: (mintUrl: string | null | undefined) => void;
 }
 
 interface UseMintDomainResult {
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   getMintRuntime: (
     mintUrl: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;
@@ -65,7 +65,7 @@ export const useMintDomain = ({
 
   const getMintIconUrl = React.useCallback(
     (
-      mint: MintUrlInput,
+      mint: string | null | undefined,
     ): {
       origin: string | null;
       url: string | null;

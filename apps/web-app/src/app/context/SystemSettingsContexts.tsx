@@ -5,7 +5,7 @@ import React from "react";
 import type { EvoluServerStatus } from "../../evolu";
 import type { PasswordManagerSaveResult } from "../../platform/passwordManager";
 import type { ProbeLightningFee } from "../hooks/composition/useLinkshuComposition";
-import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
+import type { LocalMintInfoRow } from "../types/appTypes";
 
 export interface AdvancedSettingsContextValue {
   copyNostrKeys: () => Promise<void>;
@@ -93,7 +93,7 @@ export interface MintSettingsContextValue {
   cashuMeltToMainMintButtonLabel: string | null;
   defaultMintUrl: string | null;
   defaultMintUrlDraft: string;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   getMintRuntime: (
     url: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;

@@ -67,12 +67,10 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
   const inferredLightningAddress =
     inferLightningAddressFromLnurlTarget(lnAddress);
   const displayAddress = formatMiddleDots(
-    String(
-      knownContact?.lnAddress ??
-        preview?.lightningAddress ??
-        inferredLightningAddress ??
-        displayTarget,
-    ),
+    knownContact?.lnAddress ??
+      preview?.lightningAddress ??
+      inferredLightningAddress ??
+      displayTarget,
     36,
   );
   const canCoverAnything = cashuBalance > 0;
@@ -109,7 +107,7 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
             <div className="contact-avatar is-large" aria-hidden="true">
               <Avatar
                 pictureUrl={knownContactPictureUrl}
-                fallback={getInitials(String(knownContact.name ?? ""))}
+                fallback={getInitials((knownContact.name ?? ""))}
                 fallbackClassName="contact-avatar-fallback"
                 loading="lazy"
               />

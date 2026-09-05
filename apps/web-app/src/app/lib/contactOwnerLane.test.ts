@@ -8,7 +8,7 @@ describe("contact owner lane", () => {
   const owner1 = Evolu.OwnerId.orThrow("AQEBAQEBAQEBAQEBAQEBAQ");
 
   it("reads the physical owner lane from an aggregated contact row", () => {
-    expect(readRowOwnerId({ ownerId: owner1 })).toBe(String(owner1));
+    expect(readRowOwnerId({ ownerId: owner1 })).toBe(owner1);
     expect(readRowOwnerId({ ownerId: null })).toBe("");
   });
 

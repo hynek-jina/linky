@@ -71,19 +71,19 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
   const { mintText, tokenAmount } = React.useMemo(() => {
     const parsed = tokenText ? parseTokenText(tokenText) : null;
-    const storedAmount = Number(tokenMeta?.amount ?? 0);
+    const storedAmount = tokenMeta?.amount ?? 0;
     const amount =
       Number.isFinite(storedAmount) && storedAmount > 0
         ? storedAmount
         : (parsed?.amount ?? 0);
-    const mint = String(tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
+    const mint = (tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
     return { mintText: mint, tokenAmount: amount };
   }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
   const mintDisplay = getMintDisplay(mintText);
   const isExternalized = isCashuTokenExternalizedState(row?.state);
   const isIssued = isCashuTokenIssuedState(row?.state);
   const isReserved = isCashuTokenReservedState(row?.state);
-  const isPending = String(row?.state ?? "") === "pending";
+  const isPending = (row?.state ?? "") === "pending";
   const isOwnToken = isCashuTokenAcceptedState(row?.state);
   // Error rows can hold live proofs (e.g. a partially spent receive); linkshu
   // `returnToWallet` re-receives them, which is the recovery path since
@@ -263,7 +263,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
         ) : null}
       </div>
 
-      {String(safeRow.state ?? "") === "error" && (
+      {(safeRow.state ?? "") === "error" && (
         <p className="cashu-token-status cashu-token-status-error">
           {formatStoredCashuError(safeRow.error) ?? t("cashuInvalid")}
         </p>

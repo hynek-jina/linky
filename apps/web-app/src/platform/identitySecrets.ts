@@ -47,7 +47,7 @@ const mirrorPushNsecBestEffort = async (nsec: string): Promise<void> => {
 const wipeCashuStateIfMnemonicChanged = async (
   nextCashuMnemonic: string,
 ): Promise<void> => {
-  const next = String(nextCashuMnemonic ?? "").trim();
+  const next = nextCashuMnemonic.trim();
   if (!next) return;
   const current = (
     await readStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY)

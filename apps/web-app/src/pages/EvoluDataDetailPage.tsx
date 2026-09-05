@@ -113,10 +113,10 @@ export function EvoluDataDetailPage(): React.ReactElement {
   };
 
   const currentDataEntries = React.useMemo(() => {
-    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeContactsOwnerId = (evoluContactsOwnerId ?? "").trim();
     const visibleTransactionsOwnerIds = new Set(
       [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
-        .map((ownerId) => String(ownerId ?? "").trim())
+        .map((ownerId) => (ownerId ?? "").trim())
         .filter(Boolean),
     );
 
@@ -159,10 +159,10 @@ export function EvoluDataDetailPage(): React.ReactElement {
   ]);
 
   const visibleHistoryRows = React.useMemo(() => {
-    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeContactsOwnerId = (evoluContactsOwnerId ?? "").trim();
     const visibleTransactionsOwnerIds = new Set(
       [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
-        .map((ownerId) => String(ownerId ?? "").trim())
+        .map((ownerId) => (ownerId ?? "").trim())
         .filter(Boolean),
     );
 

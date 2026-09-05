@@ -4,11 +4,7 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import { hasMessageEntityPreview } from "../app/lib/messageEntityPreview";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
-import type {
-  ContactRowLike,
-  LocalNostrMessage,
-  MintUrlInput,
-} from "../app/types/appTypes";
+import type { ContactRowLike, LocalNostrMessage } from "../app/types/appTypes";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
 import {
   formatContactMessageTimestamp,
@@ -23,7 +19,7 @@ interface ContactCardProps {
   avatarUrl: string | null;
   contact: ContactRowLike;
   getMintIconUrl: (
-    url: MintUrlInput,
+    url: string | null | undefined,
   ) => Pick<MintIcon, "url"> & Partial<Omit<MintIcon, "url">>;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   hasAttention: boolean;
@@ -54,13 +50,13 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     isUnknownContact = false,
   }) => {
     const { formatDisplayedAmountText, t } = useAppShellCore();
-    const initials = getInitials(String(contact.name ?? ""));
+    const initials = getInitials((contact.name ?? ""));
     const contactStatus = formatDisplayGeneralStatus({
       status: statusText,
       providesLabel: t("contactStatusProvides"),
     });
-    const lastText = String(lastMessage?.content ?? "").trim();
-    const rawDirection = String(lastMessage?.direction ?? "").trim();
+    const lastText = (lastMessage?.content ?? "").trim();
+    const rawDirection = (lastMessage?.direction ?? "").trim();
     const previewDirection =
       rawDirection === "in" || rawDirection === "out" ? rawDirection : null;
     const displayText = formatChatMessagePreviewText({
@@ -72,11 +68,11 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     const preview =
       displayText.length > 40 ? `${displayText.slice(0, 40)}…` : displayText;
     const lastTime = lastMessage
-      ? formatContactMessageTimestamp(Number(lastMessage.createdAtSec ?? 0))
+      ? formatContactMessageTimestamp(lastMessage.createdAtSec)
       : "";
 
     const directionSymbol = (() => {
-      const dir = String(lastMessage?.direction ?? "").trim();
+      const dir = (lastMessage?.direction ?? "").trim();
       if (dir === "out") return "↗";
       if (dir === "in") return "↘";
       return "";
@@ -131,11 +127,8 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
             <div className="card-title-row">
               {contact.name ? (
                 <h4 className="contact-title">
-                  <span
-                    className="contact-title-text"
-                    title={String(contact.name)}
-                  >
-                    {String(contact.name)}
+                  <span className="contact-title-text" title={contact.name}>
+                    {contact.name}
                   </span>
                   {contactStatus ? (
                     <span className="contact-status-text" title={contactStatus}>
@@ -187,7 +180,7 @@ interface TokenPreviewProps {
   directionSymbol: string;
   formatDisplayedAmountText: (amountSat: number) => string;
   getMintIconUrl: (
-    url: MintUrlInput,
+    url: string | null | undefined,
   ) => Pick<MintIcon, "url"> & Partial<Omit<MintIcon, "url">>;
   onIconError: (origin: string, nextUrl: string | null) => void;
   onIconLoad: (origin: string, url: string | null) => void;

@@ -173,15 +173,15 @@ export const useScanNativeComposition = ({
   const [pendingDeepLinkText, setPendingDeepLinkText] = React.useState<
     string | null
   >(() => {
-    const stored = String(
-      safeLocalStorageGet(PENDING_DEEP_LINK_TEXT_STORAGE_KEY) ?? "",
+    const stored = (
+      safeLocalStorageGet(PENDING_DEEP_LINK_TEXT_STORAGE_KEY) ?? ""
     ).trim();
     return stored || null;
   });
 
   const updatePendingDeepLinkText = React.useCallback(
     (value: string | null) => {
-      const normalized = String(value ?? "").trim();
+      const normalized = (value ?? "").trim();
 
       if (!normalized) {
         safeLocalStorageRemove(PENDING_DEEP_LINK_TEXT_STORAGE_KEY);
@@ -299,33 +299,33 @@ export const useScanNativeComposition = ({
   }, []);
 
   const copyShareOptionsText = React.useCallback(async () => {
-    const text = String(shareOptionsText ?? "").trim();
+    const text = (shareOptionsText ?? "").trim();
     if (!text) return;
     await copyText(text);
     setShareOptionsText(null);
   }, [copyText, shareOptionsText]);
 
   const shareOptionsViaEmail = React.useCallback(() => {
-    const text = String(shareOptionsText ?? "").trim();
+    const text = (shareOptionsText ?? "").trim();
     if (!text) return;
     openShareOptionsUrl(`mailto:?body=${encodeURIComponent(text)}`);
   }, [openShareOptionsUrl, shareOptionsText]);
 
   const shareOptionsViaSms = React.useCallback(() => {
-    const text = String(shareOptionsText ?? "").trim();
+    const text = (shareOptionsText ?? "").trim();
     if (!text) return;
     openShareOptionsUrl(`sms:?body=${encodeURIComponent(text)}`);
   }, [openShareOptionsUrl, shareOptionsText]);
 
   const shareOptionsViaWhatsApp = React.useCallback(() => {
-    const text = String(shareOptionsText ?? "").trim();
+    const text = (shareOptionsText ?? "").trim();
     if (!text) return;
     openShareOptionsUrl(`https://wa.me/?text=${encodeURIComponent(text)}`);
   }, [openShareOptionsUrl, shareOptionsText]);
 
   const shareText = React.useCallback(
     async (value: string) => {
-      const text = String(value ?? "").trim();
+      const text = value.trim();
       if (!text) {
         pushToast(t("errorPrefix"));
         return;
@@ -438,7 +438,7 @@ export const useScanNativeComposition = ({
 
       nfcWriteCancelledByUserRef.current = false;
 
-      const message = String(result.message ?? "").trim();
+      const message = (result.message ?? "").trim();
       pushToast(
         message ? `${t("nfcWriteFailed")}: ${message}` : t("nfcWriteFailed"),
       );
@@ -450,7 +450,7 @@ export const useScanNativeComposition = ({
 
   const writeCashuTokenToNfc = React.useCallback(
     async (id: CashuTokenId, tokenText: string) => {
-      const trimmed = String(tokenText ?? "").trim();
+      const trimmed = tokenText.trim();
       const deepLink = buildCashuDeepLink(trimmed);
       if (!deepLink) {
         pushToast(t("cashuInvalid"));
@@ -472,7 +472,7 @@ export const useScanNativeComposition = ({
 
   const shareCashuTokenText = React.useCallback(
     async (id: CashuTokenId, text: string) => {
-      const trimmed = String(text ?? "").trim();
+      const trimmed = text.trim();
       if (!trimmed) {
         pushToast(t("cashuInvalid"));
         return;
@@ -500,7 +500,7 @@ export const useScanNativeComposition = ({
   );
 
   const writeCurrentNpubToNfc = React.useCallback(async () => {
-    const npub = normalizeNpubIdentifier(currentNpub);
+    const npub = normalizeNpubIdentifier(currentNpub ?? "");
     if (!npub) {
       pushToast(t("profileMissingNpub"));
       return;
@@ -531,7 +531,7 @@ export const useScanNativeComposition = ({
 
         const findKnownContact = (peerPubkey: string) =>
           contactsLatestRef.current.find((contact) => {
-            const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+            const normalizedNpub = normalizeNpubIdentifier(contact.npub ?? "");
             if (!normalizedNpub) {
               return false;
             }
@@ -541,7 +541,7 @@ export const useScanNativeComposition = ({
 
         const openKnownNotificationContact = (peerPubkey: string): boolean => {
           const knownContact = findKnownContact(peerPubkey);
-          const knownContactId = String(knownContact?.id ?? "").trim();
+          const knownContactId = (knownContact?.id ?? "").trim();
           if (!knownContactId) {
             return false;
           }
@@ -586,8 +586,8 @@ export const useScanNativeComposition = ({
         const knownContact = findKnownContact(peerPubkey);
 
         const contactId = knownContact
-          ? String(knownContact.id ?? "").trim()
-          : String(buildUnknownContactId(peerPubkey) ?? "").trim();
+          ? knownContact.id.trim()
+          : (buildUnknownContactId(peerPubkey) ?? "").trim();
         if (!contactId) {
           return false;
         }
@@ -639,7 +639,8 @@ export const useScanNativeComposition = ({
   });
 
   React.useEffect(() => {
-    const acceptDeepLinkUrl = (rawUrl: unknown) => {
+    const acceptDeepLinkUrl = (rawUrl: string | null) => {
+      if (!rawUrl) return;
       const parsed = parseNativeDeepLinkUrl(rawUrl);
       if (!parsed) {
         return;
@@ -663,7 +664,8 @@ export const useScanNativeComposition = ({
         return;
       }
 
-      acceptDeepLinkUrl(Reflect.get(detail, "url"));
+      const url: unknown = Reflect.get(detail, "url");
+      if (typeof url === "string") acceptDeepLinkUrl(url);
     };
 
     window.addEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
@@ -771,7 +773,7 @@ export const useScanNativeComposition = ({
       return;
     }
 
-    const rawHash = String(window.location.hash ?? "");
+    const rawHash = window.location.hash;
     const token = extractCashuTokenFromTextFromUrl(rawHash);
     if (!token) {
       return;
@@ -818,14 +820,14 @@ export const useScanNativeComposition = ({
         typeof window !== "undefined" &&
         typeof window.prompt === "function"
       ) {
-        text = String(window.prompt(t("scanPastePrompt")) ?? "");
+        text = window.prompt(t("scanPastePrompt")) ?? "";
       } else {
         pushToast(t("pasteNotAvailable"));
         return;
       }
     }
 
-    const raw = String(text ?? "").trim();
+    const raw = text.trim();
     if (!raw) {
       pushToast(t("pasteEmpty"));
       return;
@@ -865,8 +867,8 @@ export const useScanNativeComposition = ({
 
         if (detectorCtor) {
           const detector = new detectorCtor({ formats: ["qr_code"] });
-          const detectorValue = String(
-            (await detector.detect(image))?.[0]?.rawValue ?? "",
+          const detectorValue = (
+            (await detector.detect(image))?.[0]?.rawValue ?? ""
           ).trim();
 
           if (detectorValue) {
@@ -895,8 +897,8 @@ export const useScanNativeComposition = ({
         ctx.drawImage(image, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
         const jsQr = (await import("jsqr")).default;
-        const qrValue = String(
-          jsQr(imageData.data, width, height)?.data ?? "",
+        const qrValue = (
+          jsQr(imageData.data, width, height)?.data ?? ""
         ).trim();
 
         if (!qrValue) {

@@ -4,7 +4,6 @@ import { CirclePlus as TokenAddIcon } from "lucide-react";
 import type { Dispatch, FC, SetStateAction } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
-import type { MintUrlInput } from "../app/types/appTypes";
 import { WalletTokenPill } from "../components/CashuTokenPill";
 import type { MintIcon } from "../utils/mint";
 
@@ -27,7 +26,7 @@ interface CashuTokensPageProps {
   }>;
   deleteSpentCashuTokens: () => Promise<void>;
   deleteSpentCashuTokensIsBusy: boolean;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   meltLargestForeignMintToMainMint: () => Promise<void>;
   restoreMissingTokens: () => Promise<void>;
   setMintIconUrlByMint: Dispatch<SetStateAction<Record<string, string | null>>>;

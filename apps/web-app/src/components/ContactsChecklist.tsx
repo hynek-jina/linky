@@ -57,7 +57,7 @@ export function ContactsChecklist({
           />
         </div>
         <div className="contacts-checklist-progressText">
-          {String(t("contactsOnboardingProgress"))
+          {t("contactsOnboardingProgress")
             .replace(/\{done\}/g, String(tasksCompleted))
             .replace(/\{total\}/g, String(tasksTotal))}
         </div>

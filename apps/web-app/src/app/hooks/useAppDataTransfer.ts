@@ -55,10 +55,10 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
         token: Evolu.NonEmptyString.orThrow(args.token),
       };
 
-      const state = String(args.state ?? "").trim();
+      const state = (args.state ?? "").trim();
       if (state) payload.state = Evolu.NonEmptyString100.orThrow(state);
 
-      const error = String(args.error ?? "").trim();
+      const error = (args.error ?? "").trim();
       if (error) payload.error = Evolu.NonEmptyString1000.orThrow(error);
 
       return payload;
@@ -76,20 +76,20 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
         version: 1,
         exportedAt: now.toISOString(),
         contacts: contacts.map((contact) => ({
-          name: String(contact.name ?? "").trim() || null,
-          npub: String(contact.npub ?? "").trim() || null,
-          lnAddress: String(contact.lnAddress ?? "").trim() || null,
-          groupName: String(contact.groupName ?? "").trim() || null,
-          groupNamesJson: String(contact.groupNamesJson ?? "").trim() || null,
+          name: (contact.name ?? "").trim() || null,
+          npub: (contact.npub ?? "").trim() || null,
+          lnAddress: (contact.lnAddress ?? "").trim() || null,
+          groupName: (contact.groupName ?? "").trim() || null,
+          groupNamesJson: (contact.groupNamesJson ?? "").trim() || null,
         })),
         cashuTokens: cashuTokens.map((token) => {
-          const tokenText = String(token.token ?? "").trim();
-          const rawToken = String(token.rawToken ?? "").trim();
+          const tokenText = (token.token ?? "").trim();
+          const rawToken = (token.rawToken ?? "").trim();
           return {
             token: tokenText,
             rawToken: rawToken && rawToken !== tokenText ? rawToken : null,
-            state: String(token.state ?? "").trim() || null,
-            error: String(token.error ?? "").trim() || null,
+            state: (token.state ?? "").trim() || null,
+            error: (token.error ?? "").trim() || null,
           };
         }),
       };
@@ -137,9 +137,7 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
 
       let parsed: JsonValue;
       try {
-        parsed = Schema.decodeUnknownSync(Schema.parseJson(JsonValue))(
-          String(text ?? ""),
-        );
+        parsed = Schema.decodeUnknownSync(Schema.parseJson(JsonValue))(text);
       } catch {
         pushToast(t("importInvalid"));
         return;
@@ -161,10 +159,8 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
       const existingByNpub = new Map<string, TContact>();
       const existingByLn = new Map<string, TContact>();
       for (const contact of contacts) {
-        const npub = String(contact.npub ?? "").trim();
-        const ln = String(contact.lnAddress ?? "")
-          .trim()
-          .toLowerCase();
+        const npub = (contact.npub ?? "").trim();
+        const ln = (contact.lnAddress ?? "").trim().toLowerCase();
         if (npub) existingByNpub.set(npub, contact);
         if (ln) existingByLn.set(ln, contact);
       }
@@ -174,11 +170,11 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
       const existingTokenSet = new Set<string>();
       const existingTokenIdSet = new Set<string>();
       for (const token of cashuTokensAll) {
-        const encoded = String(token.token ?? "").trim();
-        const raw = String(token.rawToken ?? "").trim();
+        const encoded = (token.token ?? "").trim();
+        const raw = (token.rawToken ?? "").trim();
         if (encoded) existingTokenSet.add(encoded);
         if (raw) existingTokenSet.add(raw);
-        existingTokenIdSet.add(String(token.id));
+        existingTokenIdSet.add(token.id);
       }
 
       let addedContacts = 0;
@@ -200,9 +196,7 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
 
         const existing =
           (npub ? existingByNpub.get(npub) : undefined) ??
-          (lnAddress
-            ? existingByLn.get(String(lnAddress).toLowerCase())
-            : undefined);
+          (lnAddress ? existingByLn.get(lnAddress.toLowerCase()) : undefined);
         const normalizedLnAddress = lnAddress?.toLowerCase() ?? null;
         if (
           !existing &&
@@ -259,7 +253,7 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
         if (existingTokenSet.has(token)) continue;
 
         const rawToken = sanitizeText(rec.rawToken, 100000);
-        const tokenId = String(createCashuTokenId(rawToken || token));
+        const tokenId = createCashuTokenId(rawToken || token);
         if (existingTokenIdSet.has(tokenId)) continue;
         const state = sanitizeText(rec.state, 100);
         const error = sanitizeText(rec.error, 1000);

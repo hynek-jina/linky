@@ -24,7 +24,7 @@ export const useCashuDomain = ({
 
   const normalizeCashuTokenText = React.useCallback(
     (tokenRaw: string): string => {
-      return String(tokenRaw ?? "").trim();
+      return tokenRaw.trim();
     },
     [],
   );
@@ -33,12 +33,12 @@ export const useCashuDomain = ({
     (row: CashuTokenRow, tokenRaw: string): boolean => {
       const candidate = normalizeCashuTokenText(tokenRaw);
       if (!candidate) return false;
-      if (String(row.id ?? "") === String(createCashuTokenId(candidate))) {
+      if (row.id === createCashuTokenId(candidate)) {
         return true;
       }
 
-      const storedRaw = String(row.rawToken ?? "").trim();
-      const storedToken = String(row.token ?? "").trim();
+      const storedRaw = (row.rawToken ?? "").trim();
+      const storedToken = (row.token ?? "").trim();
 
       return (
         (storedRaw !== "" && storedRaw === candidate) ||
@@ -114,9 +114,9 @@ export const useCashuDomain = ({
       if (isOptimisticallyKnownCashuToken(raw)) return true;
 
       const current = cashuTokensAllRef.current;
-      const deterministicId = String(createCashuTokenId(raw));
+      const deterministicId = createCashuTokenId(raw);
       return current.some((row) => {
-        if (String(row.id ?? "") === deterministicId) return true;
+        if (row.id === deterministicId) return true;
         if (row.isDeleted) return false;
         if (isCashuTokenErrorState(row.state)) return false;
         return rowMatchesToken(row, raw);

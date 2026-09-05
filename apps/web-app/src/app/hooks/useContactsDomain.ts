@@ -12,11 +12,6 @@ import {
   normalizeContactGroups,
   serializeContactGroups,
 } from "../../utils/contactGroups";
-import type {
-  OptionalBooleanTextNumber,
-  OptionalNumber,
-  OptionalText,
-} from "../types/appTypes";
 import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { readRowOwnerId } from "../lib/rowOwnerId";
@@ -41,28 +36,6 @@ interface UseContactsDomainParams {
   upsert: EvoluMutations["upsert"];
   visibleOwnerIds: readonly Evolu.OwnerId[];
 }
-
-const readContactId = (row: unknown): string => {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("id" in row)) return "";
-  const id = row.id;
-  if (typeof id !== "string") return "";
-  return id.trim();
-};
-
-const readCreatedAt = (value: OptionalNumber): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  return parsed;
-};
-
-const isDeletedRow = (value: OptionalBooleanTextNumber): boolean => {
-  if (value === true || value === 1) return true;
-  const text = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  return text === "1" || text === "true";
-};
 
 const shouldReplaceContactVersion = (
   candidateOwnerRank: number,
@@ -107,10 +80,7 @@ export const useContactsDomain = ({
   const allContacts = useQuery(contactsQuery);
 
   const visibleOwnerIdTexts = React.useMemo(
-    () =>
-      visibleOwnerIds
-        .map((ownerId) => String(ownerId ?? "").trim())
-        .filter(Boolean),
+    () => visibleOwnerIds.map((ownerId) => ownerId.trim()).filter(Boolean),
     [visibleOwnerIds],
   );
 
@@ -141,16 +111,10 @@ export const useContactsDomain = ({
       const ownerRank = visibleOwnerRankById.get(ownerId);
       if (ownerRank === undefined) continue;
 
-      const contactId = readContactId(contact);
+      const contactId = contact.id;
       if (!contactId) continue;
 
-      const createdAt = readCreatedAt(
-        typeof contact === "object" &&
-          contact !== null &&
-          "createdAt" in contact
-          ? contact.createdAt
-          : null,
-      );
+      const createdAt = contact.createdAt ? Date.parse(contact.createdAt) : 0;
 
       const existing = latestById.get(contactId);
       if (
@@ -172,24 +136,8 @@ export const useContactsDomain = ({
 
     return Array.from(latestById.values())
       .map(({ row }) => row)
-      .filter((row) => {
-        if (typeof row !== "object" || row === null) return false;
-        const maybeDeleted = "isDeleted" in row ? row.isDeleted : null;
-        return !isDeletedRow(maybeDeleted);
-      })
-      .sort(
-        (a, b) =>
-          readCreatedAt(
-            typeof b === "object" && b !== null && "createdAt" in b
-              ? b.createdAt
-              : null,
-          ) -
-          readCreatedAt(
-            typeof a === "object" && a !== null && "createdAt" in a
-              ? a.createdAt
-              : null,
-          ),
-      );
+      .filter((row) => row.isDeleted !== Evolu.sqliteTrue)
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
   }, [allContacts, visibleOwnerRankById]);
 
   const dedupeContacts = React.useCallback(async () => {
@@ -201,18 +149,16 @@ export const useContactsDomain = ({
       template: string,
       vars: Record<string, string | number>,
     ): string => {
-      return String(template ?? "").replace(/\{(\w+)\}/g, (_m, k: string) =>
+      return template.replace(/\{(\w+)\}/g, (_m, k: string) =>
         String(vars[k] ?? ""),
       );
     };
 
-    const normalize = (value: OptionalText): string => {
-      return String(value ?? "")
-        .trim()
-        .toLowerCase();
+    const normalize = (value: string | null | undefined): string => {
+      return (value ?? "").trim().toLowerCase();
     };
 
-    const fieldScore = (value: OptionalText): number =>
+    const fieldScore = (value: string | null | undefined): number =>
       normalize(value) ? 1 : 0;
 
     const writeContactProfileUpdate = (
@@ -357,7 +303,7 @@ export const useContactsDomain = ({
           (keep.npub ?? null) !== (mergedNpub ?? null) ||
           (keep.lnAddress ?? null) !== (mergedLn ?? null) ||
           (keep.groupName ?? null) !== (mergedGroup ?? null) ||
-          String(keep.groupNamesJson ?? "") !== String(mergedGroupsJson ?? "");
+          (keep.groupNamesJson ?? "") !== (mergedGroupsJson ?? "");
 
         if (keepNeedsUpdate) {
           const result = writeContactProfileUpdate(
@@ -424,7 +370,7 @@ export const useContactsDomain = ({
     if (!appOwnerId) return;
     if (contacts.length === 0) return;
 
-    const ownerKey = String(appOwnerId);
+    const ownerKey = appOwnerId;
     const migrationKey = `linky.contacts_owner_migrated_v1:${ownerKey}`;
 
     if (safeLocalStorageGet(migrationKey) === "1") return;
@@ -464,7 +410,7 @@ export const useContactsDomain = ({
     let ungrouped = 0;
 
     for (const contact of contacts) {
-      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      const archivedAtSec = contact.archivedAtSec ?? 0;
       if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
 
       const groups = getContactGroups(contact);
@@ -502,9 +448,7 @@ export const useContactsDomain = ({
   }, [activeGroup, groupNames, noGroupFilterValue]);
 
   const contactsSearchParts = React.useMemo(() => {
-    const normalized = String(contactsSearch ?? "")
-      .trim()
-      .toLowerCase();
+    const normalized = contactsSearch.trim().toLowerCase();
 
     if (!normalized) return [];
     return normalized.split(/\s+/).filter(Boolean);
@@ -512,7 +456,7 @@ export const useContactsDomain = ({
 
   const contactsSearchData = React.useMemo(() => {
     return contacts.map((contact) => {
-      const idKey = String(contact.id ?? "").trim();
+      const idKey = contact.id.trim();
       const groupNames = getContactGroups(contact);
       const haystack = [
         contact.name,
@@ -520,11 +464,7 @@ export const useContactsDomain = ({
         contact.lnAddress,
         ...groupNames,
       ]
-        .map((value) =>
-          String(value ?? "")
-            .trim()
-            .toLowerCase(),
-        )
+        .map((value) => (value ?? "").trim().toLowerCase())
         .filter(Boolean)
         .join(" ");
 

@@ -92,7 +92,7 @@ export const getDesktopActiveContactId = (route: Route): string | null => {
     case "contact":
     case "contactEdit":
     case "contactPay":
-      return String(route.id);
+      return route.id;
 
     case "chat":
       return route.id;

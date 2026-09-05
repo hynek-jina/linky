@@ -601,7 +601,7 @@ export const useEvoluContactsOwnerRotation = ({
       return;
     }
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!normalizedSeed) {
       setFixedOwnerSyncData(null);
       return;
@@ -625,7 +625,7 @@ export const useEvoluContactsOwnerRotation = ({
       return;
     }
 
-    const metaOwnerId = String(fixedOwnerSyncData?.metaOwner.id ?? "").trim();
+    const metaOwnerId = (fixedOwnerSyncData?.metaOwner.id ?? "").trim();
     if (!metaOwnerId) {
       setAllowMissingOwnerMetaBootstrap(false);
       return;
@@ -641,7 +641,7 @@ export const useEvoluContactsOwnerRotation = ({
     };
   }, [fixedOwnerSyncData?.metaOwner.id, isSeedLogin]);
 
-  const metaOwnerIdText = String(fixedOwnerSyncData?.metaOwner.id ?? "").trim();
+  const metaOwnerIdText = (fixedOwnerSyncData?.metaOwner.id ?? "").trim();
   const rotationSnapshots = React.useMemo(
     () => readRotationSnapshotsByScope(ownerMetaRows, metaOwnerIdText),
     [metaOwnerIdText, ownerMetaRows],
@@ -719,17 +719,17 @@ export const useEvoluContactsOwnerRotation = ({
   );
 
   const contactsActiveOwnerId = isSeedLogin
-    ? String(ownerSyncData?.contactsOwner.id ?? "").trim()
-    : String(appOwnerId ?? "").trim();
+    ? (ownerSyncData?.contactsOwner.id ?? "").trim()
+    : (appOwnerId ?? "").trim();
   const cashuActiveOwnerId = isSeedLogin
-    ? String(ownerSyncData?.cashuOwner.id ?? "").trim()
-    : String(appOwnerId ?? "").trim();
+    ? (ownerSyncData?.cashuOwner.id ?? "").trim()
+    : (appOwnerId ?? "").trim();
   const messagesActiveOwnerId = isSeedLogin
-    ? String(ownerSyncData?.messagesOwner.id ?? "").trim()
-    : String(appOwnerId ?? "").trim();
+    ? (ownerSyncData?.messagesOwner.id ?? "").trim()
+    : (appOwnerId ?? "").trim();
   const transactionsActiveOwnerId = isSeedLogin
-    ? String(ownerSyncData?.transactionsOwner.id ?? "").trim()
-    : String(appOwnerId ?? "").trim();
+    ? (ownerSyncData?.transactionsOwner.id ?? "").trim()
+    : (appOwnerId ?? "").trim();
 
   React.useEffect(() => {
     const requests = [
@@ -941,7 +941,7 @@ export const useEvoluContactsOwnerRotation = ({
       return;
     }
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!normalizedSeed) {
       setOwnerSyncData(null);
       setCashuVisibleOwnerIds([]);
@@ -1033,7 +1033,7 @@ export const useEvoluContactsOwnerRotation = ({
   React.useEffect(() => {
     if (!fixedOwnerSyncData) return;
 
-    const metaOwnerId = String(fixedOwnerSyncData.metaOwner.id).trim();
+    const metaOwnerId = fixedOwnerSyncData.metaOwner.id.trim();
     if (!metaOwnerId) return;
 
     let cashuSnap: RotationSnapshot | null = null;
@@ -1238,7 +1238,7 @@ export const useEvoluContactsOwnerRotation = ({
     if (!fixedOwnerSyncData) return;
     if (!ownerSyncData) return;
     const metaOwnerId = fixedOwnerSyncData.metaOwner.id;
-    const metaOwnerIdStr = String(metaOwnerId).trim();
+    const metaOwnerIdStr = metaOwnerId.trim();
     if (!metaOwnerIdStr) return;
 
     const readSnapshotForScope = (
@@ -1359,7 +1359,7 @@ export const useEvoluContactsOwnerRotation = ({
   const rotateContactsOwner = React.useCallback(async () => {
     if (rotateContactsOwnerIsBusy) return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       return;
     }
@@ -1452,7 +1452,7 @@ export const useEvoluContactsOwnerRotation = ({
   const rotateCashuOwner = React.useCallback(async () => {
     if (rotateCashuOwnerIsBusy) return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       return;
     }
@@ -1505,7 +1505,7 @@ export const useEvoluContactsOwnerRotation = ({
       writeStoredNonNegativeInt(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, nextIndex);
       const nextOwnerCashuRows = allCashuTokensRows.reduce(
         (count, row) =>
-          readRowOwnerId(row) === String(derived.cashuOwner.id).trim()
+          readRowOwnerId(row) === derived.cashuOwner.id.trim()
             ? count + 1
             : count,
         0,
@@ -1545,7 +1545,7 @@ export const useEvoluContactsOwnerRotation = ({
   ]);
 
   const requestManualRotateContactsOwner = React.useCallback(async () => {
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       pushToast(t("seedMissing"));
       return;
@@ -1572,7 +1572,7 @@ export const useEvoluContactsOwnerRotation = ({
   }, [isSeedLogin, pushToast, rotateContactsOwner, slip39Seed, t]);
 
   const requestManualRotateCashuOwner = React.useCallback(async () => {
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       pushToast(t("seedMissing"));
       return;
@@ -1601,7 +1601,7 @@ export const useEvoluContactsOwnerRotation = ({
   const rotateMessagesOwner = React.useCallback(async () => {
     if (rotateMessagesOwnerIsBusy) return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       return;
     }
@@ -1659,14 +1659,14 @@ export const useEvoluContactsOwnerRotation = ({
       );
       const nextOwnerMessageRows = allNostrMessagesRows.reduce(
         (count, row) =>
-          readRowOwnerId(row) === String(derived.messagesOwner.id).trim()
+          readRowOwnerId(row) === derived.messagesOwner.id.trim()
             ? count + 1
             : count,
         0,
       );
       const nextOwnerReactionRows = allNostrReactionsRows.reduce(
         (count, row) =>
-          readRowOwnerId(row) === String(derived.messagesOwner.id).trim()
+          readRowOwnerId(row) === derived.messagesOwner.id.trim()
             ? count + 1
             : count,
         0,
@@ -1707,7 +1707,7 @@ export const useEvoluContactsOwnerRotation = ({
   ]);
 
   const requestManualRotateMessagesOwner = React.useCallback(async () => {
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       pushToast(t("seedMissing"));
       return;
@@ -1735,7 +1735,7 @@ export const useEvoluContactsOwnerRotation = ({
   const rotateTransactionsOwner = React.useCallback(async () => {
     if (rotateTransactionsOwnerIsBusy) return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       return;
     }
@@ -1794,7 +1794,7 @@ export const useEvoluContactsOwnerRotation = ({
       );
       const nextOwnerTransactionRows = allTransactionsRows.reduce(
         (count, row) =>
-          readRowOwnerId(row) === String(derived.transactionsOwner.id).trim()
+          readRowOwnerId(row) === derived.transactionsOwner.id.trim()
             ? count + 1
             : count,
         0,
@@ -1834,7 +1834,7 @@ export const useEvoluContactsOwnerRotation = ({
   ]);
 
   const requestManualRotateTransactionsOwner = React.useCallback(async () => {
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
       pushToast(t("seedMissing"));
       return;

@@ -56,7 +56,7 @@ const isStandaloneDisplay = (): boolean => {
 
 const getUserAgent = (): string => {
   if (typeof navigator === "undefined") return "";
-  return String(navigator.userAgent ?? "");
+  return navigator.userAgent;
 };
 
 const isMobileBrowser = (): boolean => {

@@ -23,14 +23,14 @@ export const formatBytes = (bytes: number): string => {
 };
 
 export const formatShortNpub = (npub: string): string => {
-  const trimmed = String(npub ?? "").trim();
+  const trimmed = npub.trim();
   if (!trimmed) return "";
   if (trimmed.length <= 18) return trimmed;
   return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
 };
 
 export const formatShortLightningAddress = (value: string): string => {
-  const trimmed = String(value ?? "").trim();
+  const trimmed = value.trim();
   if (!trimmed) return "";
 
   const atIndex = trimmed.indexOf("@");
@@ -48,7 +48,7 @@ export const formatShortLightningAddress = (value: string): string => {
 };
 
 export const formatMiddleDots = (value: string, maxLen: number): string => {
-  const trimmed = String(value ?? "").trim();
+  const trimmed = value.trim();
   if (!trimmed) return "";
   if (!Number.isFinite(maxLen) || maxLen <= 0) return trimmed;
   if (trimmed.length <= maxLen) return trimmed;
@@ -64,15 +64,15 @@ export const getBestNostrName = (metadata: {
   displayName?: string | undefined;
   name?: string | undefined;
 }): string | null => {
-  const display = String(metadata.displayName ?? "").trim();
+  const display = (metadata.displayName ?? "").trim();
   if (display) return display;
-  const name = String(metadata.name ?? "").trim();
+  const name = (metadata.name ?? "").trim();
   if (name) return name;
   return null;
 };
 
 export const normalizeLocale = (lang?: string): string => {
-  const raw = String(lang ?? "").trim();
+  const raw = (lang ?? "").trim();
   if (raw) {
     if (raw === "cs") return "cs-CZ";
     if (raw === "de") return "de-DE";
@@ -80,7 +80,7 @@ export const normalizeLocale = (lang?: string): string => {
     return raw;
   }
   if (typeof document !== "undefined") {
-    const docLang = String(document.documentElement?.lang ?? "").trim();
+    const docLang = (document.documentElement?.lang ?? "").trim();
     if (docLang) {
       if (docLang === "cs") return "cs-CZ";
       if (docLang === "de") return "de-DE";
@@ -88,7 +88,7 @@ export const normalizeLocale = (lang?: string): string => {
     }
   }
   if (typeof navigator !== "undefined") {
-    const navLang = String(navigator.language ?? "").trim();
+    const navLang = navigator.language.trim();
     if (navLang) {
       if (navLang === "cs") return "cs-CZ";
       if (navLang === "de") return "de-DE";
@@ -159,7 +159,7 @@ export const formatContactMessageTimestamp = (
   createdAtSec: number,
   lang?: string,
 ): string => {
-  const ms = Number(createdAtSec ?? 0) * 1000;
+  const ms = createdAtSec * 1000;
   if (!Number.isFinite(ms) || ms <= 0) return "";
   const d = new Date(ms);
   const now = new Date();
@@ -176,7 +176,7 @@ export const formatContactMessageTimestamp = (
 
 export const previewTokenText = (token: string | null): string | null => {
   if (!token) return null;
-  const trimmed = String(token).trim();
+  const trimmed = token.trim();
   if (!trimmed) return null;
   return trimmed.length > 16 ? `${trimmed.slice(0, 16)}…` : trimmed;
 };

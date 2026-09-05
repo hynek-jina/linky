@@ -107,12 +107,12 @@ export function Topbar({
           >
             <span className="topbar-chat-avatar" aria-hidden="true">
               {(() => {
-                const npub = normalizeNpubIdentifier(chatTopbarContact.npub);
+                const npub = normalizeNpubIdentifier(chatTopbarContact.npub ?? "");
                 const url = npub ? nostrPictureByNpub[npub] : null;
                 return (
                   <Avatar
                     pictureUrl={url}
-                    fallback={getInitials(String(chatTopbarContact.name ?? ""))}
+                    fallback={getInitials((chatTopbarContact.name ?? ""))}
                     fallbackClassName="topbar-chat-avatar-fallback"
                     loading="lazy"
                   />
@@ -120,7 +120,7 @@ export function Topbar({
               })()}
             </span>
             <span className="topbar-chat-name">
-              {String(chatTopbarContact.name ?? "").trim() ||
+              {(chatTopbarContact.name ?? "").trim() ||
                 t("messagesTitle")}
             </span>
           </button>

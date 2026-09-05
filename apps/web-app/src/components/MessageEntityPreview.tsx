@@ -2,7 +2,6 @@ import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
-import type { MintUrlInput } from "../app/types/appTypes";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { Avatar } from "./Avatar";
@@ -17,7 +16,7 @@ interface MessageEntityPreviewProps {
   content: string;
   directionSymbol?: string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
-  getMintIconUrl: (mint: MintUrlInput) => {
+  getMintIconUrl: (mint: string | null | undefined) => {
     url: string | null;
   };
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
@@ -57,7 +56,7 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
   }
 
   for (const match of standaloneTokenInfo ? [] : matches) {
-    const text = String(match[0] ?? "");
+    const text = match[0];
     const start = match.index ?? 0;
     if (start > cursor) segments.push(content.slice(cursor, start));
 

@@ -330,7 +330,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
   const pasteSearch = async () => {
     const text = await readClipboardText();
-    const queryText = String(text ?? "").trim();
+    const queryText = (text ?? "").trim();
     if (!queryText) return;
     searchQueryRef.current = queryText;
     setForm({ ...form, npub: queryText });
@@ -435,8 +435,10 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
               {searchResults ? (
                 <div className="contact-new-search-results">
                   {searchResults.contacts.map((candidate) => {
-                    const displayName = String(
-                      candidate.name || candidate.query || "",
+                    const displayName = (
+                      candidate.name ||
+                      candidate.query ||
+                      ""
                     ).trim();
                     return (
                       <div
@@ -540,8 +542,10 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                   </div>
                   <div className="contact-new-suggestion-list">
                     {contactSuggestions.map((suggestion) => {
-                      const displayName = String(
-                        suggestion.name || suggestion.query || "",
+                      const displayName = (
+                        suggestion.name ||
+                        suggestion.query ||
+                        ""
                       ).trim();
                       const avatarUrl = suggestion.pictureUrl ?? null;
 

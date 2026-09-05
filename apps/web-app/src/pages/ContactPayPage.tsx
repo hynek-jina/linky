@@ -57,8 +57,8 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
 }) => {
   const { formatDisplayedAmountText, t } = useAppShellCore();
 
-  const ln = String(selectedContact?.lnAddress ?? "").trim();
-  const npub = normalizeNpubIdentifier(selectedContact?.npub);
+  const ln = (selectedContact?.lnAddress ?? "").trim();
+  const npub = normalizeNpubIdentifier(selectedContact?.npub ?? "");
   const url = npub ? nostrPictureByNpub[npub] : null;
   const isRequestFlow = contactPaymentIntent === "request";
   const canUseCashu = payWithCashuEnabled && Boolean(npub);
@@ -131,7 +131,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
           <div className="contact-avatar is-large" aria-hidden="true">
             <Avatar
               pictureUrl={url}
-              fallback={getInitials(String(selectedContact.name ?? ""))}
+              fallback={getInitials((selectedContact.name ?? ""))}
               fallbackClassName="contact-avatar-fallback"
               loading="lazy"
             />

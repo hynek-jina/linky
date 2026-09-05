@@ -70,7 +70,7 @@ const parseWordNumber = (words: readonly number[]): number | null => {
 export const getLightningInvoicePreview = (
   rawInvoice: string,
 ): LightningInvoicePreview | null => {
-  const invoice = String(rawInvoice ?? "").trim();
+  const invoice = rawInvoice.trim();
   if (!BOLT11_PREFIX_RE.test(invoice)) return null;
 
   const preview: LightningInvoicePreview = {
@@ -141,7 +141,7 @@ export const getLightningInvoicePreview = (
 export const getLightningInvoiceDescriptionHashHex = (
   rawInvoice: string,
 ): string | null => {
-  const invoice = String(rawInvoice ?? "").trim();
+  const invoice = rawInvoice.trim();
   if (!BOLT11_PREFIX_RE.test(invoice)) return null;
 
   try {

@@ -75,7 +75,7 @@ const asTelemetryPhase = (
 export const normalizePaymentTelemetryErrorDetail = (
   value: string | null | undefined,
 ): string | null => {
-  const text = String(value ?? "").trim();
+  const text = (value ?? "").trim();
   if (!text) return null;
   return text.slice(0, 500);
 };

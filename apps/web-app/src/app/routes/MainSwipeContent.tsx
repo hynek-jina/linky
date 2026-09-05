@@ -98,7 +98,7 @@ const useVisibleContactSections = (
   return React.useMemo(() => {
     const isProxyPaymentContact = (contact: ContactRowLike): boolean =>
       contact.isUnknownContact !== true &&
-      activeOffers.contactIds.has(String(contact.id ?? "").trim());
+      activeOffers.contactIds.has((contact.id ?? "").trim());
     const proxyPayments = [
       ...visibleContacts.pinned,
       ...visibleContacts.conversations,

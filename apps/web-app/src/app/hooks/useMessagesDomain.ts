@@ -3,7 +3,7 @@ import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
-import type { ContactId } from "../../evolu";
+import type { ContactId, NostrMessageRow, NostrReactionRow } from "../../evolu";
 import { evolu, useEvolu } from "../../evolu";
 import type { Route } from "../../types/route";
 import {
@@ -34,7 +34,6 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../../utils/storage";
-import { readRowOwnerId } from "../lib/rowOwnerId";
 import {
   asNonEmptyString,
   makeLocalId,
@@ -85,18 +84,11 @@ const isSqliteTrueish = (value: unknown): boolean => {
   return normalized === "true";
 };
 
-const resolveStoredOwnerId = (row: Record<string, unknown>): OwnerId | null => {
-  const ownerId = readRowOwnerId(row);
-  if (!ownerId) return null;
-  const parsed = Evolu.OwnerId.fromUnknown(ownerId);
-  return parsed.ok ? parsed.value : null;
-};
-
 const parseCreatedAtSec = (value: unknown): number =>
   toPositiveInt(value, Math.ceil(Date.now() / 1000));
 
 const toLocalNostrMessage = (
-  row: Record<string, unknown>,
+  row: NostrMessageRow,
 ): LocalNostrMessage | null => {
   const id = trimString(row.id);
   const contactId = trimString(row.contactId);
@@ -139,7 +131,7 @@ const toLocalNostrMessage = (
 };
 
 const toLocalNostrReaction = (
-  row: Record<string, unknown>,
+  row: NostrReactionRow,
 ): LocalNostrReaction | null => {
   const id = trimString(row.id);
   const messageId = trimString(row.messageId);
@@ -475,7 +467,7 @@ export const useMessagesDomain = ({
   }, [visibleMessageOwnerIds]);
 
   const isVisibleMessageOwner = React.useCallback(
-    (row: Record<string, unknown>) => {
+    (row: Pick<NostrMessageRow, "ownerId">) => {
       if (visibleMessageOwnerIdsSet.size === 0) return true;
       const ownerId = trimString(row.ownerId);
       if (!ownerId) return false;
@@ -523,7 +515,7 @@ export const useMessagesDomain = ({
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return;
       safeLocalStorageSetJson(
-        overlayMessagesKeyForOwner(String(ownerId)),
+        overlayMessagesKeyForOwner(ownerId),
         nextMessages,
       );
     },
@@ -538,7 +530,7 @@ export const useMessagesDomain = ({
     }
 
     const normalized = safeLocalStorageGetJson(
-      overlayMessagesKeyForOwner(String(ownerId)),
+      overlayMessagesKeyForOwner(ownerId),
       Schema.Array(UnknownRecord),
       [],
     )
@@ -631,13 +623,13 @@ export const useMessagesDomain = ({
   );
 
   const buildVisibleRowOwnerIdsById = React.useCallback(
-    (rows: readonly Record<string, unknown>[]) => {
+    (rows: readonly (NostrMessageRow | NostrReactionRow)[]) => {
       const ownerIdsById = new Map<string, OwnerId[]>();
       for (const row of rows) {
         if (!isVisibleMessageOwner(row)) continue;
         const id = trimString(row.id);
         if (!id) continue;
-        const ownerId = resolveStoredOwnerId(row);
+        const ownerId = row.ownerId;
         if (!ownerId) continue;
         const existing = ownerIdsById.get(id);
         if (!existing) {
@@ -808,7 +800,7 @@ export const useMessagesDomain = ({
           trimString(current.contactId) === trimString(payload.contactId) &&
           trimString(current.direction) === trimString(payload.direction) &&
           toText(current.content) === toText(payload.content) &&
-          Number(current.createdAtSec ?? 0) === Number(payload.createdAtSec)
+          current.createdAtSec === payload.createdAtSec
         );
       });
       if (existing) return trimString(existing.id);
@@ -1212,7 +1204,7 @@ export const useMessagesDomain = ({
           trimString(current.reactorPubkey) ===
             trimString(payload.reactorPubkey) &&
           trimString(current.emoji) === trimString(payload.emoji) &&
-          Number(current.createdAtSec ?? 0) === Number(payload.createdAtSec)
+          current.createdAtSec === payload.createdAtSec
         );
       });
       if (existing) return trimString(existing.id);
@@ -1637,7 +1629,7 @@ export const useMessagesDomain = ({
     }
 
     const normalized = safeLocalStorageGetJson(
-      `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+      `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${ownerId}`,
       Schema.Array(UnknownRecord),
       [],
     )
@@ -1692,7 +1684,7 @@ export const useMessagesDomain = ({
       setPendingPayments((prev) => {
         const next = [...prev, entry].slice(-200);
         safeLocalStorageSetJson(
-          `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+          `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${ownerId}`,
           next,
         );
         return next;
@@ -1713,7 +1705,7 @@ export const useMessagesDomain = ({
         );
 
         safeLocalStorageSetJson(
-          `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+          `${LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX}.${ownerId}`,
           next,
         );
 

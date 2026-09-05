@@ -34,11 +34,11 @@ export const useFeedbackContact = <
   const openFeedbackContact = React.useCallback(() => {
     const targetNpub = FEEDBACK_CONTACT_NPUB;
     const existing = contacts.find(
-      (contact) => String(contact.npub ?? "").trim() === targetNpub,
+      (contact) => (contact.npub ?? "").trim() === targetNpub,
     );
 
     if (existing?.id) {
-      if (String(existing.name ?? "") === "Feedback") {
+      if ((existing.name ?? "") === "Feedback") {
         update("contact", { id: existing.id, name: null });
       }
       openFeedbackContactPendingRef.current = false;
@@ -70,7 +70,7 @@ export const useFeedbackContact = <
 
     const targetNpub = FEEDBACK_CONTACT_NPUB;
     const existing = contacts.find(
-      (contact) => String(contact.npub ?? "").trim() === targetNpub,
+      (contact) => (contact.npub ?? "").trim() === targetNpub,
     );
     if (!existing?.id) return;
 

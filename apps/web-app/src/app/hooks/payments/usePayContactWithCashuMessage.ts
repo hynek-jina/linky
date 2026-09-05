@@ -146,7 +146,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         return { error: "missing nsec", ok: false, queued: false };
       }
 
-      const contactNpub = String(contact.npub ?? "").trim();
+      const contactNpub = (contact.npub ?? "").trim();
       if (!contactNpub) {
         if (notify) setStatus(t("chatMissingContactNpub"));
         return { error: "missing contact npub", ok: false, queued: false };
@@ -162,7 +162,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       logPayStep("start", {
         amountSat,
         cashuBalance,
-        contactId: String(contactId),
+        contactId: contactId,
         fromQueue: Boolean(fromQueue),
         payWithCashuEnabled,
       });
@@ -171,14 +171,14 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
         const displayName =
-          String(contact.name ?? "").trim() ||
-          String(contact.lnAddress ?? "").trim() ||
+          (contact.name ?? "").trim() ||
+          (contact.lnAddress ?? "").trim() ||
           t("appTitle");
         const displayAmount = formatDisplayedAmountParts(amountSat);
         const clientId = makeLocalId();
         const messageId = appendLocalNostrMessage({
           clientId,
-          contactId: String(contactId),
+          contactId: contactId,
           content: t("payQueuedMessage")
             .replace(
               "{amount}",
@@ -196,7 +196,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         });
         logPayStep("queued-offline", {
           amountSat,
-          contactId: String(contactId),
+          contactId: contactId,
           messageId,
         });
         enqueuePendingPayment({ amountSat, contactId, messageId });
@@ -334,11 +334,11 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       if (!publishing.hasPendingMessages) {
         // The message carrying the token is published; the funds are the
         // contact's now, so the pending row has nothing left to guard.
-        await cashuTokenLifecycle.forget(String(receipt.rowId));
+        await cashuTokenLifecycle.forget(receipt.rowId);
         reportCashuSendRowForgotten({
           mint: receipt.mint,
           reason: "message-published",
-          rowId: String(receipt.rowId),
+          rowId: receipt.rowId,
         });
       }
 
@@ -363,8 +363,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
       if (notify) {
         const displayName =
-          String(contact.name ?? "").trim() ||
-          String(contact.lnAddress ?? "").trim() ||
+          (contact.name ?? "").trim() ||
+          (contact.lnAddress ?? "").trim() ||
           t("appTitle");
         const displayAmount = formatDisplayedAmountParts(receipt.amount);
         showPaidOverlay(

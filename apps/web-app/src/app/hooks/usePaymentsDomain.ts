@@ -54,8 +54,7 @@ export const usePaymentsDomain = <TContact extends ContactIdentityRowLike>({
       try {
         for (const pending of pendingPayments) {
           const contact = contacts.find(
-            (candidate) =>
-              String(candidate.id ?? "") === String(pending.contactId ?? ""),
+            (candidate) => (candidate.id ?? "") === pending.contactId,
           );
 
           if (!contact) {
@@ -63,7 +62,7 @@ export const usePaymentsDomain = <TContact extends ContactIdentityRowLike>({
             continue;
           }
 
-          const amountSat = Number(pending.amountSat ?? 0) || 0;
+          const amountSat = pending.amountSat || 0;
           if (amountSat <= 0) {
             removePendingPayment(pending.id);
             continue;

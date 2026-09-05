@@ -80,11 +80,11 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
 }: UseScannedTextHandlerParams<TContact>) => {
   return React.useCallback(
     async (rawValue: string) => {
-      const raw = String(rawValue ?? "").trim();
+      const raw = rawValue.trim();
       if (!raw) return;
 
       const parsedDeepLink = parseNativeDeepLinkUrl(raw);
-      let scanText = String(parsedDeepLink?.text ?? raw).trim();
+      let scanText = (parsedDeepLink?.text ?? raw).trim();
 
       // BIP 321 / BIP 21 — unified `bitcoin:` URI. The address part is
       // onchain (Linky doesn't settle onchain) so we promote the best
@@ -170,7 +170,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       try {
         const pubkey = decodeNpub(normalized);
         if (pubkey) {
-          const ownNpub = String(currentNpub ?? "").trim();
+          const ownNpub = (currentNpub ?? "").trim();
           if (ownNpub && ownNpub === normalized) {
             setStatus(t("contactIsYou"));
             closeScan();
@@ -179,12 +179,12 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
           }
 
           const already = contacts.some(
-            (contact) => String(contact.npub ?? "").trim() === normalized,
+            (contact) => (contact.npub ?? "").trim() === normalized,
           );
           if (already) {
             setStatus(t("contactExists"));
             const existing = contacts.find(
-              (contact) => String(contact.npub ?? "").trim() === normalized,
+              (contact) => (contact.npub ?? "").trim() === normalized,
             );
             closeScan();
             if (existing?.id) {
@@ -232,7 +232,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         // ignore
       }
 
-      const maybeLnAddress = String(normalized ?? "").trim();
+      const maybeLnAddress = normalized.trim();
       const isLnAddress = isLightningAddress(maybeLnAddress);
       if (isLnAddress) {
         if (scanEntryPoint === "receive") {
@@ -244,9 +244,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         const needle = maybeLnAddress.toLowerCase();
         const existing = contacts.find(
           (contact) =>
-            String(contact.lnAddress ?? "")
-              .trim()
-              .toLowerCase() === needle,
+            (contact.lnAddress ?? "").trim().toLowerCase() === needle,
         );
 
         closeScan();
@@ -293,9 +291,8 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         const existing = inferredLnAddress
           ? contacts.find(
               (contact) =>
-                String(contact.lnAddress ?? "")
-                  .trim()
-                  .toLowerCase() === inferredLnAddress.toLowerCase(),
+                (contact.lnAddress ?? "").trim().toLowerCase() ===
+                inferredLnAddress.toLowerCase(),
             )
           : null;
 

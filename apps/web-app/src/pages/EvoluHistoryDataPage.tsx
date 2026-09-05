@@ -25,7 +25,7 @@ export function EvoluHistoryDataPage(): React.ReactElement {
 
   const allowedOwnerIds = useMemo(() => {
     const values = evoluHistoryAllowedOwnerIds
-      .map((ownerId) => String(ownerId ?? "").trim())
+      .map((ownerId) => ownerId.trim())
       .filter(Boolean);
 
     const out = new Set<string>();

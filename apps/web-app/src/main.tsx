@@ -419,7 +419,7 @@ const applyEvoluWebCompatPolyfills = () => {
       onmessage: Listener = null;
 
       constructor(name: string) {
-        this.name = String(name);
+        this.name = name;
         const set = channelsByName.get(this.name) ?? new Set();
         set.add(this);
         channelsByName.set(this.name, set);

@@ -7,10 +7,10 @@ import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 export const extractCashuTokenMeta = (
   row: Pick<CashuTokenRow, "amount" | "mint" | "rawToken" | "token" | "unit">,
 ): CashuTokenMeta => {
-  const tokenText = String(row.token ?? row.rawToken ?? "").trim();
-  const storedMint = String(row.mint ?? "").trim();
-  const storedUnit = String(row.unit ?? "").trim() || null;
-  const storedAmount = Number(row.amount ?? 0);
+  const tokenText = (row.token ?? row.rawToken ?? "").trim();
+  const storedMint = (row.mint ?? "").trim();
+  const storedUnit = (row.unit ?? "").trim() || null;
+  const storedAmount = row.amount ?? 0;
 
   const parsed = tokenText ? parseTokenText(tokenText) : null;
 
@@ -33,7 +33,7 @@ export const extractCashuTokenMeta = (
 
 /** linkshu's `extractTokenText` behind a bank-payment-payload exclusion. */
 export const extractCashuTokenFromText = (text: string): string | null => {
-  const raw = String(text ?? "").trim();
+  const raw = text.trim();
   if (!raw) return null;
   if (isBankPaymentPayload(raw) || getLinkyBankPaymentOfferInfo(raw)) {
     return null;
@@ -42,4 +42,4 @@ export const extractCashuTokenFromText = (text: string): string | null => {
 };
 
 export const isStandaloneCashuTokenMessage = (text: string): boolean =>
-  parseTokenText(String(text ?? "")) !== null;
+  parseTokenText(text) !== null;

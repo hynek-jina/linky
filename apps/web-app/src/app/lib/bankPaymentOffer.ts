@@ -476,8 +476,7 @@ interface ActiveBankPaymentOfferContacts {
 
 const getBankPaymentOfferEntryTime = (
   entry: BankPaymentOfferContactEntry,
-): number =>
-  entry.info.statusUpdatedAtSec || Number(entry.message.createdAtSec ?? 0) || 0;
+): number => entry.info.statusUpdatedAtSec || entry.message.createdAtSec || 0;
 
 const isNewerBankPaymentOfferEntry = (
   candidate: BankPaymentOfferContactEntry,
@@ -501,8 +500,8 @@ export const getActiveBankPaymentOfferContacts = (
   const groups = new Map<string, Map<string, BankPaymentOfferContactEntry>>();
 
   for (const message of messages) {
-    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
-    const contactId = String(message.contactId ?? "").trim();
+    const info = getLinkyBankPaymentOfferInfo(message.content);
+    const contactId = message.contactId.trim();
     if (!info || !contactId) continue;
 
     const entriesByContact =
@@ -534,7 +533,7 @@ export const getActiveBankPaymentOfferContacts = (
 
       const expiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
         info,
-        Number(message.createdAtSec ?? 0),
+        message.createdAtSec,
       );
       if (expiresAtSec !== null) {
         if (nowSec >= expiresAtSec) continue;
@@ -544,7 +543,7 @@ export const getActiveBankPaymentOfferContacts = (
             : Math.min(nextExpiryAtSec, expiresAtSec);
       }
 
-      contactIds.add(String(message.contactId ?? "").trim());
+      contactIds.add(message.contactId.trim());
     }
   }
 
@@ -574,12 +573,10 @@ export const getLinkyBankPaymentOfferResponseDurationSec = (
   return bankPaidAtSec - initiatedAtSec;
 };
 
-interface BankPaymentOfferResponseMessage {
-  contactId?: unknown;
-  content?: unknown;
-  createdAtSec?: unknown;
-  direction?: unknown;
-}
+type BankPaymentOfferResponseMessage = Pick<
+  LocalNostrMessage,
+  "contactId" | "content" | "createdAtSec" | "direction"
+>;
 
 export const getLastBankPaymentOfferResponseSecByContactId = (
   messages: readonly BankPaymentOfferResponseMessage[],
@@ -591,9 +588,9 @@ export const getLastBankPaymentOfferResponseSecByContactId = (
 
   for (const message of messages) {
     if (message.direction !== "out") continue;
-    const contactId = String(message.contactId ?? "").trim();
-    const content = String(message.content ?? "");
-    const createdAtSec = Number(message.createdAtSec ?? 0);
+    const contactId = (message.contactId ?? "").trim();
+    const content = message.content ?? "";
+    const createdAtSec = message.createdAtSec;
     if (!contactId || !content || !Number.isFinite(createdAtSec)) continue;
 
     const info = getLinkyBankPaymentOfferInfo(content);
@@ -626,12 +623,12 @@ export const mergeBankPaymentOffersIntoLastMessageByContactId = (
   const merged = new Map(lastMessageByContactId);
 
   for (const message of bankPaymentOfferMessages) {
-    const contactId = String(message.contactId ?? "").trim();
+    const contactId = message.contactId.trim();
     if (!contactId) continue;
 
     const current = merged.get(contactId);
-    const currentCreatedAtSec = Number(current?.createdAtSec ?? 0) || 0;
-    const messageCreatedAtSec = Number(message.createdAtSec ?? 0) || 0;
+    const currentCreatedAtSec = (current?.createdAtSec ?? 0) || 0;
+    const messageCreatedAtSec = message.createdAtSec || 0;
     if (!current || messageCreatedAtSec >= currentCreatedAtSec) {
       merged.set(contactId, message);
     }

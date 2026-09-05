@@ -206,7 +206,7 @@ export function PushDebugPage(): React.ReactElement {
       setStatus(
         result.success
           ? t("notificationsRegistered")
-          : String(result.error ?? t("notificationsError")),
+          : (result.error ?? t("notificationsError")),
       );
       await refreshReport();
     } finally {

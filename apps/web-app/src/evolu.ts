@@ -562,6 +562,27 @@ export const createCashuTokensAllQuery = () =>
     db.selectFrom("cashuToken").selectAll().orderBy("createdAt", "desc"),
   );
 
+export const createContactsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("contact").selectAll());
+export const createNostrMessagesAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("nostrMessage").selectAll());
+export const createNostrReactionsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("nostrReaction").selectAll());
+export const createTransactionsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("transaction").selectAll());
+export type ContactRow = Evolu.InferRow<
+  ReturnType<typeof createContactsAllQuery>
+>;
+export type NostrMessageRow = Evolu.InferRow<
+  ReturnType<typeof createNostrMessagesAllQuery>
+>;
+export type NostrReactionRow = Evolu.InferRow<
+  ReturnType<typeof createNostrReactionsAllQuery>
+>;
+export type TransactionRow = Evolu.InferRow<
+  ReturnType<typeof createTransactionsAllQuery>
+>;
+
 export type CashuTokenRow = Evolu.InferRow<
   ReturnType<typeof createCashuTokensAllQuery>
 >;

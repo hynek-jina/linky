@@ -79,9 +79,7 @@ const getResponseMessage = (json: JsonValue, fallback: string): string => {
 };
 
 export const normalizeOwnLightningUsername = (value: string): string => {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return value.trim().toLowerCase();
 };
 
 export const getOwnLightningUsernameValidationIssue = (
@@ -102,7 +100,7 @@ export const getOwnLightningAddressFromUsername = (value: string): string => {
 export const getOwnLightningAddressInputCandidate = (
   value: string,
 ): OwnLightningAddressInputCandidate | null => {
-  const input = String(value ?? "").trim();
+  const input = value.trim();
   if (!input) return null;
 
   const atIndex = input.indexOf("@");
@@ -211,7 +209,7 @@ export const finalizeOwnLightningAddressClaim = async (args: {
   username: string;
 }): Promise<OwnLightningClaimFinalizeResult> => {
   const username = normalizeOwnLightningUsername(args.username);
-  const paymentToken = String(args.paymentToken ?? "").trim();
+  const paymentToken = args.paymentToken.trim();
   const issue = getOwnLightningUsernameValidationIssue(username);
   if (issue || !paymentToken) {
     return { kind: "error", message: "Missing claim data" };

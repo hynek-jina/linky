@@ -130,7 +130,7 @@ export const useProfileComposition = ({
   // The own pubkey is part of the profile watch; mirror its map entries into
   // the my-profile state the editor also writes optimistically.
   const ownNpub = React.useMemo(
-    () => normalizeNpubIdentifier(currentNpub),
+    () => normalizeNpubIdentifier(currentNpub ?? ""),
     [currentNpub],
   );
   const watchedMetadata = ownNpub

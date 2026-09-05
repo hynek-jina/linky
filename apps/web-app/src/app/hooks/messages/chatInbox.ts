@@ -102,7 +102,7 @@ export const applyChatMessageReceived = (
       const targetId = trimString(target.id);
       if (!targetId) return null;
       const existingOriginal =
-        trimString(target.originalContent) || String(target.content ?? "");
+        trimString(target.originalContent) || target.content;
       ctx.updateLocalNostrMessage(targetId, {
         content,
         status: "sent",

@@ -39,7 +39,6 @@ import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type {
   ChatReactionChip,
   LocalNostrMessage,
-  MintUrlInput,
 } from "../app/types/appTypes";
 import { deriveDefaultProfile } from "../derivedProfile";
 import type { MintIcon } from "../utils/mint";
@@ -92,7 +91,7 @@ interface ChatMessageProps {
   declineInfo: { requestRumorId: string | null } | null;
   formatChatDayLabel: (ms: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   isSeen: boolean;
   locale: string;
@@ -232,32 +231,30 @@ function ChatMessageComponent({
   const swipeTriggeredRef = React.useRef(false);
   const messageDivRef = React.useRef<HTMLDivElement | null>(null);
 
-  const isOut = String(message.direction ?? "") === "out";
-  const isPending = isOut && String(message.status ?? "sent") === "pending";
-  const content = String(message.content ?? "");
+  const isOut = message.direction === "out";
+  const isPending = isOut && (message.status ?? "sent") === "pending";
+  const content = message.content;
   const privateImageInfo = React.useMemo(
     () => parsePrivateImageMessage(content),
     [content],
   );
-  const messageId = String(message.id ?? "");
-  const rumorId = String(message.rumorId ?? "").trim() || null;
-  const replyToId = String(message.replyToId ?? "").trim() || null;
-  const rootMessageId = String(message.rootMessageId ?? "").trim() || null;
-  const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+  const messageId = message.id;
+  const rumorId = (message.rumorId ?? "").trim() || null;
+  const replyToId = (message.replyToId ?? "").trim() || null;
+  const rootMessageId = (message.rootMessageId ?? "").trim() || null;
+  const createdAtSec = message.createdAtSec || 0;
   const ms = createdAtSec * 1000;
   const d = new Date(ms);
   const dayKey = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   const minuteKey = Math.floor(createdAtSec / 60);
 
-  const prevSec = previousMessage
-    ? Number(previousMessage.createdAtSec ?? 0) || 0
-    : 0;
+  const prevSec = previousMessage ? previousMessage.createdAtSec || 0 : 0;
   const prevDate = previousMessage ? new Date(prevSec * 1000) : null;
   const prevDayKey = prevDate
     ? `${prevDate.getFullYear()}-${prevDate.getMonth() + 1}-${prevDate.getDate()}`
     : null;
 
-  const nextSec = nextMessage ? Number(nextMessage.createdAtSec ?? 0) || 0 : 0;
+  const nextSec = nextMessage ? nextMessage.createdAtSec || 0 : 0;
   const nextMinuteKey = nextMessage ? Math.floor(nextSec / 60) : null;
   const isIdentityChangeMessage =
     parseIdentityChangeMessageContent(content) !== null;
@@ -397,7 +394,7 @@ function ChatMessageComponent({
     let replacementCount = 0;
 
     for (const match of matches) {
-      const matchedText = String(match[0] ?? "");
+      const matchedText = match[0];
       const start = match.index ?? 0;
       const end = start + matchedText.length;
 
@@ -512,7 +509,7 @@ function ChatMessageComponent({
     const matches = Array.from(content.matchAll(MESSAGE_INLINE_ENTITY_PATTERN));
 
     for (const match of matches) {
-      const matchedText = String(match[0] ?? "");
+      const matchedText = match[0];
       if (!MESSAGE_NPUB_PATTERN.test(matchedText)) continue;
 
       const normalizedNpub = normalizeNpubIdentifier(matchedText);

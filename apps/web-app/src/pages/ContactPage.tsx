@@ -130,8 +130,8 @@ export const ContactPage: FC<ContactPageProps> = ({
   statusText,
   t,
 }) => {
-  const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
-  const selectedLnAddress = String(selectedContact?.lnAddress ?? "").trim();
+  const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub ?? "");
+  const selectedLnAddress = (selectedContact?.lnAddress ?? "").trim();
   const verifiedNip05 = useVerifiedNip05(
     selectedLnAddress ? selectedNpub : null,
   );
@@ -144,7 +144,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   }
 
   const contactId = selectedContact.id;
-  const name = String(selectedContact.name ?? "").trim();
+  const name = (selectedContact.name ?? "").trim();
   const groups = getContactGroups(selectedContact);
   const ln = selectedLnAddress;
   const npub = selectedNpub;
@@ -168,7 +168,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   const avatarContent = (
     <Avatar
       pictureUrl={url}
-      fallback={getInitials(String(selectedContact.name ?? ""))}
+      fallback={getInitials((selectedContact.name ?? ""))}
       fallbackClassName="contact-avatar-fallback"
       loading="lazy"
     />

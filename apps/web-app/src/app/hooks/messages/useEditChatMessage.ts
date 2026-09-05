@@ -71,7 +71,7 @@ export const useEditChatMessage = <
     if (!selectedContact) return;
     if (!editContext) return;
 
-    const editedFromId = String(editContext.rumorId ?? "").trim();
+    const editedFromId = editContext.rumorId.trim();
     if (!isRumorId(editedFromId)) return;
 
     const text = chatDraft.trim();
@@ -103,7 +103,7 @@ export const useEditChatMessage = <
       const clientId = ClientId.make(makeLocalId());
       const editedAtSec = Math.ceil(Date.now() / 1e3);
 
-      updateLocalNostrMessage(String(editContext.messageId ?? ""), {
+      updateLocalNostrMessage(editContext.messageId, {
         content: text,
         status: "pending",
         wrapId: `pending:edit:${clientId}`,
@@ -113,7 +113,7 @@ export const useEditChatMessage = <
         isEdited: true,
         editedAtSec,
         editedFromId,
-        originalContent: String(editContext.originalContent ?? "").trim()
+        originalContent: editContext.originalContent.trim()
           ? editContext.originalContent
           : null,
       });
@@ -136,7 +136,7 @@ export const useEditChatMessage = <
         return;
       }
 
-      updateLocalNostrMessage(String(editContext.messageId ?? ""), {
+      updateLocalNostrMessage(editContext.messageId, {
         createdAtSec: exit.value.sentAt,
         rumorId: editedFromId,
       });

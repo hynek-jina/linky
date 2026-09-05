@@ -143,7 +143,7 @@ const toStoredTokenRow = (row: CashuTokenRow): StoredTokenRow | null => {
     createdAt: UnixSeconds.make(Math.floor(Date.parse(row.createdAt) / 1000)),
     error:
       state === CASHU_TOKEN_STATE_ERROR ? toPortableErrorText(row.error) : null,
-    id: TokenRowId.make(String(row.id)),
+    id: TokenRowId.make(row.id),
     originalTokenText,
     state,
     tokenText,
@@ -177,7 +177,7 @@ const reflectsOverlayRow = (
     normalizeCashuTokenState(evoluRow.state) ?? CASHU_TOKEN_STATE_ACCEPTED;
   return (
     state === overlayRow.state &&
-    String(evoluRow.token ?? "").trim() === overlayRow.tokenText
+    (evoluRow.token ?? "").trim() === overlayRow.tokenText
   );
 };
 
@@ -190,7 +190,7 @@ export const makeEvoluTokenStore = (
     (await deps.loadTokenRows()).filter((row) => !isDeletedCashuRow(row));
 
   const findRow = async (id: TokenRowId): Promise<CashuTokenRow | null> =>
-    (await loadLiveRows()).find((row) => String(row.id) === String(id)) ?? null;
+    (await loadLiveRows()).find((row) => String(row.id) === id) ?? null;
 
   const rowLane = (row: CashuTokenRow): Evolu.OwnerId =>
     row.ownerId ?? deps.getWriteOwnerId();
@@ -244,12 +244,12 @@ export const makeEvoluTokenStore = (
         const stored = new StoredTokenRow({
           createdAt: UnixSeconds.make(nowSeconds()),
           error: row.error,
-          id: TokenRowId.make(String(id)),
+          id: TokenRowId.make(id),
           originalTokenText: row.originalTokenText,
           state: row.state,
           tokenText: row.tokenText,
         });
-        overlay.set(String(id), {
+        overlay.set(id, {
           row: stored,
           evoluId: id,
           lane,
@@ -260,7 +260,7 @@ export const makeEvoluTokenStore = (
 
     update: (id, patch) =>
       Effect.promise(async () => {
-        const entry = overlay.get(String(id));
+        const entry = overlay.get(id);
         if (entry !== undefined) {
           if (entry.removed) return;
           runUpdate(toUpdatePayload(entry.evoluId, patch), entry.lane);
@@ -273,7 +273,7 @@ export const makeEvoluTokenStore = (
         runUpdate(toUpdatePayload(target.id, patch), lane);
         const stored = toStoredTokenRow(target);
         if (stored !== null) {
-          overlay.set(String(id), {
+          overlay.set(id, {
             row: applyPatchToStoredRow(stored, patch),
             evoluId: target.id,
             lane,
@@ -284,7 +284,7 @@ export const makeEvoluTokenStore = (
 
     remove: (id) =>
       Effect.promise(async () => {
-        const entry = overlay.get(String(id));
+        const entry = overlay.get(id);
         if (entry !== undefined) {
           if (!entry.removed) {
             runUpdate(
@@ -301,7 +301,7 @@ export const makeEvoluTokenStore = (
         runUpdate({ id: target.id, isDeleted: Evolu.sqliteTrue }, lane);
         const stored = toStoredTokenRow(target);
         if (stored !== null) {
-          overlay.set(String(id), {
+          overlay.set(id, {
             row: stored,
             evoluId: target.id,
             lane,
@@ -315,7 +315,7 @@ export const makeEvoluTokenStore = (
       const seenIds = new Set<string>();
       const result: StoredTokenRow[] = [];
       for (const row of liveRows) {
-        const key = String(row.id);
+        const key = row.id;
         seenIds.add(key);
         const entry = overlay.get(key);
         if (entry !== undefined) {

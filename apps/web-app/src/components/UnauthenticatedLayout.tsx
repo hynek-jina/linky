@@ -59,9 +59,7 @@ type UnauthenticatedLayoutProps = {
 };
 
 const formatTemplate = (template: string, vars: Record<string, string>) =>
-  template.replace(/\{(\w+)\}/g, (_match, key: string) =>
-    String(vars[key] ?? ""),
-  );
+  template.replace(/\{(\w+)\}/g, (_match, key: string) => vars[key] ?? "");
 
 export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   confirmPendingOnboardingProfile,

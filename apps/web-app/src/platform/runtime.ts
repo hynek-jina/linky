@@ -16,9 +16,7 @@ export const getTelemetryAppHost = (): string | null => {
     return null;
   }
 
-  const host = String(window.location.host ?? "")
-    .trim()
-    .toLowerCase();
+  const host = window.location.host.trim().toLowerCase();
 
   return host ? host.slice(0, 255) : null;
 };
@@ -29,7 +27,7 @@ const getNavigator = (): Navigator | null => {
 
 const getLowercaseUserAgent = (): string => {
   const browserNavigator = getNavigator();
-  return String(browserNavigator?.userAgent ?? "").toLowerCase();
+  return (browserNavigator?.userAgent ?? "").toLowerCase();
 };
 
 const getNavigatorStandalone = (): boolean => {

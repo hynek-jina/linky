@@ -17,7 +17,6 @@ import type {
   LocalNostrReaction,
   NewLocalNostrMessage,
   NewLocalNostrReaction,
-  OptionalText,
   PaymentLogData,
   RouteWithOptionalId,
   UpdateLocalNostrMessage,
@@ -78,7 +77,9 @@ const deriveMyPubkey = (currentNsec: string | null): string | null => {
   return identityFromNsec(currentNsec.trim())?.pubkey ?? null;
 };
 
-type InboxContactRowLike = ContactNameRowLike & { npub?: OptionalText };
+type InboxContactRowLike = ContactNameRowLike & {
+  npub?: string | null | undefined;
+};
 
 const buildContactIndex = (
   contacts: readonly InboxContactRowLike[],
@@ -87,7 +88,7 @@ const buildContactIndex = (
   // Archived contacts stay in the index: their incoming messages land on the
   // contact itself, which then restores it from the archive.
   for (const contact of contacts) {
-    const npub = normalizeNpubIdentifier(contact.npub);
+    const npub = normalizeNpubIdentifier(contact.npub ?? "");
     if (!npub) continue;
     const pubkey = decodeNpub(npub);
     const id = trimString(contact.id);

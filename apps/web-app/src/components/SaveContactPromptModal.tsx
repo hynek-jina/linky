@@ -27,7 +27,7 @@ export function SaveContactPromptModal({
   const displayAmount = formatDisplayedAmountParts(amountSat);
 
   const handleSave = () => {
-    const ln = String(lnAddress ?? "").trim();
+    const ln = lnAddress.trim();
     const npub = parseDefaultLightningAddressNpub(ln);
 
     flushSync(() => {

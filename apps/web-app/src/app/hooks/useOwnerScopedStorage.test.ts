@@ -123,8 +123,8 @@ describe("buildTransactionInsertPayload", () => {
       detailsJson: JSON.stringify({
         requestId: "request-1",
         lightningInvoice: "lnbc1invoice",
-        usedTokenIds: [String(createCashuTokenId(usedToken))],
-        gainedTokenIds: [String(createCashuTokenId(gainedToken))],
+        usedTokenIds: [createCashuTokenId(usedToken)],
+        gainedTokenIds: [createCashuTokenId(gainedToken)],
       }),
       direction: "out",
       fee: 1,
@@ -203,7 +203,7 @@ describe("useOwnerScopedStorage", () => {
     );
     expect(
       localStorage.getItem(
-        `${LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX}.${String(appOwnerId)}`,
+        `${LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX}.${appOwnerId}`,
       ),
     ).not.toBeNull();
   });
@@ -227,7 +227,7 @@ describe("useOwnerScopedStorage", () => {
     }).not.toThrow();
     expect(
       localStorage.getItem(
-        `${LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX}.${String(appOwnerId)}`,
+        `${LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX}.${appOwnerId}`,
       ),
     ).not.toBeNull();
   });
@@ -239,7 +239,7 @@ describe("useOwnerScopedStorage", () => {
       transactionsOwnerId,
       insert,
     );
-    const legacyStorageKey = `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${String(appOwnerId)}`;
+    const legacyStorageKey = `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${appOwnerId}`;
     localStorage.setItem(
       legacyStorageKey,
       JSON.stringify([

@@ -62,9 +62,7 @@ const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
 export const parseDisplayCurrency = (
   value: string | null | undefined,
 ): DisplayCurrency | null => {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase();
+  const normalized = (value ?? "").trim().toLowerCase();
   if (normalized === "sat") return "sat";
   if (normalized === "btc" || normalized === "b") return "btc";
   if (normalized === "czk") return "czk";
@@ -175,7 +173,7 @@ const getFiatValue = (
 };
 
 const parsePositiveInteger = (value: string): number => {
-  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  const digitsOnly = value.replace(/\D/g, "");
   if (!digitsOnly) return 0;
   const parsed = Number.parseInt(digitsOnly, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -183,9 +181,7 @@ const parsePositiveInteger = (value: string): number => {
 };
 
 const parsePositiveDisplayNumber = (value: string): number => {
-  const normalized = String(value ?? "")
-    .trim()
-    .replace(",", ".");
+  const normalized = value.trim().replace(",", ".");
   if (!/^\d+(?:\.\d*)?$/.test(normalized)) return 0;
   const parsed = Number.parseFloat(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -339,10 +335,7 @@ export const formatDisplayAmountText = (
   options: DisplayAmountOptions,
 ): string => {
   const parts = formatDisplayAmountParts(amountSat, options);
-  return [
-    `${parts.approxPrefix}${parts.amountText}`,
-    String(parts.unitLabel ?? "").trim(),
-  ]
+  return [`${parts.approxPrefix}${parts.amountText}`, parts.unitLabel.trim()]
     .filter(Boolean)
     .join(" ");
 };

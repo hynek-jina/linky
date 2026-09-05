@@ -58,9 +58,9 @@ const normalizeDomain = (value: string): string | null => {
 };
 
 export const parseNip05IdentifierInput = (
-  value: unknown,
+  value: string,
 ): Nip05Identifier | null => {
-  const input = stripNostrUriPrefix(String(value ?? ""));
+  const input = stripNostrUriPrefix(value);
   if (!input) return null;
   if (looksLikeDirectNpub(input)) return null;
 
@@ -90,9 +90,9 @@ export const parseNip05IdentifierInput = (
 };
 
 export const getDefaultNip05IdentifierFromAddress = (
-  value: unknown,
+  value: string,
 ): string | null => {
-  const input = stripNostrUriPrefix(String(value ?? ""));
+  const input = stripNostrUriPrefix(value);
   const atIndex = input.indexOf("@");
   if (atIndex < 0 || atIndex !== input.lastIndexOf("@")) return null;
 
@@ -173,7 +173,7 @@ const resolveNip05Identifier = async (
 };
 
 export const resolveNip05Input = async (
-  value: unknown,
+  value: string,
   options?: { signal?: AbortSignal },
 ): Promise<Nip05ResolutionResult> => {
   const identifier = parseNip05IdentifierInput(value);
@@ -182,7 +182,7 @@ export const resolveNip05Input = async (
 };
 
 export const resolveVerifiedNip05Identifier = async (
-  value: unknown,
+  value: string,
   expectedNpub: string,
   options?: { signal?: AbortSignal },
 ): Promise<string | null> => {

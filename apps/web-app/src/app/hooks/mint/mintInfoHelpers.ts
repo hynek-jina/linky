@@ -9,11 +9,7 @@ import {
   normalizeMintUrl,
 } from "../../../utils/mint";
 import { extractCashuTokenMeta } from "../../lib/tokenText";
-import type {
-  LocalMintInfoRow,
-  MintUrlInput,
-  OptionalText,
-} from "../../types/appTypes";
+import type { LocalMintInfoRow } from "../../types/appTypes";
 import { isRecord } from "../../../utils/unknown";
 
 interface MintInfoRowLike {
@@ -24,17 +20,17 @@ interface MintInfoRowLike {
   isDeleted?: LocalMintInfoRow["isDeleted"];
   lastSeenAtSec?: LocalMintInfoRow["lastSeenAtSec"];
   supportsMpp?: LocalMintInfoRow["supportsMpp"];
-  url?: OptionalText;
+  url?: string | null | undefined;
 }
 
 export const isMintDeletedRow = (row: MintInfoRowLike): boolean =>
-  String(row.isDeleted ?? "") === String(Evolu.sqliteTrue);
+  row.isDeleted === Evolu.sqliteTrue || row.isDeleted === "1";
 
 const getLastSeenAtSec = (row: MintInfoRowLike): number =>
-  Number(row.lastSeenAtSec ?? 0) || 0;
+  (row.lastSeenAtSec ?? 0) || 0;
 
-const hasJsonText = (value: OptionalText): boolean =>
-  Boolean(String(value ?? "").trim().length);
+const hasJsonText = (value: string | null | undefined): boolean =>
+  Boolean((value ?? "").trim().length);
 
 const compareMintRows = (
   left: MintInfoRowLike,
@@ -53,7 +49,7 @@ const compareMintRows = (
 };
 
 const getCanonicalMintUrl = (row: MintInfoRowLike): string | null => {
-  const raw = String(row.url ?? "");
+  const raw = row.url ?? "";
   return normalizeMintUrl(raw);
 };
 
@@ -129,7 +125,7 @@ export const getEncounteredMintUrls = (
   const set = new Set<string>();
 
   for (const row of cashuTokensAll) {
-    const state = String(row.state ?? "");
+    const state = row.state ?? "";
     if (state !== "accepted") continue;
 
     const mint = extractCashuTokenMeta(row).mint;
@@ -143,7 +139,7 @@ export const getEncounteredMintUrls = (
 const toJson = (value: unknown): string | null => {
   try {
     const text = JSON.stringify(value);
-    const trimmed = String(text ?? "").trim();
+    const trimmed = text.trim();
     if (
       !trimmed ||
       trimmed === "null" ||
@@ -160,10 +156,10 @@ const toJson = (value: unknown): string | null => {
 };
 
 export const getMintInfoIconUrl = (
-  mintUrl: MintUrlInput,
-  infoJson: OptionalText,
+  mintUrl: string | null | undefined,
+  infoJson: string | null | undefined,
 ): string | null => {
-  const infoText = String(infoJson ?? "").trim();
+  const infoText = (infoJson ?? "").trim();
   if (!infoText) return null;
 
   const normalizedMintUrl = normalizeMintUrl(mintUrl);
@@ -269,7 +265,7 @@ const getDuplicateGroups = (
     const withTypes = {
       ...row,
       id,
-      url: String(row.url ?? ""),
+      url: row.url,
     };
     if (existing) existing.push(withTypes);
     else grouped.set(key, [withTypes]);
@@ -292,7 +288,7 @@ export const buildMintDedupeSignature = (
     .map(
       ({ key, rows }) =>
         `${key}:${rows
-          .map((row) => String(row.id ?? ""))
+          .map((row) => row.id)
           .sort()
           .join(",")}`,
     )
@@ -310,10 +306,10 @@ export const dedupeMintInfoRows = (
   let didChange = false;
 
   const applyPatch = (patch: Partial<LocalMintInfoRow> & { id: string }) => {
-    const id = String(patch.id ?? "");
+    const id = patch.id;
     if (!id) return;
 
-    const idx = next.findIndex((row) => String(row.id ?? "") === id);
+    const idx = next.findIndex((row) => row.id === id);
     if (idx < 0) return;
 
     next[idx] = { ...next[idx], ...patch };
@@ -329,7 +325,7 @@ export const dedupeMintInfoRows = (
     }
 
     for (const row of rows) {
-      if (String(row.id ?? "") === String(best.id ?? "")) continue;
+      if (row.id === best.id) continue;
       applyPatch({ id: row.id, isDeleted: Evolu.sqliteTrue });
     }
   }
@@ -337,8 +333,10 @@ export const dedupeMintInfoRows = (
   return didChange ? next : null;
 };
 
-export const getMintFeePpk = (feesJson: OptionalText): number | null => {
-  const text = String(feesJson ?? "").trim();
+export const getMintFeePpk = (
+  feesJson: string | null | undefined,
+): number | null => {
+  const text = (feesJson ?? "").trim();
   if (!text) return null;
   try {
     const parsed: unknown = JSON.parse(text);

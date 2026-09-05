@@ -118,8 +118,10 @@ export const useProfileEditor = ({
     const initialName = bestName ?? effectiveProfileName ?? "";
     const initialLn = effectiveMyLightningAddress ?? "";
 
-    const metaPic = String(
-      myProfileMetadata?.picture ?? effectiveProfilePicture ?? "",
+    const metaPic = (
+      myProfileMetadata?.picture ??
+      effectiveProfilePicture ??
+      ""
     ).trim();
 
     const generatedAvatar = deriveGeneratedAvatar(currentNpub ?? initialName);
@@ -188,7 +190,7 @@ export const useProfileEditor = ({
 
   const ownLightningAddressMatchesCurrentIdentity = React.useCallback(
     (candidate: OwnLightningAddressInputCandidate): boolean => {
-      const normalizedDefault = String(defaultLightningAddress ?? "")
+      const normalizedDefault = (defaultLightningAddress ?? "")
         .trim()
         .toLowerCase();
       if (
@@ -199,9 +201,7 @@ export const useProfileEditor = ({
       }
 
       for (const lightningAddress of ownedLightningAddresses) {
-        const normalizedOwned = String(lightningAddress ?? "")
-          .trim()
-          .toLowerCase();
+        const normalizedOwned = lightningAddress.trim().toLowerCase();
         if (normalizedOwned && candidate.lightningAddress === normalizedOwned) {
           return true;
         }
@@ -280,7 +280,7 @@ export const useProfileEditor = ({
           myProfileMetadata ?? loadCachedProfile(currentNpub)?.metadata ?? null;
         const keptNip05 =
           nextNip05 ??
-          (getDefaultNip05IdentifierFromAddress(prev?.nip05)
+          (getDefaultNip05IdentifierFromAddress(prev?.nip05 ?? "")
             ? undefined
             : prev?.nip05);
 
@@ -406,8 +406,10 @@ export const useProfileEditor = ({
         if (Exit.isFailure(publishExit)) throw new Error("publish failed");
 
         const bestName = getBestNostrName(next.metadata);
-        const picture = String(
-          next.metadata.picture ?? effectiveProfilePicture ?? "",
+        const picture = (
+          next.metadata.picture ??
+          effectiveProfilePicture ??
+          ""
         ).trim();
         const statusText =
           parseProfileGeneralStatus(myProfileStatus).text ?? "";

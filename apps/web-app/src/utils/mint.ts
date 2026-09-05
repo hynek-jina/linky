@@ -132,7 +132,7 @@ export const getNextMintIconUrl = (
   origin: string | null,
 ): string | null => {
   const genericUrl = GENERIC_MINT_ICON_DATA_URL;
-  const cleanedCurrentUrl = String(currentUrl ?? "").trim() || null;
+  const cleanedCurrentUrl = (currentUrl ?? "").trim() || null;
   const faviconUrl = origin ? `${origin}/favicon.ico` : null;
 
   if (faviconUrl && cleanedCurrentUrl !== faviconUrl) {

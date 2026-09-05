@@ -121,6 +121,9 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 
 ### Evolu persistence and owner lanes
 
+- Persisted contact, message, reaction, and transaction rows use query-inferred Evolu types exported from `evolu.ts`. `ContactRowLike` derives its display fields from those types and permits partial, unbranded fields for unsaved Nostr peers; mutation boundaries still validate branded IDs and text. Evolu creation dates are ISO strings, not numeric timestamps.
+- Transaction history transforms live in `app/lib/transactionHistory.ts`. Nullable amount and fee columns stay null when absent; incomplete synced rows are skipped until required fields arrive. Indexed dictionaries can have missing keys even when TypeScript declares `Record<string, string>`, so their empty-value fallbacks remain.
+
 - Runtime contact/transaction ID validation lives in `src/evoluIds.ts`, which does not initialize the database. `evolu.ts` re-exports these IDs for existing consumers; lightweight hooks import the schemas directly. Contact import, editing, and owner migration share the text-field constructors in `app/lib/contactFields.ts`.
 
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`

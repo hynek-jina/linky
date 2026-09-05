@@ -15,8 +15,8 @@ export const isCashuRowCandidateBetter = ({
   existing,
   ownerRank,
 }: CashuRowPreferenceInput): boolean => {
-  const candidateOwnerId = String(candidate.ownerId);
-  const existingOwnerId = String(existing.ownerId);
+  const candidateOwnerId = candidate.ownerId;
+  const existingOwnerId = existing.ownerId;
   const candidateRank = ownerRank.get(candidateOwnerId) ?? -1;
   const existingRank = ownerRank.get(existingOwnerId) ?? -1;
   const candidateIsDeleted = candidate.isDeleted === Evolu.sqliteTrue;

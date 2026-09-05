@@ -1,5 +1,4 @@
 import React from "react";
-import type { MintUrlInput } from "../app/types/appTypes";
 import type { MintIcon } from "../utils/mint";
 import { getNextMintIconUrl } from "../utils/mint";
 
@@ -8,7 +7,7 @@ interface MintButtonProps {
   badgeTone?: "recommended" | "test";
   disabled?: boolean;
   fallbackLetter: string;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   isSelected: boolean;
   isTestMint?: boolean;
   label: string;

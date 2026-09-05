@@ -47,7 +47,7 @@ export const useNpubCashMintSelection = ({
 }: UseNpubCashMintSelectionParams) => {
   React.useEffect(() => {
     if (!defaultMintUrl) return;
-    const draft = String(defaultMintUrlDraft ?? "").trim();
+    const draft = defaultMintUrlDraft.trim();
     if (draft) return;
     setDefaultMintUrlDraft(normalizeMintUrl(defaultMintUrl));
   }, [defaultMintUrl, defaultMintUrlDraft, setDefaultMintUrlDraft]);
