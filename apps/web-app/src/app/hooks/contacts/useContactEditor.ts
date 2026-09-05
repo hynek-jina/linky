@@ -1,3 +1,5 @@
+import { contactsLimitMessage } from "./useSaveNpubContact";
+import { writeContact } from "../../lib/writeContact";
 import { toEvoluText, toContactTextFields } from "../../lib/contactFields";
 import * as Evolu from "@evolu/common";
 import {
@@ -300,10 +302,7 @@ export const useContactEditor = ({
         return upsert("contact", fullOverridePayload, { ownerId: appOwnerId });
       }
 
-      if (!appOwnerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId: appOwnerId });
-      if (scoped.ok) return scoped;
-      return update("contact", payload);
+      return writeContact(update, payload, appOwnerId);
     },
     [appOwnerId, buildFullContactOverridePayload, update, upsert],
   );
@@ -474,12 +473,7 @@ export const useContactEditor = ({
     }
 
     if (!editingId && activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
-      setStatus(
-        t("contactsLimitReached").replace(
-          "{max}",
-          String(MAX_CONTACTS_PER_OWNER),
-        ),
-      );
+      setStatus(contactsLimitMessage(t));
       return;
     }
 
@@ -681,9 +675,7 @@ export const useContactEditor = ({
         setStatus(t("contactUpdated"));
       }
     } else {
-      const result = appOwnerId
-        ? insert("contact", createPayload, { ownerId: appOwnerId })
-        : insert("contact", createPayload);
+      const result = writeContact(insert, createPayload, appOwnerId);
       if (result.ok) {
         savedContactId = result.value.id;
         setRecentlyAddedContactId(result.value.id);
@@ -922,12 +914,7 @@ export const useContactEditor = ({
       if (isSavingContact) return;
 
       if (activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
-        setStatus(
-          t("contactsLimitReached").replace(
-            "{max}",
-            String(MAX_CONTACTS_PER_OWNER),
-          ),
-        );
+        setStatus(contactsLimitMessage(t));
         return;
       }
 
@@ -973,9 +960,7 @@ export const useContactEditor = ({
       if (parsedLnAddress.ok) createPayload.lnAddress = parsedLnAddress.value;
 
       setIsSavingContact(true);
-      const result = appOwnerId
-        ? insert("contact", createPayload, { ownerId: appOwnerId })
-        : insert("contact", createPayload);
+      const result = writeContact(insert, createPayload, appOwnerId);
 
       if (!result.ok) {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);

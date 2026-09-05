@@ -1,3 +1,4 @@
+import { writeContact } from "../../lib/writeContact";
 import type { OwnerId } from "@evolu/common";
 import React from "react";
 import type { ContactId } from "../../../evolu";
@@ -70,9 +71,7 @@ export const useChatReadCursorSync = ({
       resolveContactRowOwnerLane(selectedContact, contactsVisibleOwnerIds) ??
       contactsOwnerId;
     const payload = { id: selectedContact.id, chatLastSeenAtSec: target };
-    const result = ownerId
-      ? update("contact", payload, { ownerId })
-      : update("contact", payload);
+    const result = writeContact(update, payload, ownerId);
     if (result.ok) {
       lastWrittenAtSecByContactIdRef.current.set(contactId, target);
     }

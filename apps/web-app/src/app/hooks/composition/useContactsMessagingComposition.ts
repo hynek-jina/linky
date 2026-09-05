@@ -1,3 +1,8 @@
+import {
+  contactsLimitMessage,
+  useSaveNpubContact,
+} from "../contacts/useSaveNpubContact";
+import { writeContact } from "../../lib/writeContact";
 import * as Evolu from "@evolu/common";
 import type { ProfileMetadata } from "@linky/linkstr";
 import {
@@ -312,22 +317,11 @@ export const useContactsMessagingComposition = ({
       "1",
   );
 
-  const [chatOwnPubkeyHex, setChatOwnPubkeyHex] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!currentNsec) {
-      setChatOwnPubkeyHex(null);
-      return;
-    }
-
-    let cancelled = false;
-    const identity = identityFromNsec(currentNsec);
-    if (!cancelled) setChatOwnPubkeyHex(identity?.pubkey ?? null);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentNsec]);
+  const chatOwnPubkeyHex = React.useMemo(
+    () =>
+      currentNsec ? (identityFromNsec(currentNsec)?.pubkey ?? null) : null,
+    [currentNsec],
+  );
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
@@ -745,6 +739,18 @@ export const useContactsMessagingComposition = ({
     [t],
   );
 
+  const saveNpubContact = useSaveNpubContact({
+    contacts,
+    contactsOwnerId,
+    activeContactsOwnerContactCount,
+    buildSavedContactName,
+    unknownNameByNpub,
+    insert,
+    lang,
+    setStatus,
+    t,
+  });
+
   const unknownContacts = React.useMemo<UnknownChatContact[]>(() => {
     const blockedPubkeys = new Set(
       safeLocalStorageGetJson(
@@ -878,9 +884,7 @@ export const useContactsMessagingComposition = ({
             ? { name: parsedName.value }
             : {}),
         };
-        const result = ownerId
-          ? update("contact", payload, { ownerId })
-          : update("contact", payload);
+        const result = writeContact(update, payload, ownerId);
         if (!result.ok) continue;
       }
 
@@ -1344,10 +1348,7 @@ export const useContactsMessagingComposition = ({
 
   const openNewContactPage = React.useCallback(() => {
     if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
-      const message = t("contactsLimitReached").replace(
-        "{max}",
-        String(MAX_CONTACTS_PER_OWNER),
-      );
+      const message = contactsLimitMessage(t);
       pushToast(message);
       return;
     }
@@ -1412,9 +1413,7 @@ export const useContactsMessagingComposition = ({
         (contactToArchive?.chatLastSeenAtSec ?? 0) || 0,
       ),
     };
-    const result = archiveOwnerId
-      ? update("contact", payload, { ownerId: archiveOwnerId })
-      : update("contact", payload);
+    const result = writeContact(update, payload, archiveOwnerId);
     if (result.ok) {
       setStatus(t("contactArchived"));
       closeContactDetail();
@@ -1431,13 +1430,11 @@ export const useContactsMessagingComposition = ({
         ? resolveContactRowOwnerLane(contactToRestore, contactsVisibleOwnerIds)
         : null;
       const restoreOwnerId = storedContactOwnerId ?? contactsOwnerId;
-      const result = restoreOwnerId
-        ? update(
-            "contact",
-            { id, archivedAtSec: null },
-            { ownerId: restoreOwnerId },
-          )
-        : update("contact", { id, archivedAtSec: null });
+      const result = writeContact(
+        update,
+        { id, archivedAtSec: null },
+        restoreOwnerId,
+      );
 
       if (result.ok) {
         const restoredNpub = normalizeNpubIdentifier(
@@ -1574,23 +1571,14 @@ export const useContactsMessagingComposition = ({
       removeLocalNostrMessagesByContactId(contactId);
     }
 
-    const result = contactsOwnerId
-      ? (() => {
-          const scoped = update(
-            "contact",
-            { id: selectedContact.id, isDeleted: Evolu.sqliteTrue },
-            { ownerId: contactsOwnerId },
-          );
-          if (scoped.ok) return scoped;
-          return update("contact", {
-            id: selectedContact.id,
-            isDeleted: Evolu.sqliteTrue,
-          });
-        })()
-      : update("contact", {
-          id: selectedContact.id,
-          isDeleted: Evolu.sqliteTrue,
-        });
+    const ownerId =
+      resolveContactRowOwnerLane(selectedContact, contactsVisibleOwnerIds) ??
+      contactsOwnerId;
+    const result = writeContact(
+      update,
+      { id: selectedContact.id, isDeleted: Evolu.sqliteTrue },
+      ownerId,
+    );
 
     if (result.ok) {
       setStatus(t("contactBlocked"));
@@ -1600,6 +1588,7 @@ export const useContactsMessagingComposition = ({
 
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   }, [
+    contactsVisibleOwnerIds,
     blockPubkeyAndPublishMuteList,
     closeContactDetail,
     contactsOwnerId,
@@ -1674,58 +1663,25 @@ export const useContactsMessagingComposition = ({
       return;
     }
 
-    const existing = contacts.find(
-      (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
-    );
-
-    if (existing?.id) {
-      reassignNostrConversationContactId(contactId, existing.id);
+    const saved = saveNpubContact(npub);
+    if (!saved) return;
+    if (!saved.created) {
+      reassignNostrConversationContactId(contactId, saved.contact.id);
       setStatus(t("contactSaved"));
-      navigateTo({ route: "chat", id: existing.id });
+      navigateTo({ route: "chat", id: saved.contact.id });
       return;
     }
-
-    const bestName = unknownNameByNpub[npub] ?? null;
-    const savedName = buildSavedContactName(bestName, npub);
-    const payload = {
-      name: Evolu.NonEmptyString1000.orThrow(savedName),
-      npub: Evolu.NonEmptyString1000.orThrow(npub),
-      lnAddress: null,
-      groupName: null,
-    };
-
     pendingUnknownContactAddRef.current = {
       sourceContactId: contactId,
       targetNpub: npub,
     };
-
-    const result = contactsOwnerId
-      ? (() => {
-          const scoped = insert("contact", payload, {
-            ownerId: contactsOwnerId,
-          });
-          if (scoped.ok) return scoped;
-          return insert("contact", payload);
-        })()
-      : insert("contact", payload);
-
-    if (!result.ok) {
-      pendingUnknownContactAddRef.current = null;
-      setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
-      return;
-    }
   }, [
-    contactsOwnerId,
-    buildSavedContactName,
-    contacts,
-    insert,
-    pendingUnknownContactAddRef,
     reassignNostrConversationContactId,
     route.kind,
+    saveNpubContact,
     selectedChatContact,
     setStatus,
     t,
-    unknownNameByNpub,
   ]);
 
   const blockUnknownContactFromChat = React.useCallback(async () => {
@@ -1796,11 +1752,11 @@ export const useContactsMessagingComposition = ({
     },
     [
       buildSavedContactName,
+      unknownNameByNpub,
       contacts,
       currentNpub,
       lang,
       nostrPictureByNpub,
-      unknownNameByNpub,
     ],
   );
 
@@ -1845,59 +1801,18 @@ export const useContactsMessagingComposition = ({
         return;
       }
 
-      if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
-        setStatus(
-          t("contactsLimitReached").replace(
-            "{max}",
-            String(MAX_CONTACTS_PER_OWNER),
-          ),
-        );
-        return;
-      }
-
-      const defaultProfile = deriveDefaultProfile(npub, lang);
-      const payload = {
-        name: Evolu.NonEmptyString1000.orThrow(
-          buildSavedContactName(
-            unknownNameByNpub[npub] ?? defaultProfile.name,
-            npub,
-          ),
-        ),
-        npub: Evolu.NonEmptyString1000.orThrow(npub),
-        lnAddress: null,
-        groupName: null,
-      };
-
-      const result = contactsOwnerId
-        ? (() => {
-            const scoped = insert("contact", payload, {
-              ownerId: contactsOwnerId,
-            });
-            if (scoped.ok) return scoped;
-            return insert("contact", payload);
-          })()
-        : insert("contact", payload);
-
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
-        return;
-      }
-
-      openScannedContactPendingNpubRef.current = npub;
+      const saved = saveNpubContact(npub);
+      if (!saved) return;
+      openScannedContactPendingNpubRef.current = saved.npub;
       setStatus(t("contactSaved"));
     },
     [
-      activeContactsOwnerContactCount,
-      buildSavedContactName,
       contacts,
-      contactsOwnerId,
       currentNpub,
-      insert,
-      lang,
       openScannedContactPendingNpubRef,
+      saveNpubContact,
       setStatus,
       t,
-      unknownNameByNpub,
     ],
   );
 
@@ -1928,55 +1843,15 @@ export const useContactsMessagingComposition = ({
         activeContactsOwnerContactCount + newNpubs.length >
         MAX_CONTACTS_PER_OWNER
       ) {
-        setStatus(
-          t("contactsLimitReached").replace(
-            "{max}",
-            String(MAX_CONTACTS_PER_OWNER),
-          ),
-        );
-        return;
-      }
-
-      const payloads = newNpubs.flatMap((npub) => {
-        const defaultProfile = deriveDefaultProfile(npub, lang);
-        const name = Evolu.NonEmptyString1000.fromUnknown(
-          buildSavedContactName(
-            unknownNameByNpub[npub] ?? defaultProfile.name,
-            npub,
-          ),
-        );
-        const parsedNpub = Evolu.NonEmptyString1000.fromUnknown(npub);
-        if (!name.ok || !parsedNpub.ok) return [];
-
-        return [
-          {
-            name: name.value,
-            npub: parsedNpub.value,
-            lnAddress: null,
-            groupName: null,
-          },
-        ];
-      });
-      if (payloads.length !== newNpubs.length) {
-        setStatus(`${t("errorPrefix")}: ${t("contactIdentifierInvalid")}`);
+        setStatus(contactsLimitMessage(t));
         return;
       }
 
       const savedContacts: SavedContactRef[] = [];
-      for (const payload of payloads) {
-        const scoped = contactsOwnerId
-          ? insert("contact", payload, { ownerId: contactsOwnerId })
-          : null;
-        if (scoped?.ok) {
-          savedContacts.push({ id: scoped.value.id, ownerId: contactsOwnerId });
-          continue;
-        }
-        const result = insert("contact", payload);
-        if (!result.ok) {
-          setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
-          return;
-        }
-        savedContacts.push({ id: result.value.id, ownerId: null });
+      for (const npub of newNpubs) {
+        const saved = saveNpubContact(npub);
+        if (!saved) return;
+        savedContacts.push({ id: saved.contact.id, ownerId: saved.ownerId });
       }
 
       setPendingContactsGroupAssignment({ messageId, savedContacts });
@@ -1986,15 +1861,11 @@ export const useContactsMessagingComposition = ({
     },
     [
       activeContactsOwnerContactCount,
-      buildSavedContactName,
       contacts,
-      contactsOwnerId,
       currentNpub,
-      insert,
-      lang,
+      saveNpubContact,
       setStatus,
       t,
-      unknownNameByNpub,
     ],
   );
 
@@ -2025,9 +1896,7 @@ export const useContactsMessagingComposition = ({
           groupName: groupName.value,
           groupNamesJson: groupNamesJson.value,
         };
-        const result = ownerId
-          ? update("contact", payload, { ownerId })
-          : update("contact", payload);
+        const result = writeContact(update, payload, ownerId);
         if (!result.ok) {
           setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
           return;
@@ -2291,9 +2160,7 @@ export const useContactsMessagingComposition = ({
         chatPeerSeenSinceSec: seenWindow.sinceSec,
         chatPeerSeenAtSec: seenWindow.seenUpToSec,
       };
-      const result = ownerId
-        ? update("contact", payload, { ownerId })
-        : update("contact", payload);
+      const result = writeContact(update, payload, ownerId);
       if (result.ok) {
         peerSeenWrittenByContactIdRef.current.set(contactId, seenWindow);
       }
@@ -2350,7 +2217,7 @@ export const useContactsMessagingComposition = ({
   });
 
   return {
-    activeContactsOwnerContactCount,
+    saveNpubContact,
     activeGroup,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
@@ -2367,7 +2234,6 @@ export const useContactsMessagingComposition = ({
     bankPaymentOfferStaggerDelaySec,
     blockArchivedContact,
     blockUnknownContactFromChat,
-    buildSavedContactName,
     canAddContact,
     canSaveNewRelay,
     chatDidInitialScrollForContactRef,
@@ -2460,7 +2326,6 @@ export const useContactsMessagingComposition = ({
     setPendingDeleteId,
     statusFilterCurrencies,
     ungroupedCount,
-    unknownNameByNpub,
     unreadByContactId,
     updateLocalNostrMessage,
     visibleContacts,

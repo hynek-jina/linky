@@ -1,3 +1,4 @@
+import { writeContact } from "../lib/writeContact";
 import * as Evolu from "@evolu/common";
 import type {
   ProfileFetchEntry,
@@ -107,8 +108,6 @@ type SetByNpub<T> = React.Dispatch<
   React.SetStateAction<Record<string, T | null>>
 >;
 
-// Structural subset of `EvoluMutations["update"]` (the sync only writes
-// contact rows and ignores the result), so tests can substitute it.
 type ContactRowUpdate = (
   table: "contact",
   props: {
@@ -117,7 +116,7 @@ type ContactRowUpdate = (
     name?: typeof Evolu.NonEmptyString1000.Type | null;
   },
   options?: { readonly ownerId?: Evolu.OwnerId },
-) => unknown;
+) => Evolu.Result<unknown, unknown>;
 
 interface ProfileSyncContext {
   contacts: readonly (ContactRowLike & { id: string })[];
@@ -194,8 +193,7 @@ const syncContactsFromProfile = (
       resolveContactRowOwnerLane(contact, ctx.contactsVisibleOwnerIds) ??
       ctx.contactsOwnerId;
     const payload = { id: contact.id, ...patch };
-    if (ownerId) ctx.update("contact", payload, { ownerId });
-    else ctx.update("contact", payload);
+    writeContact(ctx.update, payload, ownerId);
   }
 };
 

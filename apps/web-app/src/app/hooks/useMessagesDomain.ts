@@ -3,6 +3,16 @@ import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
+import { useLatest } from "../../hooks/useLatest";
+import {
+  applyMessageUpdate,
+  buildMessageUpdate,
+  buildReactionUpdate,
+  type NostrMessageUpdatePayload,
+  type NostrReactionUpdatePayload,
+  type NostrMessageShadowState,
+  type NostrReactionShadowState,
+} from "./messages/messageUpdates";
 import type { ContactId, NostrMessageRow, NostrReactionRow } from "../../evolu";
 import { evolu, useEvolu } from "../../evolu";
 import type { Route } from "../../types/route";
@@ -351,65 +361,6 @@ const migrationKeyForOwner = (ownerId: string): string =>
 const overlayMessagesKeyForOwner = (ownerId: string): string =>
   `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.overlay.${ownerId}`;
 
-interface NostrMessageUpdatePayload {
-  clientId?: string | null;
-  contactId?: string;
-  content?: string;
-  createdAtSec?: number;
-  editedAtSec?: number | null;
-  editedFromId?: string | null;
-  id: string;
-  isDeleted?: typeof Evolu.sqliteTrue;
-  isEdited?: string | null;
-  localOnly?: string | null;
-  originalContent?: string | null;
-  pubkey?: string | null;
-  replyToContent?: string | null;
-  replyToId?: string | null;
-  rootMessageId?: string | null;
-  rumorId?: string | null;
-  status?: "pending" | "sent";
-  wrapId?: string;
-}
-
-interface NostrReactionUpdatePayload {
-  clientId?: string | null;
-  emoji?: string;
-  id: string;
-  isDeleted?: typeof Evolu.sqliteTrue;
-  messageId?: string;
-  reactorPubkey?: string;
-  status?: "pending" | "sent";
-  wrapId?: string;
-}
-
-interface NostrMessageShadowState {
-  clientId?: string | null;
-  content?: string;
-  createdAtSec?: number;
-  editedAtSec?: number | null;
-  editedFromId?: string | null;
-  isEdited?: boolean;
-  localOnly?: boolean;
-  originalContent?: string | null;
-  pubkey?: string | null;
-  replyToContent?: string | null;
-  replyToId?: string | null;
-  rootMessageId?: string | null;
-  rumorId?: string | null;
-  status?: "pending" | "sent";
-  wrapId?: string;
-}
-
-interface NostrReactionShadowState {
-  clientId?: string | null;
-  emoji?: string | null;
-  messageId?: string | null;
-  reactorPubkey?: string | null;
-  status?: "pending" | "sent";
-  wrapId?: string;
-}
-
 export const useMessagesDomain = ({
   appOwnerId,
   appOwnerIdRef,
@@ -540,10 +491,7 @@ export const useMessagesDomain = ({
     setOverlayMessages(dedupeNostrMessagesByPriority(normalized));
   }, [appOwnerId, appOwnerIdRef]);
 
-  const overlayMessagesRef = React.useRef<LocalNostrMessage[]>([]);
-  React.useEffect(() => {
-    overlayMessagesRef.current = overlayMessages;
-  }, [overlayMessages]);
+  const overlayMessagesRef = useLatest(overlayMessages);
 
   const nostrMessagesLocal = React.useMemo(() => {
     const combined = dedupeNostrMessagesByPriority([
@@ -579,7 +527,7 @@ export const useMessagesDomain = ({
     Map<string, NostrMessageShadowState>
   >(new Map());
   const nostrReactionWrapIdsRef = React.useRef<Set<string>>(new Set());
-  const nostrReactionsLatestRef = React.useRef<LocalNostrReaction[]>([]);
+  const nostrReactionsLatestRef = useLatest(nostrReactionsLocal);
   const nostrReactionUpdateShadowRef = React.useRef<
     Map<string, NostrReactionShadowState>
   >(new Map());
@@ -595,7 +543,6 @@ export const useMessagesDomain = ({
   }, [nostrMessagesLocal]);
 
   React.useEffect(() => {
-    nostrReactionsLatestRef.current = nostrReactionsLocal;
     nostrReactionUpdateShadowRef.current.clear();
     nostrReactionWrapIdsRef.current = new Set(
       normalizedReactionRows.seenWrapIds,
@@ -807,26 +754,7 @@ export const useMessagesDomain = ({
 
       if (isUnknownContactId(payload.contactId)) {
         const messageId = makeLocalId();
-        const nextMessage: LocalNostrMessage = {
-          id: messageId,
-          contactId: payload.contactId,
-          direction: payload.direction,
-          content: payload.content,
-          wrapId: payload.wrapId,
-          rumorId: payload.rumorId ?? null,
-          pubkey: payload.pubkey ?? "",
-          createdAtSec: payload.createdAtSec,
-          status: payload.status,
-          localOnly: payload.localOnly === "1",
-          replyToId: payload.replyToId ?? null,
-          replyToContent: payload.replyToContent ?? null,
-          rootMessageId: payload.rootMessageId ?? null,
-          editedAtSec: payload.editedAtSec ?? null,
-          editedFromId: payload.editedFromId ?? null,
-          isEdited: payload.isEdited === "1",
-          originalContent: payload.originalContent ?? null,
-          ...(payload.clientId ? { clientId: payload.clientId } : {}),
-        };
+        const nextMessage = localMessageFromInsertPayload(messageId, payload);
         const nextOverlayMessages = dedupeNostrMessagesByPriority([
           ...overlayMessagesRef.current,
           nextMessage,
@@ -872,6 +800,7 @@ export const useMessagesDomain = ({
       return messageId;
     },
     [
+      overlayMessagesRef,
       activeChatRouteId,
       chatForceScrollToBottomRef,
       chatMessagesRef,
@@ -894,239 +823,13 @@ export const useMessagesDomain = ({
       const shadow: NostrMessageShadowState =
         nostrMessageUpdateShadowRef.current.get(normalizedId) ?? {};
 
-      const readShadowText = <K extends keyof NostrMessageShadowState>(
-        key: K,
-        fallback: string | null,
-      ): string | null => {
-        if (Object.prototype.hasOwnProperty.call(shadow, key)) {
-          const value = shadow[key];
-          if (typeof value === "string") {
-            const next = asNonEmptyString(value);
-            return next;
-          }
-          return null;
-        }
-        return fallback;
-      };
-
-      const currentWrapId =
-        readShadowText("wrapId", asNonEmptyString(current?.wrapId)) ?? "";
-      const currentStatus =
-        shadow.status ?? toMessageStatus(current?.status ?? "sent");
-
-      const payload: NostrMessageUpdatePayload = {
-        id: normalizedId,
-      };
-      let hasChanges = false;
-
-      if (updates.wrapId !== undefined) {
-        const nextWrapId = trimString(updates.wrapId);
-        if (nextWrapId) {
-          const nextStatusCandidate =
-            updates.status !== undefined
-              ? toMessageStatus(updates.status)
-              : currentStatus;
-          const keepExistingSentWrap =
-            currentWrapId &&
-            !currentWrapId.startsWith("pending:") &&
-            nextStatusCandidate === "sent";
-          if (nextWrapId !== currentWrapId && !keepExistingSentWrap) {
-            payload.wrapId = nextWrapId;
-            hasChanges = true;
-            shadow.wrapId = nextWrapId;
-          }
-        }
-      }
-      if (updates.status !== undefined) {
-        const nextStatus = toMessageStatus(updates.status);
-        if (nextStatus !== currentStatus) {
-          payload.status = nextStatus;
-          hasChanges = true;
-          shadow.status = nextStatus;
-        }
-      }
-      if (updates.pubkey !== undefined) {
-        const nextPubkey = asNonEmptyString(updates.pubkey);
-        if (
-          nextPubkey &&
-          nextPubkey !==
-            readShadowText("pubkey", asNonEmptyString(current?.pubkey))
-        ) {
-          payload.pubkey = nextPubkey;
-          hasChanges = true;
-          shadow.pubkey = nextPubkey;
-        }
-      }
-      if (updates.content !== undefined) {
-        const content = toText(updates.content);
-        if (
-          content.trim() &&
-          content !==
-            (readShadowText("content", asNonEmptyString(current?.content)) ??
-              "")
-        ) {
-          payload.content = content;
-          hasChanges = true;
-          shadow.content = content;
-        }
-      }
-      if (updates.createdAtSec !== undefined) {
-        const nextCreatedAtSec = toPositiveInt(
-          updates.createdAtSec,
-          Math.ceil(Date.now() / 1000),
-        );
-        const previousCreatedAtSec =
-          shadow.createdAtSec ?? current?.createdAtSec ?? 0;
-        if (nextCreatedAtSec !== previousCreatedAtSec) {
-          payload.createdAtSec = nextCreatedAtSec;
-          hasChanges = true;
-          shadow.createdAtSec = nextCreatedAtSec;
-        }
-      }
-      if (updates.clientId !== undefined) {
-        const nextClientId = asNonEmptyString(updates.clientId);
-        if (
-          nextClientId &&
-          nextClientId !==
-            readShadowText("clientId", asNonEmptyString(current?.clientId))
-        ) {
-          payload.clientId = nextClientId;
-          hasChanges = true;
-          shadow.clientId = nextClientId;
-        }
-      }
-      if (updates.localOnly !== undefined) {
-        const nextLocalOnly = updates.localOnly ? "1" : null;
-        const prevLocalOnly =
-          shadow.localOnly !== undefined
-            ? shadow.localOnly
-              ? "1"
-              : null
-            : current?.localOnly
-              ? "1"
-              : null;
-        if (nextLocalOnly && nextLocalOnly !== prevLocalOnly) {
-          payload.localOnly = nextLocalOnly;
-          hasChanges = true;
-          shadow.localOnly = true;
-        }
-      }
-      if (updates.rumorId !== undefined) {
-        const nextRumorId = asNonEmptyString(updates.rumorId);
-        if (
-          nextRumorId &&
-          nextRumorId !==
-            readShadowText("rumorId", asNonEmptyString(current?.rumorId))
-        ) {
-          payload.rumorId = nextRumorId;
-          hasChanges = true;
-          shadow.rumorId = nextRumorId;
-        }
-      }
-      if (updates.replyToId !== undefined) {
-        const nextReplyToId = asNonEmptyString(updates.replyToId);
-        if (
-          nextReplyToId &&
-          nextReplyToId !==
-            readShadowText("replyToId", asNonEmptyString(current?.replyToId))
-        ) {
-          payload.replyToId = nextReplyToId;
-          hasChanges = true;
-          shadow.replyToId = nextReplyToId;
-        }
-      }
-      if (updates.replyToContent !== undefined) {
-        const nextReplyToContent = asNonEmptyString(updates.replyToContent);
-        if (
-          nextReplyToContent &&
-          nextReplyToContent !==
-            readShadowText(
-              "replyToContent",
-              asNonEmptyString(current?.replyToContent),
-            )
-        ) {
-          payload.replyToContent = nextReplyToContent;
-          hasChanges = true;
-          shadow.replyToContent = nextReplyToContent;
-        }
-      }
-      if (updates.rootMessageId !== undefined) {
-        const nextRootMessageId = asNonEmptyString(updates.rootMessageId);
-        if (
-          nextRootMessageId &&
-          nextRootMessageId !==
-            readShadowText(
-              "rootMessageId",
-              asNonEmptyString(current?.rootMessageId),
-            )
-        ) {
-          payload.rootMessageId = nextRootMessageId;
-          hasChanges = true;
-          shadow.rootMessageId = nextRootMessageId;
-        }
-      }
-      if (updates.editedAtSec !== undefined) {
-        const nextEditedAtSec = updates.editedAtSec
-          ? toPositiveInt(updates.editedAtSec, Math.ceil(Date.now() / 1000))
-          : null;
-        const prevEditedAtSec =
-          shadow.editedAtSec !== undefined
-            ? shadow.editedAtSec
-            : (current?.editedAtSec ?? null);
-        if (nextEditedAtSec && nextEditedAtSec !== prevEditedAtSec) {
-          payload.editedAtSec = nextEditedAtSec;
-          hasChanges = true;
-          shadow.editedAtSec = nextEditedAtSec;
-        }
-      }
-      if (updates.editedFromId !== undefined) {
-        const nextEditedFromId = asNonEmptyString(updates.editedFromId);
-        if (
-          nextEditedFromId &&
-          nextEditedFromId !==
-            readShadowText(
-              "editedFromId",
-              asNonEmptyString(current?.editedFromId),
-            )
-        ) {
-          payload.editedFromId = nextEditedFromId;
-          hasChanges = true;
-          shadow.editedFromId = nextEditedFromId;
-        }
-      }
-      if (updates.isEdited !== undefined) {
-        const nextIsEdited = updates.isEdited ? "1" : null;
-        const prevIsEdited =
-          shadow.isEdited !== undefined
-            ? shadow.isEdited
-              ? "1"
-              : null
-            : current?.isEdited
-              ? "1"
-              : null;
-        if (nextIsEdited && nextIsEdited !== prevIsEdited) {
-          payload.isEdited = nextIsEdited;
-          hasChanges = true;
-          shadow.isEdited = true;
-        }
-      }
-      if (updates.originalContent !== undefined) {
-        const nextOriginalContent = asNonEmptyString(updates.originalContent);
-        if (
-          nextOriginalContent &&
-          nextOriginalContent !==
-            readShadowText(
-              "originalContent",
-              asNonEmptyString(current?.originalContent),
-            )
-        ) {
-          payload.originalContent = nextOriginalContent;
-          hasChanges = true;
-          shadow.originalContent = nextOriginalContent;
-        }
-      }
-
-      if (!hasChanges) return;
+      const payload = buildMessageUpdate(
+        normalizedId,
+        updates,
+        current,
+        shadow,
+      );
+      if (!payload) return;
 
       nostrMessageUpdateShadowRef.current.set(normalizedId, shadow);
 
@@ -1134,45 +837,7 @@ export const useMessagesDomain = ({
         const nextOverlayMessages = overlayMessagesRef.current.map(
           (message) => {
             if (trimString(message.id) !== normalizedId) return message;
-            const nextMessage: LocalNostrMessage = { ...message };
-
-            if (payload.clientId !== undefined) {
-              if (payload.clientId === null) delete nextMessage.clientId;
-              else nextMessage.clientId = payload.clientId;
-            }
-            if (payload.content !== undefined)
-              nextMessage.content = payload.content;
-            if (payload.createdAtSec !== undefined)
-              nextMessage.createdAtSec = payload.createdAtSec;
-            if (payload.editedAtSec !== undefined)
-              nextMessage.editedAtSec = payload.editedAtSec;
-            if (payload.editedFromId !== undefined)
-              nextMessage.editedFromId = payload.editedFromId;
-            if (payload.isEdited !== undefined)
-              nextMessage.isEdited = payload.isEdited === "1";
-            if (payload.localOnly !== undefined)
-              nextMessage.localOnly = payload.localOnly === "1";
-            if (payload.originalContent !== undefined) {
-              nextMessage.originalContent = payload.originalContent;
-            }
-            if (payload.pubkey !== undefined)
-              nextMessage.pubkey = payload.pubkey ?? "";
-            if (payload.replyToContent !== undefined) {
-              nextMessage.replyToContent = payload.replyToContent;
-            }
-            if (payload.replyToId !== undefined)
-              nextMessage.replyToId = payload.replyToId;
-            if (payload.rootMessageId !== undefined) {
-              nextMessage.rootMessageId = payload.rootMessageId;
-            }
-            if (payload.rumorId !== undefined)
-              nextMessage.rumorId = payload.rumorId;
-            if (payload.status !== undefined)
-              nextMessage.status = payload.status;
-            if (payload.wrapId !== undefined)
-              nextMessage.wrapId = payload.wrapId;
-
-            return nextMessage;
+            return applyMessageUpdate(message, payload);
           },
         );
         persistOverlayMessages(nextOverlayMessages);
@@ -1181,7 +846,7 @@ export const useMessagesDomain = ({
 
       updateNostrMessage(payload);
     },
-    [persistOverlayMessages, updateNostrMessage],
+    [overlayMessagesRef, persistOverlayMessages, updateNostrMessage],
   );
 
   const appendLocalNostrReaction = React.useCallback(
@@ -1213,7 +878,7 @@ export const useMessagesDomain = ({
       if (!result.ok) return "";
       return toText(result.value.id);
     },
-    [insertNostrReaction],
+    [nostrReactionsLatestRef, insertNostrReaction],
   );
 
   const updateLocalNostrReaction = React.useCallback<UpdateLocalNostrReaction>(
@@ -1227,107 +892,19 @@ export const useMessagesDomain = ({
       const shadow: NostrReactionShadowState =
         nostrReactionUpdateShadowRef.current.get(normalizedId) ?? {};
 
-      const readShadowText = <K extends keyof NostrReactionShadowState>(
-        key: K,
-        fallback: string | null,
-      ): string | null => {
-        if (Object.prototype.hasOwnProperty.call(shadow, key)) {
-          const value = shadow[key];
-          if (typeof value === "string") return asNonEmptyString(value);
-          return null;
-        }
-        return fallback;
-      };
-
-      const currentStatus =
-        shadow.status ?? toReactionStatus(current?.status ?? "sent");
-
-      const payload: NostrReactionUpdatePayload = {
-        id: normalizedId,
-      };
-      let hasChanges = false;
-
-      if (updates.messageId !== undefined) {
-        const nextMessageId = asNonEmptyString(updates.messageId);
-        if (
-          nextMessageId &&
-          nextMessageId !==
-            readShadowText("messageId", asNonEmptyString(current?.messageId))
-        ) {
-          payload.messageId = nextMessageId;
-          hasChanges = true;
-          shadow.messageId = nextMessageId;
-        }
-      }
-      if (updates.reactorPubkey !== undefined) {
-        const nextReactorPubkey = asNonEmptyString(updates.reactorPubkey);
-        if (
-          nextReactorPubkey &&
-          nextReactorPubkey !==
-            readShadowText(
-              "reactorPubkey",
-              asNonEmptyString(current?.reactorPubkey),
-            )
-        ) {
-          payload.reactorPubkey = nextReactorPubkey;
-          hasChanges = true;
-          shadow.reactorPubkey = nextReactorPubkey;
-        }
-      }
-      if (updates.emoji !== undefined) {
-        const nextEmoji = asNonEmptyString(updates.emoji);
-        if (
-          nextEmoji &&
-          nextEmoji !==
-            readShadowText("emoji", asNonEmptyString(current?.emoji))
-        ) {
-          payload.emoji = nextEmoji;
-          hasChanges = true;
-          shadow.emoji = nextEmoji;
-        }
-      }
-      if (updates.wrapId !== undefined) {
-        const nextWrapId = trimString(updates.wrapId);
-        if (nextWrapId) {
-          const prevWrapId = readShadowText(
-            "wrapId",
-            asNonEmptyString(current?.wrapId),
-          );
-          if (nextWrapId !== (prevWrapId ?? "")) {
-            payload.wrapId = nextWrapId;
-            hasChanges = true;
-            shadow.wrapId = nextWrapId;
-          }
-        }
-      }
-      if (updates.clientId !== undefined) {
-        const nextClientId = asNonEmptyString(updates.clientId);
-        if (
-          nextClientId &&
-          nextClientId !==
-            readShadowText("clientId", asNonEmptyString(current?.clientId))
-        ) {
-          payload.clientId = nextClientId;
-          hasChanges = true;
-          shadow.clientId = nextClientId;
-        }
-      }
-      if (updates.status !== undefined) {
-        const nextStatus = toReactionStatus(updates.status);
-        if (nextStatus !== currentStatus) {
-          payload.status = nextStatus;
-          hasChanges = true;
-          shadow.status = nextStatus;
-        }
-      }
-
-      if (!hasChanges) return;
+      const payload = buildReactionUpdate(
+        normalizedId,
+        updates,
+        current,
+        shadow,
+      );
+      if (!payload) return;
 
       nostrReactionUpdateShadowRef.current.set(normalizedId, shadow);
 
       updateNostrReaction(payload);
     },
-    [updateNostrReaction],
+    [nostrReactionsLatestRef, updateNostrReaction],
   );
 
   const softDeleteLocalNostrReaction = React.useCallback(
@@ -1361,7 +938,7 @@ export const useMessagesDomain = ({
         });
       }
     },
-    [updateNostrReaction],
+    [nostrReactionsLatestRef, updateNostrReaction],
   );
 
   const reassignLocalNostrMessagesContactId = React.useCallback(
@@ -1438,6 +1015,7 @@ export const useMessagesDomain = ({
       return movedMessageIds.size;
     },
     [
+      overlayMessagesRef,
       insertNostrMessage,
       isVisibleMessageOwner,
       nostrMessageRows,
@@ -1464,6 +1042,7 @@ export const useMessagesDomain = ({
       }
     },
     [
+      overlayMessagesRef,
       isVisibleMessageOwner,
       nostrMessageRows,
       persistOverlayMessages,
@@ -1559,6 +1138,7 @@ export const useMessagesDomain = ({
       retentionPruneInFlightRef.current = false;
     }
   }, [
+    overlayMessagesRef,
     nostrMessagesLocal,
     nostrReactionsLocal,
     persistOverlayMessages,

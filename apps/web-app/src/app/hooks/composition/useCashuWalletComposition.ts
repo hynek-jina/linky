@@ -1,3 +1,4 @@
+import { useLatest } from "../../../hooks/useLatest";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import {
@@ -21,7 +22,6 @@ import {
 import { decodeTokenText } from "@linky/linkshu";
 import { Cause, Either, Exit, Option, Schema } from "effect";
 import React, { useMemo, useState } from "react";
-import { deriveDefaultProfile } from "../../../derivedProfile";
 import {
   evolu,
   useEvolu,
@@ -30,7 +30,6 @@ import {
   type ContactId,
 } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
-import type { Lang } from "../../../i18n";
 import {
   inferLightningAddressFromLnurlTarget,
   redeemLnurlWithdraw,
@@ -40,7 +39,6 @@ import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
-  MAX_CONTACTS_PER_OWNER,
   WALLET_WARNING_BALANCE_THRESHOLD_SAT,
   WALLET_WARNING_DISMISSED_STORAGE_KEY,
 } from "../../../utils/constants";
@@ -162,9 +160,8 @@ interface UseCashuWalletCompositionParams {
   contactPayBackToChatRef: React.MutableRefObject<ContactId | null>;
   contactsMessaging: Pick<
     ContactsMessagingCompositionResult,
-    | "activeContactsOwnerContactCount"
+    | "saveNpubContact"
     | "appendLocalNostrMessage"
-    | "buildSavedContactName"
     | "chatMessages"
     | "contacts"
     | "enqueuePendingPayment"
@@ -181,7 +178,6 @@ interface UseCashuWalletCompositionParams {
     | "selectedContact"
     | "sendChatMessage"
     | "setContactsOnboardingHasPaid"
-    | "unknownNameByNpub"
     | "updateLocalNostrMessage"
   >;
   formatDisplayedAmountParts: (
@@ -195,15 +191,12 @@ interface UseCashuWalletCompositionParams {
     | "cashuOwnerId"
     | "cashuOwnerIdRef"
     | "cashuVisibleOwnerIds"
-    | "contactsOwnerId"
     | "currentNpub"
     | "currentNsec"
     | "isSeedLogin"
     | "metaOwnerId"
     | "transactionsOwnerId"
   >;
-  insert: EvoluMutations["insert"];
-  lang: Lang;
   maybeShowPwaNotification: (
     title: string,
     body: string,
@@ -247,8 +240,6 @@ export const useCashuWalletComposition = ({
   formatDisplayedAmountParts,
   formatDisplayedAmountText,
   identity,
-  insert,
-  lang,
   maybeShowPwaNotification,
   ownerScopedStorage,
   payAmount,
@@ -274,7 +265,6 @@ export const useCashuWalletComposition = ({
     cashuOwnerId,
     cashuOwnerIdRef,
     cashuVisibleOwnerIds,
-    contactsOwnerId,
     currentNpub,
     currentNsec,
     isSeedLogin,
@@ -282,9 +272,8 @@ export const useCashuWalletComposition = ({
     transactionsOwnerId,
   } = identity;
   const {
-    activeContactsOwnerContactCount,
+    saveNpubContact,
     appendLocalNostrMessage,
-    buildSavedContactName,
     chatMessages,
     contacts,
     enqueuePendingPayment,
@@ -301,7 +290,6 @@ export const useCashuWalletComposition = ({
     selectedContact,
     sendChatMessage,
     setContactsOnboardingHasPaid,
-    unknownNameByNpub,
     updateLocalNostrMessage,
   } = contactsMessaging;
   const {
@@ -1212,75 +1200,15 @@ export const useCashuWalletComposition = ({
       if (!pubkey) return null;
       const npub = encodeNpub(pubkey);
 
-      const normalizedNpub = normalizeNpubIdentifier(npub);
-      if (!normalizedNpub) return null;
-
-      const duplicate = contacts.find(
-        (contact) =>
-          normalizeNpubIdentifier(contact.npub ?? "") === normalizedNpub,
-      );
-      if (duplicate?.id) return duplicate;
-
-      if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
-        setStatus(
-          t("contactsLimitReached").replace(
-            "{max}",
-            String(MAX_CONTACTS_PER_OWNER),
-          ),
-        );
-        return null;
-      }
-
-      const defaultProfile = deriveDefaultProfile(normalizedNpub, lang);
-      const contactName = buildSavedContactName(
-        unknownNameByNpub[normalizedNpub] ?? defaultProfile.name,
-        normalizedNpub,
-      );
-      const payload = {
-        name: Evolu.NonEmptyString1000.orThrow(contactName),
-        npub: Evolu.NonEmptyString1000.orThrow(normalizedNpub),
-        lnAddress: null,
-        groupName: null,
-      };
-
-      const result = contactsOwnerId
-        ? (() => {
-            const scoped = insert("contact", payload, {
-              ownerId: contactsOwnerId,
-            });
-            if (scoped.ok) return scoped;
-            return insert("contact", payload);
-          })()
-        : insert("contact", payload);
-
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
-        return null;
-      }
-
-      openScannedContactPendingNpubRef.current = normalizedNpub;
-
-      return {
-        id: result.value.id,
-        name: contactName,
-        npub: normalizedNpub,
-        lnAddress: null,
-        groupName: null,
-        ownerId: contactsOwnerId,
-      };
+      const saved = saveNpubContact(npub);
+      if (!saved) return null;
+      if (saved.created) openScannedContactPendingNpubRef.current = saved.npub;
+      return saved.contact;
     },
     [
-      activeContactsOwnerContactCount,
-      buildSavedContactName,
-      contacts,
-      contactsOwnerId,
       findContactForCashuPaymentRequest,
-      insert,
-      lang,
       openScannedContactPendingNpubRef,
-      setStatus,
-      t,
-      unknownNameByNpub,
+      saveNpubContact,
     ],
   );
 
@@ -1833,24 +1761,12 @@ export const useCashuWalletComposition = ({
   // user isn't sitting on #wallet/tokens; the ref keeps the 60s interval
   // from being torn down whenever the callback identity churns.
   const hasAnyIssuedTokensForBackgroundCheck = cashuIssuedTokens.length > 0;
-  const checkIssuedCashuTokensRef = React.useRef(
+  const checkIssuedCashuTokensRef = useLatest(
     checkIssuedCashuTokensAndDeleteClaimed,
   );
-  React.useEffect(() => {
-    checkIssuedCashuTokensRef.current = checkIssuedCashuTokensAndDeleteClaimed;
-  }, [checkIssuedCashuTokensAndDeleteClaimed]);
-  const formatDisplayedAmountTextRef = React.useRef(formatDisplayedAmountText);
-  React.useEffect(() => {
-    formatDisplayedAmountTextRef.current = formatDisplayedAmountText;
-  }, [formatDisplayedAmountText]);
-  const pushToastRef = React.useRef(pushToast);
-  React.useEffect(() => {
-    pushToastRef.current = pushToast;
-  }, [pushToast]);
-  const claimToastTRef = React.useRef(t);
-  React.useEffect(() => {
-    claimToastTRef.current = t;
-  }, [t]);
+  const formatDisplayedAmountTextRef = useLatest(formatDisplayedAmountText);
+  const pushToastRef = useLatest(pushToast);
+  const claimToastTRef = useLatest(t);
   React.useEffect(() => {
     if (!hasAnyIssuedTokensForBackgroundCheck) return;
     let cancelled = false;
@@ -1888,7 +1804,13 @@ export const useCashuWalletComposition = ({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [hasAnyIssuedTokensForBackgroundCheck]);
+  }, [
+    checkIssuedCashuTokensRef,
+    claimToastTRef,
+    formatDisplayedAmountTextRef,
+    pushToastRef,
+    hasAnyIssuedTokensForBackgroundCheck,
+  ]);
 
   const returnCashuTokenToWallet = React.useCallback(
     async (id: CashuTokenId) => {

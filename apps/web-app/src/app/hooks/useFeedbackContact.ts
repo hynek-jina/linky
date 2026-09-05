@@ -1,3 +1,4 @@
+import { writeContact } from "../lib/writeContact";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { OwnerId } from "@evolu/common";
@@ -55,9 +56,7 @@ export const useFeedbackContact = <
       groupName: null,
     };
 
-    const result = appOwnerId
-      ? insert("contact", payload, { ownerId: appOwnerId })
-      : insert("contact", payload);
+    const result = writeContact(insert, payload, appOwnerId);
 
     if (result.ok) return;
 

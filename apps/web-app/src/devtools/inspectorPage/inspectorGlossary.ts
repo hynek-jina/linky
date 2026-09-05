@@ -18,6 +18,10 @@ const NOSTR_KIND_EXPLANATIONS: Record<number, string> = {
 };
 
 const TAG_DESCRIPTIONS: Record<string, string> = {
+  "contacts.npubSaved":
+    "A Nostr contact was saved after duplicate and active owner limit checks. The contact link identifies the new row.",
+  "evolu.ownerRotated":
+    "The active write owner moved to the next lane. Previous lanes remain visible for reads; owner links join the rotation to sync diagnostics.",
   EvoluSyncRetry:
     "The user reloads the app to retry Evolu sync after a quota or server configuration change. Local history is preserved.",
   EvoluError:

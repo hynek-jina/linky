@@ -1,3 +1,4 @@
+import { writeContact } from "../lib/writeContact";
 import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import { decodeNpub } from "@linky/linkstr";
@@ -202,23 +203,11 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
             return;
           }
 
-          const result = appOwnerId
-            ? insert(
-                "contact",
-                {
-                  name: null,
-                  npub: Evolu.NonEmptyString1000.orThrow(normalized),
-                  lnAddress: null,
-                  groupName: null,
-                },
-                { ownerId: appOwnerId },
-              )
-            : insert("contact", {
-                name: null,
-                npub: Evolu.NonEmptyString1000.orThrow(normalized),
-                lnAddress: null,
-                groupName: null,
-              });
+          const result = writeContact(
+            insert,
+            { npub: Evolu.NonEmptyString1000.orThrow(normalized) },
+            appOwnerId,
+          );
 
           if (result.ok) {
             setStatus(t("contactSaved"));

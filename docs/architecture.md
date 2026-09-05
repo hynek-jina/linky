@@ -133,6 +133,15 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 - If the hosted mint update fails, Linky must not persist the new local main-mint choice as if it succeeded
 - On web, the `nsec` private key is still mirrored under `linky.nostr_nsec`; native shells are expected to provide secure secret storage via the platform bridge and secrets must never be logged or exposed
 
+### Hook ownership
+
+- `useOwnerLane` owns each rotating lane's index, pending pointer, visible history, baseline, cooldown and rotation actions. `useEvoluContactsOwnerRotation` supplies fixed identity/meta owners, one decoded snapshot map and batched history counts. Cashu's missing-pointer recovery is restricted to its initial stored lane.
+- Contact mutations share `writeContact`, which attempts the resolved row owner before the unscoped fallback. `useSaveNpubContact` owns npub normalization, duplicate and limit checks, default naming and pending inserts; contact, chat and payment entry points choose where to navigate afterward. Pending inserts remain dedupe-visible and count toward the active lane limit until Evolu returns the rows.
+- Message update field tables share normalization and shadow comparison across message and reaction updates. An explicitly cleared shadow field differs from an absent field, and sent message wraps remain stable when acknowledgments race. Unknown-contact overlays apply the same accepted payload with local boolean conversion.
+- `useBankPaymentOffers` owns offer snapshots, recipient preferences, publishing, stagger dispatch, responder locks, expiry and chat-row merging. Contacts composition supplies contacts and message callbacks and reassigns offer rows when an unknown contact is saved.
+- Pure value mirrors use `useLatest`. Refs used as synchronous optimistic caches or forward references keep their existing commit-time effects, including the message insert cache and the cashu mint callbacks; refreshing these on every render can erase pending work or read a callback before initialization.
+- This hook refactor retains the status-to-toast flow, page composition contracts and one-shot migrations. Replacing the page contexts is a separate architectural change; migration removal needs evidence that restoring older accounts no longer requires them, so this refactor sets no removal date.
+
 ### Evolu persistence and owner lanes
 
 - Persisted contact, message, reaction, and transaction rows use query-inferred Evolu types exported from `evolu.ts`. `ContactRowLike` derives its display fields from those types and permits partial, unbranded fields for unsaved Nostr peers; mutation boundaries still validate branded IDs and text. Evolu creation dates are ISO strings, not numeric timestamps.

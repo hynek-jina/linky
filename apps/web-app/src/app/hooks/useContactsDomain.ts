@@ -1,3 +1,4 @@
+import { writeContact } from "../lib/writeContact";
 import { toContactTextFields } from "../lib/contactFields";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
@@ -174,20 +175,14 @@ export const useContactsDomain = ({
     ) => {
       const ownerId =
         resolveContactRowOwnerLane(row, visibleOwnerIds) ?? appOwnerId;
-      if (!ownerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId });
-      if (scoped.ok) return scoped;
-      return update("contact", payload);
+      return writeContact(update, payload, ownerId);
     };
 
     const writeContactDelete = (id: ContactId, row: unknown) => {
       const payload = { id, isDeleted: Evolu.sqliteTrue };
       const ownerId =
         resolveContactRowOwnerLane(row, visibleOwnerIds) ?? appOwnerId;
-      if (!ownerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId });
-      if (scoped.ok) return scoped;
-      return update("contact", payload);
+      return writeContact(update, payload, ownerId);
     };
 
     try {

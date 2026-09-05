@@ -1,3 +1,4 @@
+import { writeContact } from "../lib/writeContact";
 import { toContactTextFields } from "../lib/contactFields";
 import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
@@ -227,14 +228,10 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
             groupNamesJson: payload.groupNamesJson ?? previous.groupNamesJson,
           };
 
-          const result = appOwnerId
-            ? update("contact", merged, { ownerId: appOwnerId })
-            : update("contact", merged);
+          const result = writeContact(update, merged, appOwnerId);
           if (result.ok) updatedContacts += 1;
         } else {
-          const result = appOwnerId
-            ? insert("contact", payload, { ownerId: appOwnerId })
-            : insert("contact", payload);
+          const result = writeContact(insert, payload, appOwnerId);
           if (result.ok) {
             addedContacts += 1;
             if (npub) insertedNpubs.add(npub);
