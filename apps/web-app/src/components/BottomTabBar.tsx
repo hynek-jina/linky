@@ -1,7 +1,7 @@
 import React from "react";
-import { useNavigation } from "../hooks/useRouting";
-import { BottomTab } from "./BottomTab";
+import { navigateTo } from "../hooks/useRouting";
 import type { Translate } from "../i18n";
+import { BottomTab } from "./BottomTab";
 
 interface BottomTabBarProps {
   activeTab: "contacts" | "wallet" | null;
@@ -20,7 +20,6 @@ export function BottomTabBar({
   t,
   walletLabel,
 }: BottomTabBarProps): React.ReactElement {
-  const navigateTo = useNavigation();
   const tabsRef = React.useRef<HTMLDivElement | null>(null);
   const contactsTabRef = React.useRef<HTMLButtonElement | null>(null);
   const walletTabRef = React.useRef<HTMLButtonElement | null>(null);

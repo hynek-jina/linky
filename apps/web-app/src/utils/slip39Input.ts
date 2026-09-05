@@ -16,7 +16,7 @@ interface Slip39InputAnalysis {
 }
 
 const splitSlip39Input = (value: string): readonly string[] =>
-  String(value ?? "")
+  value
     .toLowerCase()
     .trim()
     .split(/[\s,;]+/)
@@ -27,7 +27,7 @@ export const normalizeSlip39Input = (value: string): string =>
   splitSlip39Input(value).join(" ");
 
 export const analyzeSlip39Input = (value: string): Slip39InputAnalysis => {
-  const rawValue = String(value ?? "");
+  const rawValue = value;
   const normalizedInput = normalizeSlip39Input(rawValue);
   const words = normalizedInput ? normalizedInput.split(" ") : [];
   const loweredInput = rawValue.toLowerCase();
@@ -35,7 +35,7 @@ export const analyzeSlip39Input = (value: string): Slip39InputAnalysis => {
   const rawFragments = loweredInput.split(/[\s,;]+/);
   const activeFragment = endsWithSeparator
     ? ""
-    : String(rawFragments[rawFragments.length - 1] ?? "").trim();
+    : (rawFragments[rawFragments.length - 1] ?? "").trim();
   const prefixMatches = activeFragment
     ? SLIP39_WORD_LIST.filter((word) => word.startsWith(activeFragment)).slice(
         0,

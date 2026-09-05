@@ -22,7 +22,7 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - **NEVER use `as` or `any` to cast types** - validate with a runtime type guard instead of casting
 - Branded ID types from Evolu (`ContactId`, `CashuTokenId`, `MintId`, etc.) - don't use plain strings
 - Components use `interface` for props, not `type`
-- LocalStorage keys use `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`)
+- New browser storage names use the `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`). Existing exceptions are listed in `docs/architecture.md` under "Compatibility and audit decisions"; preserve those names for upgrades.
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first
 - Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
@@ -57,10 +57,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 
 ## E2E tests
 
-Two Playwright projects in `apps/web-app/playwright.config.ts`:
-
-- `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — `tests/proxy-payment.spec.ts`, `tests/linkshu-migration.spec.ts`, `tests/chat-recovery.spec.ts`, `tests/chat-payment-request.spec.ts`, `tests/evolu-sync.spec.ts`, `tests/cashu-sync.spec.ts`, `tests/evolu-quota-recovery.spec.ts`, and `tests/password-manager-save.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+The `local-stack` project in `apps/web-app/playwright.config.ts` runs the suites listed in `LOCAL_STACK_SPECS` against the Docker stack. The app is served as a **production build** on :5176; bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)
@@ -78,11 +75,13 @@ The default reporter prints every `[linky]` console line prefixed with the accou
 
 The run is ~20s, so `--headed` mostly shows a blur; `--ui` and the trace viewer are the useful tools. Do not reintroduce a slow-motion knob: a per-action delay pushes the top-up quote and the offer's phase timers past their deadlines, so the test fails for reasons unrelated to the code under test.
 
-Playwright starts _every_ `webServer` entry regardless of `--project`, so a Vite dev server also boots on :5174 even when running only `local-stack`; set `E2E_SKIP_WEBSERVER=1` to skip it (CI does).
-
-`.github/workflows/e2e.yml` runs the `local-stack` project on every push to main and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
+`.github/workflows/e2e.yml` runs the `local-stack` project and site redemption/recovery tests on pull requests and every push to main, and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
 
 Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
+
+## Site E2E tests
+
+`bun run --filter @linky/site test:e2e` uses the existing mints on :3338/:3339 and Nostr relay on :7777, and builds the site on :5180 with `VITE_ALLOW_TEST_MINT=1`.
 
 ## linkshu integration tests
 
@@ -102,6 +101,7 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 - Payment integration tests use source mint :3338 and target mint :3339, with separate keys and databases. `cashu-mint-target` starts with the `integration` or `e2e` profile. Use the target mint for payable invoices; the source mint auto-pays its own quotes, so same-mint tests race its three-second timer
 - Evolu quota recovery tests use the isolated :4002 relay from the `e2e` or `quota` profile, capped at 16 KiB per owner. The normal :4001 relay defaults to unlimited; `EVOLU_OWNER_QUOTA_BYTES=0` means unlimited, and a positive value limits encrypted history bytes per owner.
 - The local Nginx server accepts the password-save form POST only at `/password-save.html` and serves the empty static document. Keep this exception scoped so other unsupported POST requests still fail
+- The local Nginx server must serve `.mjs` as JavaScript; PDF previews load a module worker and fail when it is served as `application/octet-stream`
 - The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent
 - The dev mint runs with `MINT_RATE_LIMIT=FALSE`; nutshell's defaults (60 requests/minute globally, 20/minute for transactions) answer 429 partway through any full integration run
 - The `nostr-rs-relay` image's `/bin/sh` is dash, so its healthcheck must invoke `bash` explicitly for `/dev/tcp`

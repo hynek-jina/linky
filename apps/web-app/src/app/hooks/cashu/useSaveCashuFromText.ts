@@ -4,11 +4,7 @@ import { parseTokenText } from "@linky/linkshu";
 import { navigateTo } from "../../../hooks/useRouting";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
-import type {
-  LoggedPaymentEventParams,
-  OptionalNumber,
-  OptionalText,
-} from "../../types/appTypes";
+import type { LoggedPaymentEventParams } from "../../types/appTypes";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import { isUnknownContactId } from "../messages/contactIdentity";
 import type { ReceiveCashuToken } from "../composition/useLinkshuComposition";
@@ -17,8 +13,8 @@ import type { Translate } from "../../../i18n";
 
 interface CashuTokenMetaRow {
   id: string;
-  isDeleted?: OptionalText;
-  lastCheckedAtSec?: OptionalNumber;
+  isDeleted?: string | number | boolean | null | undefined;
+  lastCheckedAtSec?: number | null | undefined;
 }
 
 interface SaveCashuFromTextOptions {
@@ -101,7 +97,7 @@ export const useSaveCashuFromText = ({
       const parsed = parseTokenText(tokenRaw);
       const parsedMint = parsed?.mint ?? null;
       const parsedAmount = parsed?.amount ?? null;
-      const optionContactId = String(options?.contactId ?? "").trim();
+      const optionContactId = (options?.contactId ?? "").trim();
       const unknownContactId = isUnknownContactId(optionContactId)
         ? optionContactId
         : null;
@@ -151,13 +147,13 @@ export const useSaveCashuFromText = ({
           const receipt = outcome.right;
           rememberCashuTokenKnown(tokenRaw, receipt.tokenText);
 
-          const cleanedMint = String(receipt.mint).trim().replace(/\/+$/, "");
+          const cleanedMint = receipt.mint.trim().replace(/\/+$/, "");
           if (cleanedMint && !isMintDeleted(cleanedMint)) {
             const nowSec = nowSeconds();
             const existing = mintInfoByUrl.get(cleanedMint);
             touchMintInfo(cleanedMint, nowSec);
 
-            const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+            const lastChecked = (existing?.lastCheckedAtSec ?? 0) || 0;
             if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
           }
 

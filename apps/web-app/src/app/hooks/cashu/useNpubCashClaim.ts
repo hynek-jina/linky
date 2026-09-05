@@ -1,8 +1,10 @@
+import { useLatest } from "../../../hooks/useLatest";
+import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
 import { Either } from "effect";
 import React from "react";
 import { parseTokenText } from "@linky/linkshu";
-import type { JsonValue } from "../../../types/json";
+import { JsonValue } from "../../../types/json";
 import {
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
   LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
@@ -175,7 +177,7 @@ export const useNpubCashClaim = ({
         const existing = mintInfoByUrl.get(cleanedMint);
         touchMintInfo(cleanedMint, nowSec);
 
-        const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+        const lastChecked = (existing?.lastCheckedAtSec ?? 0) || 0;
         if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
       }
 
@@ -307,7 +309,7 @@ export const useNpubCashClaim = ({
       headers: { Authorization: auth },
     });
     if (!res.ok) return;
-    const json = (await res.json()) as JsonValue;
+    const json = Schema.decodeUnknownSync(JsonValue)(await res.json());
     for (const tokenText of extractUniqueClaimTokens(json)) {
       await acceptAndStoreCashuToken(tokenText);
     }
@@ -479,10 +481,7 @@ export const useNpubCashClaim = ({
     sweepUpstreamPaidQuotes,
   ]);
 
-  const claimNpubCashOnceLatestRef = React.useRef(claimNpubCashOnce);
-  React.useEffect(() => {
-    claimNpubCashOnceLatestRef.current = claimNpubCashOnce;
-  }, [claimNpubCashOnce]);
+  const claimNpubCashOnceLatestRef = useLatest(claimNpubCashOnce);
 
   return {
     claimNpubCashOnce,

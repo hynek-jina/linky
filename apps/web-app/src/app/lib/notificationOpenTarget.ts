@@ -1,3 +1,4 @@
+import { asNonEmptyString } from "../../utils/validation";
 import { normalizePubkeyHex } from "../hooks/messages/contactIdentity";
 import {
   readNotificationOpenData,
@@ -62,12 +63,14 @@ export const readNotificationOpenTarget = (
 
   const outerEventId = String(readField(source, "outerEventId") ?? "").trim();
   const recipientPubkey = normalizePubkeyHex(
-    readField(source, "recipientPubkey"),
+    asNonEmptyString(readField(source, "recipientPubkey")),
   );
   const relayHints = readNotificationRelayHints(
     readField(source, "relayHints"),
   );
-  const senderPubkey = normalizePubkeyHex(readField(source, "senderPubkey"));
+  const senderPubkey = normalizePubkeyHex(
+    asNonEmptyString(readField(source, "senderPubkey")),
+  );
 
   if (!outerEventId || !recipientPubkey) return null;
 
@@ -77,7 +80,7 @@ export const readNotificationOpenTarget = (
 export const consumeNotificationOpenDetailFromHash = (): string | null => {
   if (typeof window === "undefined") return null;
 
-  const rawHash = String(window.location.hash ?? "");
+  const rawHash = window.location.hash;
   const queryIndex = rawHash.indexOf("?");
   if (queryIndex < 0) return null;
 

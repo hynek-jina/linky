@@ -1,8 +1,8 @@
-import React, { type FC } from "react";
 import { Copy } from "lucide-react";
+import React, { type FC } from "react";
 import { WalletBalance } from "../components/WalletBalance";
-import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
 import type { Translate } from "../i18n";
+import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
 
 type TopupInvoiceQrMode = "cashu" | "universal" | "lightning";
 
@@ -190,14 +190,14 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
     topupInvoiceQr,
   );
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
-  const mintDisplay = String(topupMintUrl ?? "")
+  const mintDisplay = (topupMintUrl ?? "")
     .trim()
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "");
   const universalPayload =
-    String(topupInvoiceQrPayload ?? topupInvoice ?? "").trim() || null;
-  const cashuPayload = String(topupInvoiceCashuRequest ?? "").trim() || null;
-  const lightningPayload = String(topupInvoice ?? "").trim() || null;
+    (topupInvoiceQrPayload ?? topupInvoice ?? "").trim() || null;
+  const cashuPayload = (topupInvoiceCashuRequest ?? "").trim() || null;
+  const lightningPayload = (topupInvoice ?? "").trim() || null;
   const selectedPayload =
     qrMode === "cashu"
       ? cashuPayload
@@ -252,7 +252,7 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
   ]);
 
   const handleCopyInvoice = () => {
-    const copyValue = String(selectedPayload ?? "").trim();
+    const copyValue = (selectedPayload ?? "").trim();
     if (!copyValue) return;
     void copyText(copyValue);
   };
@@ -330,9 +330,7 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
         <p className="muted">{topupInvoiceError}</p>
       ) : topupInvoice ? (
         <div className="topup-invoice-qr-shell">
-          <div className="mono-box" style={{ marginBottom: 12 }}>
-            {topupInvoice}
-          </div>
+          <div className="mono-box mono-box-layout">{topupInvoice}</div>
           {copyButton}
         </div>
       ) : (

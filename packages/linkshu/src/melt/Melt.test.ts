@@ -11,6 +11,7 @@ import {
   Bolt11Invoice,
   CurrencyUnit,
   KeysetId,
+  QuoteId,
   MintUrl,
 } from "../domain/primitives";
 import { deterministicCounterKey } from "../internal/counters";
@@ -537,5 +538,49 @@ describe("Melt.melt", () => {
       _tag: "TokenAlreadySpent",
       mint,
     });
+  });
+});
+
+describe("persisted melt quotes", () => {
+  it("uses the persisted quote and rejects an invoice mismatch before swapping", async () => {
+    const { wallet, sendCalls, checkQuoteCalls } = makeWallet({
+      quote: () => Promise.reject(new Error("must not issue another quote")),
+      checkQuote: () =>
+        Promise.resolve(quoteResponse({ request: "lnbc1another" })),
+    });
+    const { run } = makeHarness(wallet);
+    const result = await run(
+      Effect.flatMap(Melt, (melt) =>
+        Effect.flip(
+          melt.melt(
+            new MeltDraft({ ...draft, quoteId: QuoteId.make("quote-1") }),
+          ),
+        ),
+      ),
+    );
+    assert(Exit.isSuccess(result));
+    expect(result.value).toMatchObject({
+      _tag: "MintRejected",
+      detail: "melt quote does not match invoice",
+    });
+    expect(checkQuoteCalls).toEqual(["quote-1"]);
+    expect(sendCalls).toEqual([]);
+  });
+  it("reports a settled quote without creating a second payment or exposing invoice text", async () => {
+    const { wallet, sendCalls } = makeWallet({
+      checkQuote: () => Promise.resolve(quoteResponse({ state: "PAID" })),
+    });
+    const { run, events } = makeHarness(wallet);
+    const result = await run(
+      Effect.gen(function* () {
+        const melt = yield* Melt;
+        const quote = yield* melt.quote(draft);
+        return yield* melt.status(quote);
+      }),
+    );
+    assert(Exit.isSuccess(result));
+    expect(result.value).toBe("PAID");
+    expect(sendCalls).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain(invoice);
   });
 });

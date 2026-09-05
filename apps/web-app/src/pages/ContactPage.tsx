@@ -1,20 +1,22 @@
-import { useEffect, useState, type FC } from "react";
-import { ArchiveRestore } from "lucide-react";
 import {
-  DonateIcon,
-  FeedbackIcon,
-  MessagesIcon,
-  PayIcon,
-} from "../components/icons";
+  ArchiveRestore,
+  HeartHandshake as DonateIcon,
+  MessageCircle as FeedbackIcon,
+  MessageCircleMore as MessagesIcon,
+  HandCoins as PayIcon,
+} from "lucide-react";
+import { useEffect, useState, type FC } from "react";
+import { Avatar } from "../components/Avatar";
+
 import type { ContactId } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
 import { loadCachedProfile } from "../profileCache";
-import { formatShortLightningAddress, getInitials } from "../utils/formatting";
 import { getContactGroups } from "../utils/contactGroups";
+import { formatShortLightningAddress, getInitials } from "../utils/formatting";
 import { resolveVerifiedNip05Identifier } from "../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import type { Translate } from "../i18n";
 
 interface Contact {
   archivedAtSec?: number | string | null;
@@ -128,9 +130,8 @@ export const ContactPage: FC<ContactPageProps> = ({
   statusText,
   t,
 }) => {
-  const navigateTo = useNavigation();
-  const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
-  const selectedLnAddress = String(selectedContact?.lnAddress ?? "").trim();
+  const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub ?? "");
+  const selectedLnAddress = (selectedContact?.lnAddress ?? "").trim();
   const verifiedNip05 = useVerifiedNip05(
     selectedLnAddress ? selectedNpub : null,
   );
@@ -143,7 +144,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   }
 
   const contactId = selectedContact.id;
-  const name = String(selectedContact.name ?? "").trim();
+  const name = (selectedContact.name ?? "").trim();
   const groups = getContactGroups(selectedContact);
   const ln = selectedLnAddress;
   const npub = selectedNpub;
@@ -164,12 +165,13 @@ export const ContactPage: FC<ContactPageProps> = ({
     status: statusText,
     providesLabel: t("contactStatusProvides"),
   });
-  const avatarContent = url ? (
-    <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" />
-  ) : (
-    <span className="contact-avatar-fallback">
-      {getInitials(String(selectedContact.name ?? ""))}
-    </span>
+  const avatarContent = (
+    <Avatar
+      pictureUrl={url}
+      fallback={getInitials(selectedContact.name ?? "")}
+      fallbackClassName="contact-avatar-fallback"
+      loading="lazy"
+    />
   );
 
   return (

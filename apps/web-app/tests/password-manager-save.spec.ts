@@ -1,11 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { setBaseStorage } from "./helpers/appState";
+import { MOBILE_VIEWPORT, setBaseStorage } from "./helpers/appState";
+import { addContactByNpub } from "./helpers/contacts";
+import { watchAppErrors } from "./helpers/diagnostics";
+import { createSeedIdentity } from "./helpers/identity";
 import { stubFiatRates } from "./helpers/network";
 
-test("password save returns an inert document and signup reaches the wallet", async ({
+test("password save is inert and a new signup persists contacts and messages", async ({
   page,
 }) => {
+  const errors = watchAppErrors(page, "fresh signup");
   const nestedScriptRequests: string[] = [];
+  await page.setViewportSize(MOBILE_VIEWPORT);
   await setBaseStorage(page);
   await stubFiatRates(page);
   page.on("request", (request) => {
@@ -51,4 +56,28 @@ test("password save returns an inert document and signup reaches the wallet", as
   await page.getByRole("button", { name: "Confirm profile" }).click();
   await expect(page.getByLabel("Available balance")).toBeVisible();
   expect(nestedScriptRequests).toEqual([]);
+
+  const contact = await createSeedIdentity();
+  const contactId = await addContactByNpub(page, contact.npub);
+  const message = "First message after signing up";
+  await page.locator('[data-guide="chat-input"]').fill(message);
+  await page.locator('[data-guide="chat-send"]').click();
+  await expect(
+    page.locator(".chat-bubble").filter({ hasText: message }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`#chat/${contactId}$`));
+  await expect(
+    page.locator(".chat-bubble").filter({ hasText: message }),
+  ).toBeVisible();
+  await page.goto("/#contacts");
+  const contactCard = page.locator('[data-guide="contact-card"]');
+  await expect(contactCard).toHaveCount(1);
+  await contactCard.click();
+  await expect(page).toHaveURL(new RegExp(`#chat/${contactId}$`));
+  await expect(
+    page.locator(".chat-bubble").filter({ hasText: message }),
+  ).toBeVisible();
+  errors.assertClean();
 });

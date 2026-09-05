@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { nip19 } from "nostr-tools";
 
 const LOCAL_RELAY_URL = "ws://localhost:7777";
@@ -18,14 +19,14 @@ interface NostrEventShape {
 }
 
 const isEventShape = (value: unknown): value is NostrEventShape => {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.content === "string" &&
-    typeof candidate.kind === "number" &&
-    typeof candidate.pubkey === "string" &&
-    Array.isArray(candidate.tags)
-  );
+  return Schema.is(
+    Schema.Struct({
+      content: Schema.String,
+      kind: Schema.Number,
+      pubkey: Schema.String,
+      tags: Schema.Array(Schema.Array(Schema.String)),
+    }),
+  )(value);
 };
 
 /** One REQ against the local relay, resolving with the events seen before EOSE. */

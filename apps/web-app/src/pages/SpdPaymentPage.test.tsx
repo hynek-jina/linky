@@ -1,5 +1,4 @@
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 import { SpdPaymentPage } from "./SpdPaymentPage";
@@ -239,33 +238,28 @@ describe("SpdPaymentPage offer recipients", () => {
   });
 
   const renderEditable = async (
-    container: HTMLElement,
     spdPayload: string,
     onRequestReimbursement: () => Promise<{
       chatId: string;
       offerId: string;
     } | null>,
   ) => {
-    const root = createRoot(container);
-    const render = async (isEditing: boolean) => {
-      await act(async () => {
-        root.render(
-          <SpdPaymentPage
-            cashuBalanceAfterMelt={100_000}
-            initialOfferContactCount={1}
-            initialOfferDelaySec={0}
-            isEditing={isEditing}
-            offerContacts={[
-              { id: "contact-a", name: "Alice", npub: "npub1alice" },
-            ]}
-            onRequestReimbursement={onRequestReimbursement}
-            spdPayload={spdPayload}
-          />,
-        );
-      });
+    const page = (isEditing: boolean) => (
+      <SpdPaymentPage
+        cashuBalanceAfterMelt={100_000}
+        initialOfferContactCount={1}
+        initialOfferDelaySec={0}
+        isEditing={isEditing}
+        offerContacts={[{ id: "contact-a", name: "Alice", npub: "npub1alice" }]}
+        onRequestReimbursement={onRequestReimbursement}
+        spdPayload={spdPayload}
+      />
+    );
+    const { container, rerender } = await renderIntoDocument(page(false));
+    return {
+      container,
+      render: (isEditing: boolean) => rerender(page(isEditing)),
     };
-    await render(false);
-    return render;
   };
 
   const fieldInput = (container: HTMLElement, key: string) => {
@@ -283,12 +277,9 @@ describe("SpdPaymentPage offer recipients", () => {
 
   it("sends the confirmed edits instead of the scanned fields", async () => {
     const onRequestReimbursement = vi.fn(async () => null);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
     const spdPayload =
       "SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK*X-VS:111";
-    const render = await renderEditable(
-      container,
+    const { container, render } = await renderEditable(
       spdPayload,
       onRequestReimbursement,
     );
@@ -359,11 +350,8 @@ describe("SpdPaymentPage offer recipients", () => {
 
   it("flags invalid account and BIC edits and drops a draft left by navigation", async () => {
     const onRequestReimbursement = vi.fn(async () => null);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
     const spdPayload = "SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK";
-    const render = await renderEditable(
-      container,
+    const { container, render } = await renderEditable(
       spdPayload,
       onRequestReimbursement,
     );

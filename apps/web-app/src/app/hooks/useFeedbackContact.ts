@@ -1,7 +1,7 @@
+import { writeContact } from "../lib/writeContact";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { OwnerId } from "@evolu/common";
-import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import { FEEDBACK_CONTACT_NPUB } from "../../utils/constants";
 import type { ContactNameRowLike } from "../types/appTypes";
@@ -35,15 +35,15 @@ export const useFeedbackContact = <
   const openFeedbackContact = React.useCallback(() => {
     const targetNpub = FEEDBACK_CONTACT_NPUB;
     const existing = contacts.find(
-      (contact) => String(contact.npub ?? "").trim() === targetNpub,
+      (contact) => (contact.npub ?? "").trim() === targetNpub,
     );
 
     if (existing?.id) {
-      if (String(existing.name ?? "") === "Feedback") {
-        update("contact", { id: existing.id as ContactId, name: null });
+      if ((existing.name ?? "") === "Feedback") {
+        update("contact", { id: existing.id, name: null });
       }
       openFeedbackContactPendingRef.current = false;
-      navigateTo({ route: "chat", id: existing.id as ContactId });
+      navigateTo({ route: "chat", id: existing.id });
       return;
     }
 
@@ -51,14 +51,12 @@ export const useFeedbackContact = <
 
     const payload = {
       name: null,
-      npub: targetNpub as typeof Evolu.NonEmptyString1000.Type,
+      npub: Evolu.NonEmptyString1000.orThrow(targetNpub),
       lnAddress: null,
       groupName: null,
     };
 
-    const result = appOwnerId
-      ? insert("contact", payload, { ownerId: appOwnerId })
-      : insert("contact", payload);
+    const result = writeContact(insert, payload, appOwnerId);
 
     if (result.ok) return;
 
@@ -71,12 +69,12 @@ export const useFeedbackContact = <
 
     const targetNpub = FEEDBACK_CONTACT_NPUB;
     const existing = contacts.find(
-      (contact) => String(contact.npub ?? "").trim() === targetNpub,
+      (contact) => (contact.npub ?? "").trim() === targetNpub,
     );
     if (!existing?.id) return;
 
     openFeedbackContactPendingRef.current = false;
-    navigateTo({ route: "chat", id: existing.id as ContactId });
+    navigateTo({ route: "chat", id: existing.id });
   }, [contacts]);
 
   return {

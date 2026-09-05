@@ -1,3 +1,10 @@
+import { useLatest } from "../hooks/useLatest";
+import {
+  HeartHandshake as DonateIcon,
+  Images as GalleryIcon,
+  HandCoins as PayIcon,
+  Send as SendIcon,
+} from "lucide-react";
 import {
   memo,
   useCallback,
@@ -20,14 +27,14 @@ import {
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
-  getMessageEditorValue,
-  setMessageEditorCaret,
-} from "../app/lib/messageEditorDom";
-import {
   captureChatViewportAnchor,
   restoreChatViewportAnchor,
   type ChatViewportAnchor,
 } from "../app/lib/chatViewport";
+import {
+  getMessageEditorValue,
+  setMessageEditorCaret,
+} from "../app/lib/messageEditorDom";
 import {
   applyMessageMentionSuggestion,
   getMessageMentionQuery,
@@ -46,8 +53,8 @@ import type {
   ChatReactionChip,
   LocalNostrMessage,
   LocalNostrReaction,
-  MintUrlInput,
 } from "../app/types/appTypes";
+import { Avatar } from "../components/Avatar";
 import {
   ChatMessage,
   type BankPaymentOfferPeerNotice,
@@ -55,19 +62,14 @@ import {
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
 import { ChatMessageEditor } from "../components/ChatMessageEditor";
-import {
-  DonateIcon,
-  GalleryIcon,
-  PayIcon,
-  RequestIcon,
-  SendIcon,
-} from "../components/icons";
+import { RequestIcon } from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { navigateTo } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
+import type { MintIcon } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { nowSeconds } from "../utils/time";
-import type { Translate } from "../i18n";
 
 interface Contact {
   id: string;
@@ -93,12 +95,7 @@ interface ChatPageProps {
   editContext: EditChatContext | null;
   feedbackContactNpub: string;
   getCashuTokenMessageInfo: (id: string) => CashuTokenMessageInfo | null;
-  getMintIconUrl: (mint: MintUrlInput) => {
-    origin: string | null;
-    url: string | null;
-    host: string | null;
-    failed: boolean;
-  };
+  getMintIconUrl: (mint: string | null | undefined) => MintIcon;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   lang: string;
   mentionContacts: MessageMentionContact[];
@@ -179,14 +176,13 @@ const buildBankPaymentOfferIndex = (
   const byOfferId = new Map<string, IndexedBankPaymentOffer[]>();
 
   for (const message of messages) {
-    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+    const info = getLinkyBankPaymentOfferInfo(message.content);
     if (!info) continue;
 
     const indexed = {
-      contactId: String(message.contactId ?? "").trim(),
+      contactId: message.contactId.trim(),
       info,
-      updatedAtSec:
-        info.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0,
+      updatedAtSec: info.statusUpdatedAtSec || message.createdAtSec || 0,
     };
     const candidates = byOfferId.get(info.offerId);
     if (candidates) candidates.push(indexed);
@@ -201,7 +197,7 @@ const getBankPaymentOfferPeerNotice = (
   offerInfo: LinkyBankPaymentOfferInfo | null,
   offersById: Map<string, IndexedBankPaymentOffer[]>,
 ): BankPaymentOfferPeerNotice | null => {
-  if (!offerInfo || String(message.direction ?? "") !== "out") return null;
+  if (!offerInfo || message.direction !== "out") return null;
   if (
     offerInfo.status === "accepted_by_other" ||
     offerInfo.status === "bank_details_sent" ||
@@ -212,9 +208,9 @@ const getBankPaymentOfferPeerNotice = (
     return null;
   }
 
-  const contactId = String(message.contactId ?? "").trim();
+  const contactId = message.contactId.trim();
   const currentUpdatedAtSec =
-    offerInfo.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0;
+    offerInfo.statusUpdatedAtSec || message.createdAtSec || 0;
   let otherAccepted = false;
   let otherHasPriority = false;
 
@@ -339,15 +335,7 @@ const ChatMessageList = memo(function ChatMessageList({
     },
     [setMintIconUrlByMint],
   );
-  const onMintIconError = useCallback(
-    (origin: string, nextUrl: string | null) => {
-      setMintIconUrlByMint((previous) => ({
-        ...previous,
-        [origin]: nextUrl,
-      }));
-    },
-    [setMintIconUrlByMint],
-  );
+
   const messageElRef = useCallback(
     (element: HTMLDivElement | null, messageId: string) => {
       const elements = chatMessageElByIdRef.current;
@@ -362,8 +350,8 @@ const ChatMessageList = memo(function ChatMessageList({
     const parsedByMessage = new Map<LocalNostrMessage, ParsedChatMessage>();
 
     for (const message of chatMessages) {
-      const content = String(message.content ?? "");
-      const rumorId = String(message.rumorId ?? "").trim();
+      const content = message.content;
+      const rumorId = (message.rumorId ?? "").trim();
       if (rumorId) byRumorId.set(rumorId, message);
       parsedByMessage.set(message, {
         bankPaymentOfferInfo: getLinkyBankPaymentOfferInfo(content),
@@ -379,12 +367,12 @@ const ChatMessageList = memo(function ChatMessageList({
       { respondedAtSec: number; status: "declined" | "paid" }
     >();
     for (const message of chatMessages) {
-      const replyToId = String(message.replyToId ?? "").trim();
+      const replyToId = (message.replyToId ?? "").trim();
       const parsed = parsedByMessage.get(message);
       if (!replyToId || !parsed) continue;
       if (!parsed.isCashuToken && !parsed.declineInfo) continue;
 
-      const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+      const createdAtSec = message.createdAtSec || 0;
       const previous = latestRequestResponseByRumorId.get(replyToId);
       if (previous && previous.respondedAtSec > createdAtSec) continue;
       latestRequestResponseByRumorId.set(replyToId, {
@@ -403,18 +391,18 @@ const ChatMessageList = memo(function ChatMessageList({
         paymentRequestInfo: null,
         privateImageInfo: null,
       };
-      const rumorId = String(message.rumorId ?? "").trim();
-      const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+      const rumorId = (message.rumorId ?? "").trim();
+      const createdAtSec = message.createdAtSec || 0;
       const isSeen =
-        String(message.direction ?? "") === "out" &&
+        message.direction === "out" &&
         createdAtSec > peerSeenSinceSec &&
         createdAtSec <= peerSeenUpToSec;
       const paymentRequestStatus = rumorId
         ? (latestRequestResponseByRumorId.get(rumorId)?.status ?? "requested")
         : "requested";
-      const replyToId = String(message.replyToId ?? "").trim();
+      const replyToId = (message.replyToId ?? "").trim();
       const fallbackReplyContent =
-        String(message.replyToContent ?? "").trim() || null;
+        (message.replyToContent ?? "").trim() || null;
       const repliedMessage = replyToId ? byRumorId.get(replyToId) : null;
       const replyQuoteText = replyToId
         ? formatChatMessagePreviewText({
@@ -435,23 +423,23 @@ const ChatMessageList = memo(function ChatMessageList({
         parsed.bankPaymentOfferInfo,
         offersById,
       );
-      const offererPublicKey = String(
-        parsed.bankPaymentOfferInfo?.offererPublicKey ?? "",
+      const offererPublicKey = (
+        parsed.bankPaymentOfferInfo?.offererPublicKey ?? ""
       ).trim();
       const canSettleBankPaymentOffer =
         parsed.bankPaymentOfferInfo?.status === "bank_paid" &&
         ((Boolean(offererPublicKey) && offererPublicKey === chatOwnPubkeyHex) ||
-          String(message.direction ?? "") === "out");
+          message.direction === "out");
 
       return {
         ...parsed,
         bankPaymentOfferPeerNotice,
         canActOnPaymentRequest:
           Boolean(parsed.paymentRequestInfo) &&
-          String(message.direction ?? "") === "in" &&
+          message.direction === "in" &&
           paymentRequestStatus === "requested",
         canEdit:
-          String(message.direction ?? "") === "out" &&
+          message.direction === "out" &&
           Boolean(rumorId) &&
           !parsed.isCashuToken &&
           !parsed.paymentRequestInfo &&
@@ -468,10 +456,8 @@ const ChatMessageList = memo(function ChatMessageList({
           void onDeclinePaymentRequest(message);
         },
         onOpenBankPaymentOfferDetails: () => {
-          const offerId = String(
-            parsed.bankPaymentOfferInfo?.offerId ?? "",
-          ).trim();
-          const chatId = String(message.contactId ?? selectedContactId).trim();
+          const offerId = (parsed.bankPaymentOfferInfo?.offerId ?? "").trim();
+          const chatId = message.contactId.trim();
           if (!offerId || !chatId) return;
           setLinkyBankPaymentOfferMinimized(chatId, offerId, false);
           navigateTo({ route: "bankPaymentOffer", chatId, offerId });
@@ -527,7 +513,7 @@ const ChatMessageList = memo(function ChatMessageList({
       ) : (
         viewModels.map((viewModel) => (
           <ChatMessage
-            key={String(viewModel.message.id)}
+            key={viewModel.message.id}
             message={viewModel.message}
             previousMessage={viewModel.previousMessage}
             nextMessage={viewModel.nextMessage}
@@ -537,7 +523,7 @@ const ChatMessageList = memo(function ChatMessageList({
             getMintIconUrl={getMintIconUrl}
             getNpubMessageContactInfo={getNpubMessageContactInfo}
             onMintIconLoad={onMintIconLoad}
-            onMintIconError={onMintIconError}
+            onMintIconError={onMintIconLoad}
             actionLabels={actionLabels}
             canEdit={viewModel.canEdit}
             canReplyOrReact={viewModel.canReplyOrReact}
@@ -638,7 +624,7 @@ const ChatComposer = memo(function ChatComposer({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSendDraftRef = useRef<string | null>(null);
   const [draft, setDraft] = useState(chatDraft);
-  const draftRef = useRef(draft);
+  const draftRef = useLatest(draft);
   const [composeCaret, setComposeCaret] = useState(chatDraft.length);
   const isDesktop =
     typeof window !== "undefined" &&
@@ -671,15 +657,11 @@ const ChatComposer = memo(function ChatComposer({
     setComposeCaret(chatDraft.length);
   }, [chatDraft]);
 
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
   useEffect(
     () => () => {
       setChatDraft(draftRef.current);
     },
-    [setChatDraft],
+    [setChatDraft, draftRef],
   );
 
   useEffect(() => {
@@ -790,18 +772,12 @@ const ChatComposer = memo(function ChatComposer({
                 onClick={() => selectMentionSuggestion(suggestion)}
               >
                 <span className="chat-contact-pill-avatar" aria-hidden="true">
-                  {info?.pictureUrl ? (
-                    <img
-                      src={info.pictureUrl}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="chat-contact-pill-avatar-fallback">
-                      {suggestion.contact.name.charAt(0)}
-                    </span>
-                  )}
+                  <Avatar
+                    pictureUrl={info?.pictureUrl ? info.pictureUrl : null}
+                    fallback={suggestion.contact.name.charAt(0)}
+                    fallbackClassName="chat-contact-pill-avatar-fallback"
+                    loading="lazy"
+                  />
                 </span>
                 <span className="chat-mention-suggestion-label">
                   {suggestion.contact.name}
@@ -1186,11 +1162,11 @@ export const ChatPage: FC<ChatPageProps> = ({
   const composeInputRef = useRef<HTMLDivElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
   const npub = selectedContact
-    ? normalizeNpubIdentifier(selectedContact.npub)
+    ? normalizeNpubIdentifier(selectedContact.npub ?? "")
     : null;
   const selectedContactId = selectedContact?.id ?? null;
   const hasUnknownPubkeyHex = Boolean(
-    String(selectedContact?.unknownPubkeyHex ?? "").trim(),
+    (selectedContact?.unknownPubkeyHex ?? "").trim(),
   );
 
   useChatViewport(chatMessagesRef, composeInputRef, selectedContactId);
@@ -1199,31 +1175,24 @@ export const ChatPage: FC<ChatPageProps> = ({
   useEffect(() => {
     if (selectedContact?.isUnknownContact) return;
 
-    const chatId = String(selectedContact?.id ?? "").trim();
+    const chatId = (selectedContact?.id ?? "").trim();
     if (!chatId) return;
 
     const nowSec = nowSeconds();
     let newestOffer: { offerId: string; updatedAtSec: number } | null = null;
 
     for (const message of bankPaymentOfferMessages) {
-      if (String(message.contactId ?? "").trim() !== chatId) continue;
-      if (String(message.direction ?? "") !== "in") continue;
+      if (message.contactId.trim() !== chatId) continue;
+      if (message.direction !== "in") continue;
 
-      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      const info = getLinkyBankPaymentOfferInfo(message.content);
       if (!info || info.status !== "offered") continue;
-      if (
-        isLinkyBankPaymentOfferExpired(
-          info,
-          Number(message.createdAtSec ?? 0),
-          nowSec,
-        )
-      ) {
+      if (isLinkyBankPaymentOfferExpired(info, message.createdAtSec, nowSec)) {
         continue;
       }
       if (isLinkyBankPaymentOfferMinimized(chatId, info.offerId)) continue;
 
-      const updatedAtSec =
-        info.statusUpdatedAtSec ?? Number(message.createdAtSec ?? 0);
+      const updatedAtSec = info.statusUpdatedAtSec ?? message.createdAtSec;
       if (!newestOffer || updatedAtSec > newestOffer.updatedAtSec) {
         newestOffer = { offerId: info.offerId, updatedAtSec };
       }
@@ -1253,8 +1222,7 @@ export const ChatPage: FC<ChatPageProps> = ({
     if (!replyContext?.replyToId) return "";
 
     const repliedMessage = chatMessages.find(
-      (message) =>
-        String(message.rumorId ?? "").trim() === replyContext.replyToId,
+      (message) => (message.rumorId ?? "").trim() === replyContext.replyToId,
     );
     return formatChatMessagePreviewText({
       content: repliedMessage?.content ?? "",
@@ -1272,7 +1240,7 @@ export const ChatPage: FC<ChatPageProps> = ({
     );
   }
 
-  const ln = String(selectedContact.lnAddress ?? "").trim();
+  const ln = (selectedContact.lnAddress ?? "").trim();
   const isUnknownContact = Boolean(selectedContact.isUnknownContact);
   const canPayThisContact =
     !isUnknownContact &&
@@ -1321,8 +1289,8 @@ export const ChatPage: FC<ChatPageProps> = ({
         onSettleBankPaymentOffer={onSettleBankPaymentOffer}
         onReact={onReact}
         onReply={onReply}
-        peerSeenSinceSec={Number(selectedContact.chatPeerSeenSinceSec ?? 0)}
-        peerSeenUpToSec={Number(selectedContact.chatPeerSeenAtSec ?? 0)}
+        peerSeenSinceSec={selectedContact.chatPeerSeenSinceSec ?? 0}
+        peerSeenUpToSec={selectedContact.chatPeerSeenAtSec ?? 0}
         reactionsByMessageId={reactionsByMessageId}
         selectedContactId={selectedContact.id}
         setMintIconUrlByMint={setMintIconUrlByMint}

@@ -1,3 +1,4 @@
+import { useLatest } from "../../hooks/useLatest";
 import React from "react";
 import {
   startNativeQrScan,
@@ -75,18 +76,9 @@ const readNativeScanViewport = (): NativeScanViewport | null => {
 };
 
 const readCameraPermissionState = async (): Promise<string | null> => {
-  const permissions = Reflect.get(navigator, "permissions");
-  if (typeof permissions !== "object" || permissions === null) return null;
-
-  const query = Reflect.get(permissions, "query");
-  if (typeof query !== "function") return null;
-
-  const result: unknown = await Reflect.apply(query, permissions, [
-    { name: "camera" },
-  ]);
-  if (typeof result !== "object" || result === null) return null;
-
-  return String(Reflect.get(result, "state") ?? "").trim() || null;
+  if (!navigator.permissions?.query) return null;
+  const result = await navigator.permissions.query({ name: "camera" });
+  return result.state;
 };
 
 export const useGuideScannerDomain = ({
@@ -188,15 +180,15 @@ export const useGuideScannerDomain = ({
     stopScanStream();
   }, [stopScanStream]);
 
-  const handleScannedTextRef = React.useRef(onScannedText);
-  React.useEffect(() => {
-    handleScannedTextRef.current = onScannedText;
-  }, [onScannedText]);
+  const handleScannedTextRef = useLatest(onScannedText);
 
-  const handleDetectedScanValue = React.useCallback(async (value: string) => {
-    await handleScannedTextRef.current(value);
-    return true;
-  }, []);
+  const handleDetectedScanValue = React.useCallback(
+    async (value: string) => {
+      await handleScannedTextRef.current(value);
+      return true;
+    },
+    [handleScannedTextRef],
+  );
 
   const handleNativeScanResult = React.useCallback(
     async (
@@ -214,7 +206,7 @@ export const useGuideScannerDomain = ({
         return;
       }
 
-      const value = String(result.value ?? "").trim();
+      const value = (result.value ?? "").trim();
       if (value) {
         const nativeScanHandle = nativeScanHandleRef.current;
         nativeScanHandleRef.current = null;
@@ -233,7 +225,7 @@ export const useGuideScannerDomain = ({
         return;
       }
 
-      const message = String(result.message ?? "").trim();
+      const message = (result.message ?? "").trim();
       logScanDebug("native scan failed", {
         message,
       });
@@ -599,7 +591,7 @@ export const useGuideScannerDomain = ({
 
           if (detector) {
             const codes = await detector.detect(video);
-            const value = String(codes?.[0]?.rawValue ?? "").trim();
+            const value = (codes?.[0]?.rawValue ?? "").trim();
             if (value) {
               const didHandle = await handleDetectedScanValue(value);
               if (didHandle) {
@@ -633,7 +625,7 @@ export const useGuideScannerDomain = ({
                 decodeHeight,
               );
               const result = jsQr(imageData.data, decodeWidth, decodeHeight);
-              const value = String(result?.data ?? "").trim();
+              const value = (result?.data ?? "").trim();
               if (value) {
                 const didHandle = await handleDetectedScanValue(value);
                 if (didHandle) {

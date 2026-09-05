@@ -104,24 +104,20 @@ export const formatDisplayGeneralStatus = (params: {
 };
 
 export const buildStatusFilterValue = (currency: string): string => {
-  return `${STATUS_FILTER_PREFIX}${String(currency ?? "")
-    .trim()
-    .toUpperCase()}`;
+  return `${STATUS_FILTER_PREFIX}${currency.trim().toUpperCase()}`;
 };
 
 export const isStatusFilterValue = (
   value: string | null | undefined,
 ): boolean => {
-  return String(value ?? "").startsWith(STATUS_FILTER_PREFIX);
+  return (value ?? "").startsWith(STATUS_FILTER_PREFIX);
 };
 
 export const parseStatusFilterValue = (
   value: string | null | undefined,
 ): string | null => {
   if (!isStatusFilterValue(value)) return null;
-  const currency = String(value ?? "")
-    .slice(STATUS_FILTER_PREFIX.length)
-    .trim();
+  const currency = (value ?? "").slice(STATUS_FILTER_PREFIX.length).trim();
   return currency || null;
 };
 

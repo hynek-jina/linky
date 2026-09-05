@@ -26,7 +26,7 @@ export const getContactPublicProfile = (
   npub: string | null | undefined,
   metadata: ProfileMetadata | null | undefined,
 ): ContactPublicProfile => {
-  const normalizedNpub = normalizeNpubIdentifier(npub);
+  const normalizedNpub = normalizeNpubIdentifier(npub ?? "");
   if (!normalizedNpub || !metadata) {
     return { lnAddress: "", name: "" };
   }
@@ -48,7 +48,7 @@ export const resolveContactProfile = (
   contact: ContactRowLike,
   metadata: ProfileMetadata | null | undefined,
 ): ResolvedContactProfile => {
-  const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+  const normalizedNpub = normalizeNpubIdentifier(contact.npub ?? "");
   const storedName = trimString(contact.name);
   const storedLnAddress = trimString(contact.lnAddress);
 

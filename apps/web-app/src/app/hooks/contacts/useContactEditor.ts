@@ -1,3 +1,6 @@
+import { contactsLimitMessage } from "./useSaveNpubContact";
+import { writeContact } from "../../lib/writeContact";
+import { toEvoluText, toContactTextFields } from "../../lib/contactFields";
 import * as Evolu from "@evolu/common";
 import {
   decodeNpub,
@@ -12,7 +15,8 @@ import {
 } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import React from "react";
-import { evolu, type ContactId, type TransactionId } from "../../../evolu";
+import { evolu } from "../../../evolu";
+import { ContactId, TransactionId } from "../../../evoluIds";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
   getProfilePictureUrl,
@@ -223,8 +227,10 @@ export const useContactEditor = ({
   const contactSuggestionKnownNpubsKey = Array.from(
     new Set(
       [
-        ...contacts.map((contact) => normalizeNpubIdentifier(contact.npub)),
-        normalizeNpubIdentifier(currentNpub),
+        ...contacts.map((contact) =>
+          normalizeNpubIdentifier(contact.npub ?? ""),
+        ),
+        normalizeNpubIdentifier(currentNpub ?? ""),
       ].filter((npub): npub is string => Boolean(npub)),
     ),
   )
@@ -269,35 +275,21 @@ export const useContactEditor = ({
               : null,
         id: payload.id,
         name:
-          payload.name !== undefined
-            ? payload.name
-            : (asNonEmptyString(source.name) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+          payload.name !== undefined ? payload.name : toEvoluText(source.name),
         npub:
-          payload.npub !== undefined
-            ? payload.npub
-            : (asNonEmptyString(source.npub) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+          payload.npub !== undefined ? payload.npub : toEvoluText(source.npub),
         lnAddress:
           payload.lnAddress !== undefined
             ? payload.lnAddress
-            : (asNonEmptyString(source.lnAddress) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.lnAddress),
         groupName:
           payload.groupName !== undefined
             ? payload.groupName
-            : (asNonEmptyString(source.groupName) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.groupName),
         groupNamesJson:
           payload.groupNamesJson !== undefined
             ? payload.groupNamesJson
-            : (asNonEmptyString(source.groupNamesJson) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.groupNamesJson),
       };
     },
     [appOwnerId, contacts],
@@ -310,10 +302,7 @@ export const useContactEditor = ({
         return upsert("contact", fullOverridePayload, { ownerId: appOwnerId });
       }
 
-      if (!appOwnerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId: appOwnerId });
-      if (scoped.ok) return scoped;
-      return update("contact", payload);
+      return writeContact(update, payload, appOwnerId);
     },
     [appOwnerId, buildFullContactOverridePayload, update, upsert],
   );
@@ -348,21 +337,17 @@ export const useContactEditor = ({
 
       const transactionRows = await evolu.loadQuery(transactionsQuery);
       for (const row of transactionRows) {
-        if (typeof row !== "object" || row === null) continue;
-
-        const transactionId = asNonEmptyString("id" in row ? row.id : null);
+        const transactionId = row.id;
         if (!transactionId) continue;
 
-        const existingContactId = asNonEmptyString(
-          "contactId" in row ? row.contactId : null,
-        );
+        const existingContactId = asNonEmptyString(row.contactId);
         if (existingContactId) continue;
 
-        const method = asNonEmptyString("method" in row ? row.method : null);
+        const method = asNonEmptyString(row.method);
         if (method !== "lightning_address") continue;
 
         const transactionLnAddress = readLightningAddressFromDetailsJson(
-          "detailsJson" in row ? row.detailsJson : null,
+          row.detailsJson,
         );
         if (!transactionLnAddress) continue;
         if (transactionLnAddress.toLowerCase() !== normalizedLnAddress)
@@ -370,10 +355,10 @@ export const useContactEditor = ({
 
         updateTransactionFields(
           {
-            id: transactionId as TransactionId,
+            id: transactionId,
             contactId,
           },
-          "ownerId" in row ? row.ownerId : null,
+          row.ownerId,
         );
       }
     },
@@ -430,15 +415,15 @@ export const useContactEditor = ({
       selectedContactMetadata,
     );
     setContactEditInitial({
-      id: selectedContact.id as ContactId,
+      id: selectedContact.id,
       name: resolvedProfile.localName,
-      npub: String(selectedContact.npub ?? ""),
+      npub: selectedContact.npub ?? "",
       lnAddress: resolvedProfile.localLnAddress,
       groups: getContactGroups(selectedContact),
     });
     setForm({
       name: resolvedProfile.localName,
-      npub: String(selectedContact.npub ?? ""),
+      npub: selectedContact.npub ?? "",
       lnAddress: resolvedProfile.localLnAddress,
       groups: getContactGroups(selectedContact),
     });
@@ -455,7 +440,7 @@ export const useContactEditor = ({
     const npub = normalizeNpubIdentifier(form.npub);
     if (!npub) return { lnAddress: "", name: "" };
 
-    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
+    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub ?? "");
     if (selectedContact && selectedNpub === npub) {
       // The row backs the public value for non-overridden fields, so the
       // hint stays correct even when the profile cache is empty.
@@ -488,12 +473,7 @@ export const useContactEditor = ({
     }
 
     if (!editingId && activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
-      setStatus(
-        t("contactsLimitReached").replace(
-          "{max}",
-          String(MAX_CONTACTS_PER_OWNER),
-        ),
-      );
+      setStatus(contactsLimitMessage(t));
       return;
     }
 
@@ -533,7 +513,7 @@ export const useContactEditor = ({
       }
     }
 
-    const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
+    const currentProfileNpub = normalizeNpubIdentifier(currentNpub ?? "");
 
     if (npub && currentProfileNpub && npub === currentProfileNpub) {
       setStatus(t("contactIsYou"));
@@ -545,30 +525,26 @@ export const useContactEditor = ({
     if (npub) {
       const duplicate = contacts.find((contact) => {
         if (editingId && contact.id === editingId) return false;
-        return normalizeNpubIdentifier(contact.npub) === npub;
+        return normalizeNpubIdentifier(contact.npub ?? "") === npub;
       });
 
       if (duplicate?.id) {
         setStatus(t("contactExists"));
-        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        navigateTo({ route: "contact", id: ContactId.orThrow(duplicate.id) });
         setIsSavingContact(false);
         return;
       }
     }
 
-    const payload = {
-      name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
-      npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
-      lnAddress: lnAddress
-        ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
-        : null,
-      groupName: group ? (group as typeof Evolu.NonEmptyString1000.Type) : null,
-      groupNamesJson: groups.length
-        ? (groupNamesJson as typeof Evolu.NonEmptyString1000.Type)
-        : null,
-    };
+    const payload = toContactTextFields({
+      name,
+      npub,
+      lnAddress,
+      groupName: group,
+      groupNamesJson: groups.length ? groupNamesJson : null,
+    });
     let savedContactId: ContactId | null = editingId;
-    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
+    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub ?? "");
     const cachedMetadata = npub
       ? (loadCachedProfile(npub)?.metadata ?? undefined)
       : undefined;
@@ -619,12 +595,12 @@ export const useContactEditor = ({
       const changedFields: ContactFieldsPatch = { id: editingId };
 
       if (initial?.id === editingId) {
-        const nextName = payload.name ? String(payload.name) : null;
-        const nextNpub = payload.npub ? String(payload.npub) : null;
-        const nextLn = payload.lnAddress ? String(payload.lnAddress) : null;
-        const nextGroup = payload.groupName ? String(payload.groupName) : null;
+        const nextName = payload.name ? payload.name : null;
+        const nextNpub = payload.npub ? payload.npub : null;
+        const nextLn = payload.lnAddress ? payload.lnAddress : null;
+        const nextGroup = payload.groupName ? payload.groupName : null;
         const nextGroupsJson = payload.groupNamesJson
-          ? String(payload.groupNamesJson)
+          ? payload.groupNamesJson
           : null;
 
         const prevName = initial.name || null;
@@ -699,9 +675,7 @@ export const useContactEditor = ({
         setStatus(t("contactUpdated"));
       }
     } else {
-      const result = appOwnerId
-        ? insert("contact", createPayload, { ownerId: appOwnerId })
-        : insert("contact", createPayload);
+      const result = writeContact(insert, createPayload, appOwnerId);
       if (result.ok) {
         savedContactId = result.value.id;
         setRecentlyAddedContactId(result.value.id);
@@ -754,9 +728,9 @@ export const useContactEditor = ({
   const findExistingContactId = React.useCallback(
     (npub: string): string | undefined => {
       const existingContact = contacts.find(
-        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+        (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
       );
-      return existingContact?.id ? String(existingContact.id) : undefined;
+      return existingContact?.id ? existingContact.id : undefined;
     },
     [contacts],
   );
@@ -895,7 +869,7 @@ export const useContactEditor = ({
     ): Promise<ContactSearchResult> => {
       if (route.kind !== "contactNew") return { kind: "empty" };
 
-      const rawQuery = String(query ?? form.npub ?? "").trim();
+      const rawQuery = (query ?? form.npub).trim();
       if (!rawQuery) return { kind: "empty" };
 
       let exact: ContactSearchCandidate | null = null;
@@ -940,12 +914,7 @@ export const useContactEditor = ({
       if (isSavingContact) return;
 
       if (activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
-        setStatus(
-          t("contactsLimitReached").replace(
-            "{max}",
-            String(MAX_CONTACTS_PER_OWNER),
-          ),
-        );
+        setStatus(contactsLimitMessage(t));
         return;
       }
 
@@ -955,7 +924,7 @@ export const useContactEditor = ({
         return;
       }
 
-      const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
+      const currentProfileNpub = normalizeNpubIdentifier(currentNpub ?? "");
       if (currentProfileNpub && npub === currentProfileNpub) {
         setStatus(t("contactIsYou"));
         navigateTo({ route: "profile" });
@@ -963,14 +932,19 @@ export const useContactEditor = ({
       }
 
       const duplicate = contacts.find(
-        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+        (contact) => normalizeNpubIdentifier(contact.npub ?? "") === npub,
       );
       if (duplicate?.id) {
         setStatus(t("contactExists"));
-        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        navigateTo({ route: "contact", id: ContactId.orThrow(duplicate.id) });
         return;
       }
 
+      const parsedNpub = Evolu.NonEmptyString1000.from(npub);
+      if (!parsedNpub.ok) {
+        setStatus(t("contactIdentifierInvalid"));
+        return;
+      }
       const name = candidate.name.trim();
       const lnAddress = candidate.lnAddress.trim();
       const createPayload: Partial<{
@@ -978,19 +952,15 @@ export const useContactEditor = ({
         name: typeof Evolu.NonEmptyString1000.Type;
         npub: typeof Evolu.NonEmptyString1000.Type;
       }> = {
-        npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        npub: parsedNpub.value,
       };
-      if (name)
-        createPayload.name = name as typeof Evolu.NonEmptyString1000.Type;
-      if (lnAddress) {
-        createPayload.lnAddress =
-          lnAddress as typeof Evolu.NonEmptyString1000.Type;
-      }
+      const parsedName = Evolu.NonEmptyString1000.from(name);
+      if (parsedName.ok) createPayload.name = parsedName.value;
+      const parsedLnAddress = Evolu.NonEmptyString1000.from(lnAddress);
+      if (parsedLnAddress.ok) createPayload.lnAddress = parsedLnAddress.value;
 
       setIsSavingContact(true);
-      const result = appOwnerId
-        ? insert("contact", createPayload, { ownerId: appOwnerId })
-        : insert("contact", createPayload);
+      const result = writeContact(insert, createPayload, appOwnerId);
 
       if (!result.ok) {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -1053,11 +1023,11 @@ export const useContactEditor = ({
     const normalizedTarget = normalizeNpubIdentifier(targetNpub);
     if (!normalizedTarget) return;
     const existing = contacts.find(
-      (c) => normalizeNpubIdentifier(c.npub) === normalizedTarget,
+      (c) => normalizeNpubIdentifier(c.npub ?? "") === normalizedTarget,
     );
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
-    navigateTo({ route: "contact", id: existing.id as ContactId });
+    navigateTo({ route: "contact", id: ContactId.orThrow(existing.id) });
   }, [contacts]);
 
   // Drops the local override: writes the watch-fed cached profile value into

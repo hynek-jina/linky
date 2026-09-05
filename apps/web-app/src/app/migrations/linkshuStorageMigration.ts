@@ -1,4 +1,4 @@
-// ONE-TIME MIGRATION — DELETE ME EVENTUALLY
+// Legacy migration; removal gate in docs/architecture.md
 //
 // Carries a device's legacy cashu localStorage state to the key formats
 // @linky/linkshu reads through the localStorage KeyValueStore adapter (#307).
@@ -17,10 +17,8 @@
 // mints UI still owns them); linkshu's per-mint seen keys are seeded from
 // them plus the mints of stored token rows.
 //
-// Removal condition: delete this folder (including legacyAcceptedTokenDrain)
-// and its marked call sites (useLinkshuComposition, useCashuWalletComposition
-// twice, wipeLinkshuSeedBoundState) once production devices have all launched
-// a post-cutover build; the done flags make later runs no-ops either way.
+// Removal requires the supported-upgrade evidence in docs/architecture.md.
+// Keep the seed-bound wipe itself after removing its migration prologue.
 
 import { parseMintUrl, parseTokenText } from "@linky/linkshu";
 import { readField } from "../../utils/unknown";

@@ -20,11 +20,8 @@ describe("ContactsPage", () => {
         openNewContactPage={() => undefined}
         otherContactsLabel="Other contacts"
         renderContactCard={(contact) => (
-          <div
-            key={String(contact.id ?? "")}
-            data-contact-id={String(contact.id ?? "")}
-          >
-            {String(contact.name ?? "")}
+          <div key={contact.id ?? ""} data-contact-id={contact.id ?? ""}>
+            {contact.name ?? ""}
           </div>
         )}
         setActiveGroup={() => undefined}

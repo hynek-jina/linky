@@ -7,7 +7,5 @@ export const resolveContactRowOwnerLane = (
 ): Evolu.OwnerId | null => {
   const rowOwnerId = readRowOwnerId(row);
   if (!rowOwnerId) return null;
-  return (
-    visibleOwnerIds.find((ownerId) => String(ownerId) === rowOwnerId) ?? null
-  );
+  return visibleOwnerIds.find((ownerId) => ownerId === rowOwnerId) ?? null;
 };

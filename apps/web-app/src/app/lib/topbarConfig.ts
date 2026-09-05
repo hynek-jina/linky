@@ -127,8 +127,7 @@ export const resolveBackAction = (
 
     case "contactPay": {
       const contactId = route.id;
-      const backToChat =
-        String(contactPayBackToChatId ?? "") === String(contactId ?? "");
+      const backToChat = (contactPayBackToChatId ?? "") === contactId;
 
       return () => {
         if (backToChat && contactId) {

@@ -1,3 +1,5 @@
+import { ContactId, TransactionId } from "./evoluIds";
+export { ContactId, TransactionId } from "./evoluIds";
 import { Schema as EffectSchema } from "effect";
 import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
@@ -365,9 +367,6 @@ const probeWebSocketConnection = (
   });
 };
 
-const ContactId = Evolu.id("Contact");
-export type ContactId = typeof ContactId.Type;
-
 const CashuTokenId = Evolu.id("CashuToken");
 export type CashuTokenId = typeof CashuTokenId.Type;
 
@@ -382,9 +381,6 @@ type NostrReactionId = typeof NostrReactionId.Type;
 
 const OwnerMetaId = Evolu.id("OwnerMeta");
 type OwnerMetaId = typeof OwnerMetaId.Type;
-
-const TransactionId = Evolu.id("Transaction");
-export type TransactionId = typeof TransactionId.Type;
 
 export const Schema = {
   contact: {
@@ -565,6 +561,27 @@ export const createCashuTokensAllQuery = () =>
   evolu.createQuery((db) =>
     db.selectFrom("cashuToken").selectAll().orderBy("createdAt", "desc"),
   );
+
+export const createContactsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("contact").selectAll());
+export const createNostrMessagesAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("nostrMessage").selectAll());
+export const createNostrReactionsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("nostrReaction").selectAll());
+export const createTransactionsAllQuery = () =>
+  evolu.createQuery((db) => db.selectFrom("transaction").selectAll());
+export type ContactRow = Evolu.InferRow<
+  ReturnType<typeof createContactsAllQuery>
+>;
+export type NostrMessageRow = Evolu.InferRow<
+  ReturnType<typeof createNostrMessagesAllQuery>
+>;
+export type NostrReactionRow = Evolu.InferRow<
+  ReturnType<typeof createNostrReactionsAllQuery>
+>;
+export type TransactionRow = Evolu.InferRow<
+  ReturnType<typeof createTransactionsAllQuery>
+>;
 
 export type CashuTokenRow = Evolu.InferRow<
   ReturnType<typeof createCashuTokensAllQuery>

@@ -28,12 +28,10 @@ const SPAYD_MIME_TYPE = "application/x-shortpaymentdescriptor";
 const SPD_QR_JPEG_MIME_TYPE = "image/jpeg";
 
 const isSpdPaymentPayload = (input: string): boolean =>
-  String(input ?? "")
-    .trim()
-    .startsWith("SPD*");
+  input.trim().startsWith("SPD*");
 
 export const parseSpdPayment = (input: string): SpdPayment => {
-  const payload = String(input ?? "").trim();
+  const payload = input.trim();
   const parts = payload.split("*").filter(Boolean);
 
   if (parts[0] !== "SPD") {
@@ -52,7 +50,7 @@ export const parseSpdPayment = (input: string): SpdPayment => {
 
   // SPD carries the BIC inside ACC as `IBAN+BIC`; keep it as its own field so
   // every format exposes the same shape.
-  const [iban = "", bic = ""] = String(fields["ACC"] ?? "").split("+");
+  const [iban = "", bic = ""] = (fields["ACC"] ?? "").split("+");
   if (iban.trim()) fields["ACC"] = iban.trim();
   else delete fields["ACC"];
   if (bic.trim() && !fields["BIC"]) fields["BIC"] = bic.trim();
@@ -75,7 +73,7 @@ const createBankPayment = (args: {
     if (normalized) fields[key] = normalized;
   }
 
-  if (!String(fields["ACC"] ?? "").trim()) {
+  if (!(fields["ACC"] ?? "").trim()) {
     throw new Error("spd-missing-account");
   }
 
@@ -83,7 +81,7 @@ const createBankPayment = (args: {
 };
 
 const parseEpcPayment = (input: string): BankPayment => {
-  const payload = String(input ?? "").trim();
+  const payload = input.trim();
   const lines = payload.replace(/\r\n/g, "\n").split("\n");
   if (
     lines[0] !== "BCD" ||
@@ -93,16 +91,12 @@ const parseEpcPayment = (input: string): BankPayment => {
     throw new Error("bank-payment-invalid-epc");
   }
 
-  const account = String(lines[6] ?? "")
-    .replace(/\s/g, "")
-    .toUpperCase();
+  const account = (lines[6] ?? "").replace(/\s/g, "").toUpperCase();
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(account)) {
     throw new Error("spd-missing-account");
   }
 
-  const amountAndCurrency = String(lines[7] ?? "")
-    .trim()
-    .toUpperCase();
+  const amountAndCurrency = (lines[7] ?? "").trim().toUpperCase();
   const amountMatch = /^EUR(\d+(?:\.\d{1,2})?)?$/.exec(amountAndCurrency);
   if (!amountMatch) throw new Error("bank-payment-invalid-epc-amount");
 
@@ -124,7 +118,7 @@ const parseEpcPayment = (input: string): BankPayment => {
 const BYSQUARE_PAYLOAD_PATTERN = /^[0-9A-V]{16,4096}$/;
 
 const parsePayBySquarePayment = (input: string): BankPayment => {
-  const payload = String(input ?? "").trim();
+  const payload = input.trim();
   if (!BYSQUARE_PAYLOAD_PATTERN.test(payload)) {
     throw new Error("bank-payment-invalid-bysquare");
   }
@@ -156,7 +150,7 @@ const parsePayBySquarePayment = (input: string): BankPayment => {
 };
 
 export const parseBankPayment = (input: string): BankPayment => {
-  const payload = String(input ?? "").trim();
+  const payload = input.trim();
   if (isSpdPaymentPayload(payload)) return parseSpdPayment(payload);
   if (payload.replace(/\r\n/g, "\n").startsWith("BCD\n")) {
     return parseEpcPayment(payload);
@@ -176,7 +170,7 @@ export const tryParseBankPayment = (input: string): BankPayment | null => {
 };
 
 export const isBankPaymentPayload = (input: string): boolean => {
-  const payload = String(input ?? "").trim();
+  const payload = input.trim();
   if (isSpdPaymentPayload(payload)) return true;
   if (payload.replace(/\r\n/g, "\n").startsWith("BCD\n")) return true;
   return (
@@ -190,8 +184,8 @@ type BankPaymentOfferCurrency = "CZK" | "EUR";
 export const getBankPaymentOfferCurrency = (
   input: string,
 ): BankPaymentOfferCurrency | null => {
-  const currency = String(
-    tryParseBankPayment(input)?.fields["CC"] ?? "",
+  const currency = (
+    tryParseBankPayment(input)?.fields["CC"] ?? ""
   ).toUpperCase();
   return currency === "CZK" || currency === "EUR" ? currency : null;
 };

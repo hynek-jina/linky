@@ -1,10 +1,10 @@
 import React from "react";
-import { EvoluReloadNotice } from "./EvoluReloadNotice";
-import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
-import { useNavigation } from "../hooks/useRouting";
-import { deriveEvoluServerState } from "./evoluServerState";
+import { deriveEvoluServerState } from "../app/lib/evoluServerState";
+import { navigateTo } from "../hooks/useRouting";
+import { EvoluReloadNotice } from "./EvoluReloadNotice";
+import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 
 export function EvoluServersPage(): React.ReactElement {
   const {
@@ -21,7 +21,6 @@ export function EvoluServersPage(): React.ReactElement {
     syncOwner,
   } = useEvoluSettingsContext();
   const { t } = useAppShellCore();
-  const navigateTo = useNavigation();
 
   const counts = Object.values(evoluTableCounts);
   const totalCurrentRows = counts.reduce<number | null>(
@@ -35,11 +34,9 @@ export function EvoluServersPage(): React.ReactElement {
       <EvoluReloadNotice />
       {/* Server list */}
       {evoluServerUrls.length === 0 ? (
-        <p className="muted" style={{ marginTop: 0 }}>
-          {t("evoluServersEmpty")}
-        </p>
+        <p className="muted evolu-server-empty">{t("evoluServersEmpty")}</p>
       ) : (
-        <div style={{ marginBottom: 24 }}>
+        <div className="evolu-server-list">
           {evoluServerUrls.map((url) => {
             const { state, labelKey } = deriveEvoluServerState({
               evoluHasError,
@@ -70,7 +67,7 @@ export function EvoluServersPage(): React.ReactElement {
                     aria-label={state}
                     title={state}
                   />
-                  <span className="muted" style={{ marginLeft: 10 }}>
+                  <span className="muted evolu-server-status-label">
                     {t(labelKey)}
                   </span>
                   <span className="settings-chevron" aria-hidden="true">
@@ -83,7 +80,7 @@ export function EvoluServersPage(): React.ReactElement {
         </div>
       )}
 
-      <div className="settings-row" style={{ marginTop: 16 }}>
+      <div className="settings-row evolu-data-section">
         <button
           type="button"
           className={
@@ -100,12 +97,11 @@ export function EvoluServersPage(): React.ReactElement {
         </button>
       </div>
 
-      <h3 style={{ marginTop: 24, marginBottom: 12 }}>{t("evoluRowCounts")}</h3>
+      <h3 className="evolu-data-heading">{t("evoluRowCounts")}</h3>
 
       <div
-        className="settings-row settings-link"
+        className="settings-row settings-link settings-row-layout"
         onClick={() => navigateTo({ route: "evoluCurrentData" })}
-        style={{ cursor: "pointer" }}
       >
         <div className="settings-left">
           <span className="settings-label">{t("evoluData")}</span>
@@ -123,9 +119,8 @@ export function EvoluServersPage(): React.ReactElement {
       </div>
 
       <div
-        className="settings-row settings-link"
+        className="settings-row settings-link settings-row-layout"
         onClick={() => navigateTo({ route: "evoluHistoryData" })}
-        style={{ cursor: "pointer" }}
       >
         <div className="settings-left">
           <span className="settings-label">{t("evoluHistory")}</span>

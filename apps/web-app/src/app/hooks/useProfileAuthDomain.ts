@@ -239,7 +239,7 @@ export const useProfileAuthDomain = ({
     };
   }, []);
   const decodeNsecPrivateBytes = React.useCallback(async (nsec: string) => {
-    const raw = String(nsec ?? "").trim();
+    const raw = nsec.trim();
     if (!raw) return null;
 
     return decodeNsec(raw);
@@ -260,7 +260,7 @@ export const useProfileAuthDomain = ({
       source: NostrIdentitySource,
       switchedAtSec: number | null,
     ): Promise<void> => {
-      const normalizedSlip39 = String(sourceSlip39Seed ?? "").trim();
+      const normalizedSlip39 = sourceSlip39Seed.trim();
       if (!normalizedSlip39) return;
 
       const identityMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
@@ -295,7 +295,7 @@ export const useProfileAuthDomain = ({
   );
 
   React.useEffect(() => {
-    const nsec = String(currentNsec ?? "").trim();
+    const nsec = (currentNsec ?? "").trim();
     if (!nsec) {
       setCurrentNpub(null);
       return;
@@ -319,7 +319,7 @@ export const useProfileAuthDomain = ({
 
   const deriveAppMnemonicFromSlip39 = React.useCallback(
     async (seed: string): Promise<Evolu.Mnemonic | null> => {
-      const normalizedSeed = String(seed ?? "").trim();
+      const normalizedSeed = seed.trim();
       if (!normalizedSeed) return null;
 
       const metaMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
@@ -337,7 +337,7 @@ export const useProfileAuthDomain = ({
   );
 
   React.useEffect(() => {
-    const normalizedSlip39 = String(slip39Seed ?? "").trim();
+    const normalizedSlip39 = (slip39Seed ?? "").trim();
     setSeedMnemonic(normalizedSlip39 || null);
   }, [slip39Seed]);
 
@@ -345,7 +345,7 @@ export const useProfileAuthDomain = ({
     if (!isSeedLogin) return;
     if (cashuSeedMnemonic) return;
 
-    const normalizedSlip39 = String(slip39Seed ?? "").trim();
+    const normalizedSlip39 = (slip39Seed ?? "").trim();
     if (!normalizedSlip39) return;
 
     let cancelled = false;
@@ -437,7 +437,7 @@ export const useProfileAuthDomain = ({
 
   const republishProfileForNewKey = React.useCallback(
     async (newNsec: string): Promise<boolean> => {
-      const previousNsec = String(currentNsec ?? "").trim();
+      const previousNsec = (currentNsec ?? "").trim();
       if (!previousNsec || previousNsec === newNsec) return true;
 
       const previousNpub = await deriveNpubFromNsec(previousNsec);
@@ -488,13 +488,13 @@ export const useProfileAuthDomain = ({
     ) => {
       const invalidMessageKey =
         options?.invalidMessageKey ?? "onboardingInvalidSeed";
-      const raw = String(nsec ?? "").trim();
+      const raw = nsec.trim();
       if (!raw) {
         pushToast(t(invalidMessageKey));
         return;
       }
 
-      const normalizedSlip39 = String(sourceSlip39Seed ?? "").trim();
+      const normalizedSlip39 = sourceSlip39Seed.trim();
       if (!normalizedSlip39) {
         pushToast(t(invalidMessageKey));
         return;
@@ -519,7 +519,7 @@ export const useProfileAuthDomain = ({
         identitySource === "custom"
           ? (options?.switchedAtSec ?? changedAtSec)
           : null;
-      const previousNsec = String(currentNsec ?? "").trim();
+      const previousNsec = (currentNsec ?? "").trim();
       const shouldRecordChatNotice =
         options?.recordChatNotice === true &&
         Boolean(previousNsec) &&
@@ -589,17 +589,17 @@ export const useProfileAuthDomain = ({
     if (!isSeedLogin) return;
     if (activeNostrIdentitySource === "custom") return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!normalizedSeed) return;
 
-    const normalizedCurrentNsec = String(currentNsec ?? "").trim();
+    const normalizedCurrentNsec = (currentNsec ?? "").trim();
 
     let cancelled = false;
     void (async () => {
       const derived = await deriveNostrKeysFromSlip39(normalizedSeed);
       if (!derived || cancelled) return;
 
-      const normalizedDerivedNsec = String(derived.nsec ?? "").trim();
+      const normalizedDerivedNsec = derived.nsec.trim();
       if (!normalizedDerivedNsec) return;
       if (normalizedDerivedNsec === normalizedCurrentNsec) return;
 
@@ -661,7 +661,7 @@ export const useProfileAuthDomain = ({
       }
 
       const npub = derived.npub;
-      const normalizedNsec = String(derived.nsec ?? "").trim();
+      const normalizedNsec = derived.nsec.trim();
       if (!normalizedNsec) {
         pushToast(t("onboardingCreateFailed"));
         setOnboardingStep({
@@ -986,7 +986,7 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const raw = String(text ?? "").trim();
+      const raw = text.trim();
       if (!raw) {
         pushToast(t("pasteEmpty"));
         return;
@@ -1012,7 +1012,7 @@ export const useProfileAuthDomain = ({
   const requestPasteNostrKeys = React.useCallback(async () => {
     if (onboardingIsBusy) return;
 
-    const normalizedSeed = String(slip39Seed ?? "").trim();
+    const normalizedSeed = (slip39Seed ?? "").trim();
     if (!normalizedSeed) {
       pushToast(t("seedMissing"));
       return;
@@ -1026,7 +1026,7 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const raw = String(text ?? "").trim();
+      const raw = text.trim();
       if (!raw) {
         pushToast(t("pasteEmpty"));
         return;

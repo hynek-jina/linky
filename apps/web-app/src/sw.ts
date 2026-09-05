@@ -177,7 +177,7 @@ function truncateNotificationBody(value: string): string {
 }
 
 function formatNotificationPeerLabel(pubkeyHex: string): string {
-  const normalized = String(pubkeyHex ?? "").trim();
+  const normalized = pubkeyHex.trim();
   if (!normalized) return "";
 
   const pubkey = parsePubkey(normalized);
@@ -189,7 +189,7 @@ function buildNotificationTitle(
   decryptedMessage: DecryptedPushMessage | null,
   senderContactName: string | null,
 ): string {
-  const contactName = String(senderContactName ?? "").trim();
+  const contactName = (senderContactName ?? "").trim();
   if (contactName) return `Linky - ${contactName}`;
 
   const senderLabel = decryptedMessage
@@ -235,7 +235,7 @@ async function fetchWrapInboxEvent(
   envelope: PushNotificationEnvelope,
   secretKey: NostrSecretKey,
 ): Promise<WrapInboxEvent | null> {
-  const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
+  const outerEventId = (envelope.data?.outerEventId ?? "").trim();
   if (!isWrapId(outerEventId)) {
     logSw("sw decrypt fetch skipped because push envelope is incomplete", {
       data: envelope.data ?? {},
@@ -457,13 +457,23 @@ self.addEventListener("install", (event) => {
 // the user accepts the update banner; without this the new SW would sit in
 // the waiting state forever.
 self.addEventListener("message", (event: ExtendableMessageEvent) => {
-  const data = event.data as { type?: unknown } | null;
-  if (data && typeof data === "object" && data.type === "SKIP_WAITING") {
+  const data: unknown = event.data;
+  if (
+    data &&
+    typeof data === "object" &&
+    "type" in data &&
+    data.type === "SKIP_WAITING"
+  ) {
     void self.skipWaiting();
   }
   // Lets a freshly loaded tab check whether it is the only open client
   // before silently applying a pending update (see utils/pwaUpdate.ts).
-  if (data && typeof data === "object" && data.type === "CLIENT_COUNT") {
+  if (
+    data &&
+    typeof data === "object" &&
+    "type" in data &&
+    data.type === "CLIENT_COUNT"
+  ) {
     const port = event.ports[0];
     if (!port) return;
     event.waitUntil(

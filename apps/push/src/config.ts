@@ -1,13 +1,8 @@
+import { DEFAULT_NOSTR_RELAYS } from "@linky/linkstr";
 import { resolve } from "node:path";
 
 export const CATCH_UP_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 export const SEEN_EVENT_RETENTION_MARGIN_MS = 6 * 60 * 60 * 1000;
-
-const DEFAULT_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.0xchat.com",
-];
 
 export interface PushServiceConfig {
   port: number;
@@ -107,7 +102,7 @@ function readRelayList(env: Record<string, string | undefined>): string[] {
   const relays = readListEnv(
     env,
     "PUSH_DEFAULT_RELAYS",
-    DEFAULT_RELAYS.join(","),
+    DEFAULT_NOSTR_RELAYS.join(","),
   );
   return [...new Set(relays.map(normalizeRelayUrl))];
 }

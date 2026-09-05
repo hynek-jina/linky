@@ -1,3 +1,6 @@
+import { useLatest } from "../hooks/useLatest";
+import { parseTokenText } from "@linky/linkshu";
+import { Radio as NfcIcon } from "lucide-react";
 import type { FC } from "react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
@@ -11,13 +14,12 @@ import {
   isCashuTokenUnavailableState,
 } from "../app/lib/cashuTokenState";
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
-import { parseTokenText } from "@linky/linkshu";
-import { NfcIcon } from "../components/icons";
+
+import { getMintDisplay } from "../app/lib/tokenMessageInfo";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId, CashuTokenRow } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
-import { getMintDisplay } from "../app/lib/tokenMessageInfo";
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
@@ -59,7 +61,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   writeToNfc,
 }) => {
   const { formatDisplayedAmountText, t } = useAppShellCore();
-  const navigateTo = useNavigation();
+
   const [tokenQr, setTokenQr] = React.useState<string | null>(null);
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,
@@ -70,19 +72,19 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
   const { mintText, tokenAmount } = React.useMemo(() => {
     const parsed = tokenText ? parseTokenText(tokenText) : null;
-    const storedAmount = Number(tokenMeta?.amount ?? 0);
+    const storedAmount = tokenMeta?.amount ?? 0;
     const amount =
       Number.isFinite(storedAmount) && storedAmount > 0
         ? storedAmount
         : (parsed?.amount ?? 0);
-    const mint = String(tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
+    const mint = (tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
     return { mintText: mint, tokenAmount: amount };
   }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
   const mintDisplay = getMintDisplay(mintText);
   const isExternalized = isCashuTokenExternalizedState(row?.state);
   const isIssued = isCashuTokenIssuedState(row?.state);
   const isReserved = isCashuTokenReservedState(row?.state);
-  const isPending = String(row?.state ?? "") === "pending";
+  const isPending = (row?.state ?? "") === "pending";
   const isOwnToken = isCashuTokenAcceptedState(row?.state);
   // Error rows can hold live proofs (e.g. a partially spent receive); linkshu
   // `returnToWallet` re-receives them, which is the recovery path since
@@ -157,12 +159,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   // we stash the latest reference in a ref to keep the 10s interval
   // from being torn down + restarted on every churn. Without this the
   // tick was effectively firing every couple of seconds under load.
-  const checkSingleIssuedRef = React.useRef(
-    checkSingleIssuedCashuTokenIsClaimed,
-  );
-  React.useEffect(() => {
-    checkSingleIssuedRef.current = checkSingleIssuedCashuTokenIsClaimed;
-  }, [checkSingleIssuedCashuTokenIsClaimed]);
+  const checkSingleIssuedRef = useLatest(checkSingleIssuedCashuTokenIsClaimed);
 
   React.useEffect(() => {
     if (!isIssued) return;
@@ -190,7 +187,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isIssued, navigateTo, routeId, showPaidOverlay, t]);
+  }, [isIssued, routeId, showPaidOverlay, t, checkSingleIssuedRef]);
 
   // If the row vanished after we had loaded it once (claim detector,
   // manual delete, etc.), bounce back to the tokens list instead of
@@ -217,7 +214,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     if (!rowMissing) return;
     if (loadedRouteIdRef.current !== routeId) return;
     navigateTo({ route: "cashuTokens" });
-  }, [navigateTo, routeId, rowMissing]);
+  }, [routeId, rowMissing]);
 
   if (rowMissing) {
     if (!showMissingRecovery) return null;
@@ -262,7 +259,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
         ) : null}
       </div>
 
-      {String(safeRow.state ?? "") === "error" && (
+      {(safeRow.state ?? "") === "error" && (
         <p className="cashu-token-status cashu-token-status-error">
           {formatStoredCashuError(safeRow.error) ?? t("cashuInvalid")}
         </p>

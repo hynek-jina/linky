@@ -103,7 +103,7 @@ export const useSendChatMessage = <
       if (!selectedContact) return;
 
       const imageFile = options?.imageFile ?? null;
-      const text = String(options?.text ?? chatDraft).trim();
+      const text = (options?.text ?? chatDraft).trim();
       if (!text && !imageFile) return;
 
       if (!currentNsec) {
@@ -147,20 +147,18 @@ export const useSendChatMessage = <
           replyContextRef.current ??
           replyContext ??
           null;
-        const activeReplyToId = String(
-          activeReplyContext?.replyToId ?? "",
-        ).trim();
+        const activeReplyToId = (activeReplyContext?.replyToId ?? "").trim();
         const replyTo = isRumorId(activeReplyToId)
           ? activeReplyToId
           : undefined;
         const rootId =
-          String(activeReplyContext?.rootMessageId ?? "").trim() || replyTo;
+          (activeReplyContext?.rootMessageId ?? "").trim() || replyTo;
         const root =
           replyTo !== undefined && isRumorId(rootId) ? rootId : undefined;
         const clearReplyContextIfCurrent = () => {
           if (!activeReplyToId) return;
           setReplyContext((previous) => {
-            const previousReplyToId = String(previous?.replyToId ?? "").trim();
+            const previousReplyToId = (previous?.replyToId ?? "").trim();
             return previousReplyToId === activeReplyToId ? null : previous;
           });
         };
@@ -208,7 +206,7 @@ export const useSendChatMessage = <
                 replyToId: activeReplyContext.replyToId,
                 replyToContent: activeReplyContext.replyToContent,
                 rootMessageId:
-                  String(activeReplyContext.rootMessageId ?? "").trim() ||
+                  (activeReplyContext.rootMessageId ?? "").trim() ||
                   activeReplyContext.replyToId,
               }
             : {}),

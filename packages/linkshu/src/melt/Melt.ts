@@ -497,7 +497,25 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
         const keysetId = yield* boundKeysetId(draft.mint, wallet);
         const scope: CounterScope = { mint: draft.mint, unit: sat, keysetId };
 
-        const { raw, quote } = yield* createQuoteAt(wallet, draft);
+        const quoteId = draft.quoteId;
+        const priced =
+          quoteId === undefined
+            ? yield* createQuoteAt(wallet, draft)
+            : yield* Effect.gen(function* () {
+                const raw = yield* Effect.tryPromise({
+                  try: () => wallet.checkMeltQuoteBolt11(quoteId),
+                  catch: (error) => classifyMintError(draft.mint, error),
+                });
+                if (raw.request !== draft.invoice)
+                  return yield* new MintRejected({
+                    mint: draft.mint,
+                    code: null,
+                    detail: "melt quote does not match invoice",
+                  });
+                return { raw, quote: yield* toMeltQuote(draft.mint, raw) };
+              });
+        const { raw, quote } = priced;
+        if (quoteStateOf(raw) !== "UNPAID") return yield* paymentPending(quote);
         if (quote.expiresAt !== null && (yield* nowSeconds) > quote.expiresAt) {
           return yield* new QuoteExpired({
             quoteId: quote.quoteId,
@@ -605,6 +623,14 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
         ),
       );
 
-    return { quote, melt } as const;
+    const status = (priced: MeltQuote) =>
+      Effect.gen(function* () {
+        const wallet = yield* instances.get(priced.mint, sat);
+        const raw = yield* checkQuote(wallet, priced);
+        const state = quoteStateOf(raw);
+        if (state !== null) emitQuoteState(inspector, "melt", priced, state);
+        return state;
+      });
+    return { quote, melt, status } as const;
   }),
 }) {}

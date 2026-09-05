@@ -348,7 +348,7 @@ async function ensureNativePushListeners(): Promise<void> {
 
   nativePushListenersPromise = (async () => {
     await PushNotifications.addListener("registration", (token: Token) => {
-      const normalized = String(token.value ?? "").trim();
+      const normalized = token.value.trim();
       appendPushDebugLog("client", "native push token event", {
         tokenHash: hashStoredIdentifier(normalized),
       });
@@ -369,9 +369,7 @@ async function ensureNativePushListeners(): Promise<void> {
     });
 
     await PushNotifications.addListener("registrationError", (error) => {
-      const wrappedError = new Error(
-        String(error.error ?? "Native push registration failed"),
-      );
+      const wrappedError = new Error(error.error);
       appendPushDebugLog("client", "native push token error", {
         error,
       });

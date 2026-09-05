@@ -14,8 +14,8 @@ const normalizeNpubCase = (value: string): string => {
   return /^npub1/i.test(trimmed) ? trimmed.toLowerCase() : trimmed;
 };
 
-export const normalizeNpubIdentifier = (value: unknown): string | null => {
-  const raw = String(value ?? "").trim();
+export const normalizeNpubIdentifier = (value: string): string | null => {
+  const raw = value.trim();
   if (!raw) return null;
 
   const withoutPrefix = stripNostrUriPrefix(raw);

@@ -1,8 +1,8 @@
 import type { EvoluError } from "@evolu/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderIntoDocument } from "../testUtils/renderIntoDocument";
-import { EvoluServersPage } from "./EvoluServersPage";
 import { EvoluDataDetailPage } from "./EvoluDataDetailPage";
+import { EvoluServersPage } from "./EvoluServersPage";
 
 const counts = vi.hoisted(() => {
   const state: {
@@ -31,7 +31,7 @@ vi.mock("../app/context/SystemSettingsContexts", () => ({
 }));
 
 vi.mock("../hooks/useRouting", () => ({
-  useNavigation: () => vi.fn(),
+  navigateTo: vi.fn(),
 }));
 
 vi.mock("../evolu", () => ({

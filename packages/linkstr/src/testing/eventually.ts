@@ -1,3 +1,4 @@
+import { expect } from "vitest";
 import { Effect } from "effect";
 
 /** `expect.poll` for predicates awaited inside an Effect program. */

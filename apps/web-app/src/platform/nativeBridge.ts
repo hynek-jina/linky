@@ -612,7 +612,7 @@ export const supportsNativeNfcWrite = (): boolean => {
   }
 
   try {
-    return Boolean(bridge.areSupported());
+    return bridge.areSupported();
   } catch {
     return false;
   }

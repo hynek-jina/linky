@@ -46,6 +46,7 @@ export {
   PAYMENT_TELEMETRY_KIND,
   PAYMENT_TELEMETRY_VALUE,
 } from "./paymentTelemetry/codec";
+export * from "./paymentTelemetry/detectTelemetryEnvironment";
 export * from "./paymentTelemetry/domain";
 export * from "./paymentTelemetry/PaymentTelemetry";
 export * from "./profiles/domain";
@@ -69,3 +70,7 @@ export * from "./relayLists/RelayLists";
 export * from "./services/LinkstrIdentity";
 export * from "./services/NostrTransport";
 export * from "./services/RelayPolicy";
+
+export * from "./paymentTelemetry/classifyError";
+export * from "./paymentTelemetry/defaults";
+export * from "./defaultRelays";

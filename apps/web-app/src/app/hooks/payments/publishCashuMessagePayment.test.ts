@@ -117,7 +117,7 @@ describe("publishCashuMessagePayment", () => {
   it("enqueues the token draft with reply context and reuses one pending message", async () => {
     const args = createArgs();
     const pendingMessage: LocalNostrMessage = {
-      contactId: String(contactId),
+      contactId: contactId,
       content: "queued",
       createdAtSec: 1,
       direction: "out",

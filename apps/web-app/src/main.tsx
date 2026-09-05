@@ -3,23 +3,20 @@ import { StrictMode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
-import { BootCommitSignal } from "./components/BootCommitSignal";
-import { installIosViewportHeal } from "./platform/iosViewportHeal";
 import "./index.css";
 import {
   type OpfsProbeIssue,
   prepareEvoluWebStorage,
   shouldUseInMemoryEvoluStorage,
 } from "./platform/evoluWebStorage";
+import { installIosViewportHeal } from "./platform/iosViewportHeal";
 import type {
   BroadcastChannelLike,
   BroadcastMessageHandler,
-  GlobalWithOptionalBroadcastChannel,
   LockManagerLike,
-  NavigatorWithOptionalLocks,
-  NavigatorWithOptionalStorage,
 } from "./types/browser";
 import type { JsonValue } from "./types/json";
+import { decodeBase64Url, encodeBase64Url } from "./utils/base64";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import {
   handlePwaUpdateAvailable,
@@ -27,7 +24,6 @@ import {
   recordPwaControllerChange,
   recordPwaRegistered,
 } from "./utils/pwaUpdate";
-import { decodeBase64Url, encodeBase64Url } from "./utils/base64";
 import { getUnknownErrorMessage, isRecord } from "./utils/unknown";
 
 type BufferFromArgs =
@@ -53,10 +49,10 @@ const getGlobalBuffer = (): typeof Buffer | null => {
   return isBufferConstructor(candidate) ? candidate : null;
 };
 
-const getGlobalProcess = (): ProcessLike | null => {
+const getGlobalProcess = (): object | null => {
   const candidate = Reflect.get(globalThis, "process");
   if (candidate && typeof candidate === "object") {
-    return candidate as ProcessLike;
+    return candidate;
   }
   return null;
 };
@@ -403,8 +399,7 @@ const applyEvoluWebCompatPolyfills = () => {
   if (typeof document === "undefined") return;
 
   const ensureBroadcastChannel = () => {
-    const BC = (globalThis as GlobalWithOptionalBroadcastChannel)
-      .BroadcastChannel;
+    const BC = globalThis.BroadcastChannel;
     if (typeof BC === "undefined") return false;
     try {
       const test = new BC("__linky_test__");
@@ -424,7 +419,7 @@ const applyEvoluWebCompatPolyfills = () => {
       onmessage: Listener = null;
 
       constructor(name: string) {
-        this.name = String(name);
+        this.name = name;
         const set = channelsByName.get(this.name) ?? new Set();
         set.add(this);
         channelsByName.set(this.name, set);
@@ -461,11 +456,14 @@ const applyEvoluWebCompatPolyfills = () => {
       }
     }
 
-    (globalThis as GlobalWithOptionalBroadcastChannel).BroadcastChannel =
-      PolyBroadcastChannel;
+    Object.defineProperty(globalThis, "BroadcastChannel", {
+      value: PolyBroadcastChannel,
+      configurable: true,
+      writable: true,
+    });
   }
 
-  const nav = navigator as NavigatorWithOptionalLocks;
+  const nav = navigator;
   const locks = nav.locks;
 
   if (!locks?.request) {
@@ -473,7 +471,8 @@ const applyEvoluWebCompatPolyfills = () => {
       request: async (_name: string, cb: () => Promise<JsonValue>) => cb(),
     };
     try {
-      (navigator as NavigatorWithOptionalLocks).locks = lockPolyfill;
+      if (!Reflect.set(navigator, "locks", lockPolyfill))
+        throw new Error("Cannot assign navigator.locks");
     } catch {
       try {
         Object.defineProperty(navigator, "locks", {
@@ -506,16 +505,10 @@ const renderBootError = (error: unknown) => {
         ? globalThis.isSecureContext
         : null,
     hasWorker: typeof globalThis.Worker !== "undefined",
-    hasBroadcastChannel:
-      typeof (globalThis as GlobalWithOptionalBroadcastChannel)
-        .BroadcastChannel !== "undefined",
-    hasLocks: Boolean(
-      (globalThis.navigator as NavigatorWithOptionalLocks)?.locks,
-    ),
+    hasBroadcastChannel: typeof globalThis.BroadcastChannel !== "undefined",
+    hasLocks: Boolean(globalThis.navigator?.locks),
     hasIndexedDB: typeof globalThis.indexedDB !== "undefined",
-    hasStorage:
-      typeof (globalThis.navigator as NavigatorWithOptionalStorage)?.storage !==
-      "undefined",
+    hasStorage: typeof globalThis.navigator?.storage !== "undefined",
   };
 
   root.innerHTML = `
@@ -669,8 +662,7 @@ const bootstrap = async () => {
         <StrictMode>
           <EvoluProvider value={evolu}>
             <ErrorBoundary>
-              <BootCommitSignal onCommit={recordAppCommit} />
-              <App />
+              <App onCommit={recordAppCommit} />
             </ErrorBoundary>
           </EvoluProvider>
         </StrictMode>,

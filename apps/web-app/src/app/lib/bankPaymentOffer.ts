@@ -1,15 +1,15 @@
-import type { LocalNostrMessage } from "../types/appTypes";
+import { Option, Schema } from "effect";
 import type { Translate } from "../../i18n";
+import { NonBlankString, PositiveFiniteNumber } from "../../utils/schema";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageKeys,
   safeLocalStorageRemove,
   safeLocalStorageSetJson,
 } from "../../utils/storage";
-import { Option, Schema } from "effect";
-import { NonBlankString, PositiveFiniteNumber } from "../../utils/schema";
 import { nowSeconds } from "../../utils/time";
 import { asNonEmptyString } from "../../utils/validation";
+import type { LocalNostrMessage } from "../types/appTypes";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
@@ -476,8 +476,7 @@ interface ActiveBankPaymentOfferContacts {
 
 const getBankPaymentOfferEntryTime = (
   entry: BankPaymentOfferContactEntry,
-): number =>
-  entry.info.statusUpdatedAtSec || Number(entry.message.createdAtSec ?? 0) || 0;
+): number => entry.info.statusUpdatedAtSec || entry.message.createdAtSec || 0;
 
 const isNewerBankPaymentOfferEntry = (
   candidate: BankPaymentOfferContactEntry,
@@ -501,8 +500,8 @@ export const getActiveBankPaymentOfferContacts = (
   const groups = new Map<string, Map<string, BankPaymentOfferContactEntry>>();
 
   for (const message of messages) {
-    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
-    const contactId = String(message.contactId ?? "").trim();
+    const info = getLinkyBankPaymentOfferInfo(message.content);
+    const contactId = message.contactId.trim();
     if (!info || !contactId) continue;
 
     const entriesByContact =
@@ -534,7 +533,7 @@ export const getActiveBankPaymentOfferContacts = (
 
       const expiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
         info,
-        Number(message.createdAtSec ?? 0),
+        message.createdAtSec,
       );
       if (expiresAtSec !== null) {
         if (nowSec >= expiresAtSec) continue;
@@ -544,7 +543,7 @@ export const getActiveBankPaymentOfferContacts = (
             : Math.min(nextExpiryAtSec, expiresAtSec);
       }
 
-      contactIds.add(String(message.contactId ?? "").trim());
+      contactIds.add(message.contactId.trim());
     }
   }
 
@@ -574,12 +573,10 @@ export const getLinkyBankPaymentOfferResponseDurationSec = (
   return bankPaidAtSec - initiatedAtSec;
 };
 
-interface BankPaymentOfferResponseMessage {
-  contactId?: unknown;
-  content?: unknown;
-  createdAtSec?: unknown;
-  direction?: unknown;
-}
+type BankPaymentOfferResponseMessage = Pick<
+  LocalNostrMessage,
+  "contactId" | "content" | "createdAtSec" | "direction"
+>;
 
 export const getLastBankPaymentOfferResponseSecByContactId = (
   messages: readonly BankPaymentOfferResponseMessage[],
@@ -591,9 +588,9 @@ export const getLastBankPaymentOfferResponseSecByContactId = (
 
   for (const message of messages) {
     if (message.direction !== "out") continue;
-    const contactId = String(message.contactId ?? "").trim();
-    const content = String(message.content ?? "");
-    const createdAtSec = Number(message.createdAtSec ?? 0);
+    const contactId = (message.contactId ?? "").trim();
+    const content = message.content ?? "";
+    const createdAtSec = message.createdAtSec;
     if (!contactId || !content || !Number.isFinite(createdAtSec)) continue;
 
     const info = getLinkyBankPaymentOfferInfo(content);
@@ -626,12 +623,12 @@ export const mergeBankPaymentOffersIntoLastMessageByContactId = (
   const merged = new Map(lastMessageByContactId);
 
   for (const message of bankPaymentOfferMessages) {
-    const contactId = String(message.contactId ?? "").trim();
+    const contactId = message.contactId.trim();
     if (!contactId) continue;
 
     const current = merged.get(contactId);
-    const currentCreatedAtSec = Number(current?.createdAtSec ?? 0) || 0;
-    const messageCreatedAtSec = Number(message.createdAtSec ?? 0) || 0;
+    const currentCreatedAtSec = (current?.createdAtSec ?? 0) || 0;
+    const messageCreatedAtSec = message.createdAtSec || 0;
     if (!current || messageCreatedAtSec >= currentCreatedAtSec) {
       merged.set(contactId, message);
     }
@@ -652,3 +649,38 @@ export const formatRemainingTime = (
     .replace("{minutes}", String(minutes))
     .replace("{seconds}", String(seconds).padStart(2, "0"));
 };
+
+export const getBankPaymentOfferStatusLabel = (
+  status: LinkyBankPaymentOfferStatus,
+  isIncoming: boolean,
+  t: Translate,
+): string => {
+  switch (status) {
+    case "accepted":
+      return t("bankPaymentOfferStatusAccepted");
+    case "accepted_by_other":
+      return t("bankPaymentOfferStatusAcceptedByOther");
+    case "bank_details_sent":
+      return isIncoming
+        ? t("bankPaymentOfferStatusBankDetailsReceived")
+        : t("bankPaymentOfferStatusBankDetailsSent");
+    case "bank_paid":
+      return t("bankPaymentOfferStatusBankPaid");
+    case "canceled":
+      return t("bankPaymentOfferStatusCanceled");
+    case "declined":
+      return t("bankPaymentOfferStatusDeclined");
+    case "settled":
+      return t("bankPaymentOfferStatusSettled");
+    case "offered":
+      return t("bankPaymentOfferStatusOffered");
+  }
+};
+
+export const hasBankPaymentOfferTimedPhase = (
+  status: LinkyBankPaymentOfferStatus,
+): boolean =>
+  status === "accepted" ||
+  status === "bank_details_sent" ||
+  status === "bank_paid" ||
+  status === "offered";

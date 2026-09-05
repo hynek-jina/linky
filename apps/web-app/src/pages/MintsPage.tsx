@@ -106,7 +106,7 @@ export function MintsPage() {
   const selectedMint =
     normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) || MAIN_MINT_URL;
   const stripped = (value: string) => value.replace(/^https?:\/\//i, "");
-  const draftValue = String(defaultMintUrlDraft ?? "").trim();
+  const draftValue = defaultMintUrlDraft.trim();
   const cleanedDraft = draftValue
     ? normalizeMintUrl(ensureHttpsScheme(draftValue))
     : "";
@@ -122,9 +122,7 @@ export function MintsPage() {
 
   const selectedMintRow = mintInfoByUrl.get(selectedMint);
   const selectedMintPpk = getMintFeePpk(selectedMintRow?.feesJson);
-  const selectedMintCheckedAtSec = Number(
-    selectedMintRow?.lastCheckedAtSec ?? 0,
-  );
+  const selectedMintCheckedAtSec = selectedMintRow?.lastCheckedAtSec ?? 0;
   React.useEffect(() => {
     if (selectedMintPpk !== null) return;
     const nowSec = nowSeconds();
@@ -206,7 +204,7 @@ export function MintsPage() {
 
   return (
     <section className="panel">
-      <div className="settings-row" style={{ marginBottom: 14 }}>
+      <div className="settings-row mints-content">
         <div className="mint-choice-list">
           <div className="mint-choice-group">
             {standardMints.map((mint) => renderMintButton(mint))}
@@ -233,7 +231,7 @@ export function MintsPage() {
         spellCheck={false}
       />
 
-      <div className="panel-header" style={{ marginTop: 14 }}>
+      <div className="panel-header panel-header-layout">
         {canSave ? (
           <button
             type="button"

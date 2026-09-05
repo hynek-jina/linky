@@ -19,7 +19,6 @@ import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 import type {
   LocalPaymentEvent,
   LoggedPaymentEventParams,
-  MintUrlInput,
 } from "../types/appTypes";
 import { isUnknownContactId } from "./messages/contactIdentity";
 import {
@@ -119,21 +118,21 @@ const compactTransactionDetails = (
   copyString("lnurlSuccessUrlDescription");
 
   const usedTokenIds = readDetailStrings(value, "usedInputTokens").map(
-    (token) => String(createCashuTokenId(token)),
+    (token) => createCashuTokenId(token),
   );
   if (usedTokenIds.length > 0) compact.usedTokenIds = usedTokenIds;
 
   const gainedTokenIds = [
     readDetailString(value, "gainedToken"),
     readDetailString(value, "acceptedToken"),
-  ].flatMap((token) => (token ? [String(createCashuTokenId(token))] : []));
+  ].flatMap((token) => (token ? [createCashuTokenId(token)] : []));
   if (gainedTokenIds.length > 0) {
     compact.gainedTokenIds = Array.from(new Set(gainedTokenIds));
   }
 
   const issuedToken = readDetailString(value, "issuedToken");
   if (issuedToken) {
-    compact.issuedTokenId = String(createCashuTokenId(issuedToken));
+    compact.issuedTokenId = createCashuTokenId(issuedToken);
   }
 
   return Object.keys(compact).length > 0 ? compact : null;
@@ -172,9 +171,9 @@ export const buildTransactionInsertPayload = (args: {
     typeof args.event.fee === "number" && args.event.fee > 0
       ? Math.floor(args.event.fee)
       : null;
-  const mint = String(args.event.mint ?? "").trim();
-  const unit = String(args.event.unit ?? "").trim();
-  const error = String(args.event.error ?? "").trim();
+  const mint = (args.event.mint ?? "").trim();
+  const unit = (args.event.unit ?? "").trim();
+  const error = (args.event.error ?? "").trim();
   const status = normalizePaymentTelemetryStatus({
     error: args.event.error,
     status:
@@ -185,8 +184,8 @@ export const buildTransactionInsertPayload = (args: {
         : "error",
   });
 
-  const method = String(args.event.method ?? "").trim();
-  const phase = String(args.event.phase ?? "").trim();
+  const method = (args.event.method ?? "").trim();
+  const phase = (args.event.phase ?? "").trim();
   const storedMethod =
     method === "unknown" && phase === "swap" ? "cashu_emit" : method;
   const transactionStatus =
@@ -198,7 +197,7 @@ export const buildTransactionInsertPayload = (args: {
     status: transactionStatus,
   };
 
-  const contactId = String(args.event.contactId ?? "").trim();
+  const contactId = (args.event.contactId ?? "").trim();
   const storedContactId = isUnknownContactId(contactId) ? "" : contactId;
   const detailsJson = serializeJsonValue(
     compactTransactionDetails(args.event.details),
@@ -230,7 +229,7 @@ interface UseOwnerScopedStorageResult {
     transactionOwnerId: OwnerId | null,
   ) => void;
   readSeenMintsFromStorage: () => string[];
-  rememberSeenMint: (mintUrl: MintUrlInput) => void;
+  rememberSeenMint: (mintUrl: string | null | undefined) => void;
 }
 
 export const useOwnerScopedStorage = ({
@@ -243,7 +242,7 @@ export const useOwnerScopedStorage = ({
   const makeLocalStorageKey = React.useCallback(
     (prefix: string): string => {
       const ownerId = appOwnerIdRef.current;
-      return `${prefix}.${String(ownerId ?? "anon")}`;
+      return `${prefix}.${ownerId ?? "anon"}`;
     },
     [appOwnerIdRef],
   );
@@ -261,7 +260,7 @@ export const useOwnerScopedStorage = ({
   );
 
   const rememberSeenMint = React.useCallback(
-    (mintUrl: MintUrlInput): void => {
+    (mintUrl: string | null | undefined): void => {
       const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned) return;
       const existing = new Set(readSeenMintsFromStorage());
@@ -284,7 +283,7 @@ export const useOwnerScopedStorage = ({
         createdAtSec: nowSec,
         event: {
           amount: event.amount ?? null,
-          contactId: event.contactId ? String(event.contactId) : null,
+          contactId: event.contactId ? event.contactId : null,
           details: event.details ?? null,
           direction: event.direction,
           error: event.error ?? null,
@@ -331,7 +330,7 @@ export const useOwnerScopedStorage = ({
 
   const migrateLegacyPaymentEventsToEvolu = React.useCallback(
     (ownerId: OwnerId, transactionOwnerId: OwnerId | null) => {
-      const legacyStorageKey = `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${String(ownerId)}`;
+      const legacyStorageKey = `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${ownerId}`;
       const migratedKey = `${legacyStorageKey}${LEGACY_PAYMENT_EVENTS_MIGRATED_SUFFIX}`;
 
       if (migratedLegacyPaymentsKeyRef.current === migratedKey) return;
@@ -358,7 +357,7 @@ export const useOwnerScopedStorage = ({
         if (!isLegacyPaymentEvent(legacyItem)) continue;
 
         const transactionPayload = buildTransactionInsertPayload({
-          createdAtSec: Math.trunc(Number(legacyItem.createdAtSec)),
+          createdAtSec: Math.trunc(legacyItem.createdAtSec),
           event: legacyItem,
         });
 

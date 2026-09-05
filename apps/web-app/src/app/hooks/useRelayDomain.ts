@@ -82,7 +82,7 @@ export const useRelayDomain = ({
   // Hex pubkey derived synchronously from the nsec (currentNpub arrives a
   // render later), so the cache below is usable from the very first render.
   const cachePubkey = React.useMemo(() => {
-    const nsec = String(currentNsec ?? "").trim();
+    const nsec = (currentNsec ?? "").trim();
     if (!nsec) return null;
     return identityFromNsec(nsec)?.pubkey ?? null;
   }, [currentNsec]);
@@ -130,7 +130,7 @@ export const useRelayDomain = ({
     const seen = new Set<string>();
     const out: string[] = [];
     for (const raw of merged) {
-      const url = String(raw ?? "").trim();
+      const url = raw.trim();
       if (!isRelayUrl(url)) continue;
       if (seen.has(url)) continue;
       seen.add(url);
@@ -141,7 +141,7 @@ export const useRelayDomain = ({
 
   const selectedRelayUrl = React.useMemo(() => {
     if (route.kind !== "nostrRelay") return null;
-    const url = String(route.id ?? "").trim();
+    const url = route.id.trim();
     return url || null;
   }, [route]);
 
@@ -153,9 +153,9 @@ export const useRelayDomain = ({
     async (urls: string[]) => {
       if (!currentNsec) throw new Error("Missing nsec");
 
-      const unique = Array.from(
-        new Set(urls.map((url) => String(url ?? "").trim())),
-      ).filter(isRelayUrl);
+      const unique = Array.from(new Set(urls.map((url) => url.trim()))).filter(
+        isRelayUrl,
+      );
 
       const exit = await publishRelayLists(
         new RelayListsDraft({
@@ -366,7 +366,7 @@ export const useRelayDomain = ({
     t,
   ]);
 
-  const canSaveNewRelay = Boolean(String(newRelayUrl ?? "").trim());
+  const canSaveNewRelay = Boolean(newRelayUrl.trim());
 
   return {
     canSaveNewRelay,

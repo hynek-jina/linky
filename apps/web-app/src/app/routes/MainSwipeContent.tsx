@@ -1,22 +1,23 @@
+import { UserPlus as ContactAddIcon } from "lucide-react";
 import React from "react";
 import { BottomTabBar } from "../../components/BottomTabBar";
-import { ContactAddIcon } from "../../components/icons";
+
 import { ContactsChecklist } from "../../components/ContactsChecklist";
+import { useDesktopSplitView } from "../../hooks/useDesktopSplitView";
+import type { Translate } from "../../i18n";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
-import { useDesktopSplitView } from "../../hooks/useDesktopSplitView";
 import type { Route } from "../../types/route";
+import { nowSeconds } from "../../utils/time";
 import { useMainSwipeRoutes } from "../context/AppShellContexts";
+import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
 import { getActiveBankPaymentOfferContacts } from "../lib/bankPaymentOffer";
 import { useMainSwipeProgress } from "../lib/mainSwipeProgressStore";
-import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
 import type {
   ContactRowLike,
   ContactsGuideKey,
   LocalNostrMessage,
 } from "../types/appTypes";
-import { nowSeconds } from "../../utils/time";
-import type { Translate } from "../../i18n";
 
 export interface MainSwipeRouteProps {
   activeGroup: string | null;
@@ -97,7 +98,7 @@ const useVisibleContactSections = (
   return React.useMemo(() => {
     const isProxyPaymentContact = (contact: ContactRowLike): boolean =>
       contact.isUnknownContact !== true &&
-      activeOffers.contactIds.has(String(contact.id ?? "").trim());
+      activeOffers.contactIds.has((contact.id ?? "").trim());
     const proxyPayments = [
       ...visibleContacts.pinned,
       ...visibleContacts.conversations,
