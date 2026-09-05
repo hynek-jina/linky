@@ -57,10 +57,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 
 ## E2E tests
 
-Two Playwright projects in `apps/web-app/playwright.config.ts`:
-
-- `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — payment, migration, boot/app-shell recovery, chat/attachment recovery, signup, and owner-lane sync tests listed in `LOCAL_STACK_SPECS`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+The `local-stack` project in `apps/web-app/playwright.config.ts` runs the suites listed in `LOCAL_STACK_SPECS` against the Docker stack. The app is served as a **production build** on :5176; bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)
@@ -78,9 +75,7 @@ The default reporter prints every `[linky]` console line prefixed with the accou
 
 The run is ~20s, so `--headed` mostly shows a blur; `--ui` and the trace viewer are the useful tools. Do not reintroduce a slow-motion knob: a per-action delay pushes the top-up quote and the offer's phase timers past their deadlines, so the test fails for reasons unrelated to the code under test.
 
-Playwright starts _every_ `webServer` entry regardless of `--project`, so a Vite dev server also boots on :5174 even when running only `local-stack`; set `E2E_SKIP_WEBSERVER=1` to skip it (CI does).
-
-`.github/workflows/e2e.yml` runs the `local-stack` project on every push to main and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
+`.github/workflows/e2e.yml` runs the `local-stack` project and site redemption/recovery tests on pull requests and every push to main, and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
 
 Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
 

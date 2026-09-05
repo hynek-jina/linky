@@ -1,3 +1,4 @@
+import { useLatest } from "../../hooks/useLatest";
 import React from "react";
 import {
   startNativeQrScan,
@@ -179,15 +180,15 @@ export const useGuideScannerDomain = ({
     stopScanStream();
   }, [stopScanStream]);
 
-  const handleScannedTextRef = React.useRef(onScannedText);
-  React.useEffect(() => {
-    handleScannedTextRef.current = onScannedText;
-  }, [onScannedText]);
+  const handleScannedTextRef = useLatest(onScannedText);
 
-  const handleDetectedScanValue = React.useCallback(async (value: string) => {
-    await handleScannedTextRef.current(value);
-    return true;
-  }, []);
+  const handleDetectedScanValue = React.useCallback(
+    async (value: string) => {
+      await handleScannedTextRef.current(value);
+      return true;
+    },
+    [handleScannedTextRef],
+  );
 
   const handleNativeScanResult = React.useCallback(
     async (

@@ -1,3 +1,4 @@
+import { useMemoizedRouteBuilder } from "./hooks/composition/useMemoizedRouteBundle";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
@@ -55,9 +56,9 @@ import {
   type DisplayContact,
 } from "./hooks/composition/useContactsMessagingComposition";
 import { useIdentityOwnersComposition } from "./hooks/composition/useIdentityOwnersComposition";
-import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
+import { buildMoneyRouteProps } from "./routes/props/buildMoneyRouteProps";
 import { useProfileComposition } from "./hooks/composition/useProfileComposition";
-import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
+import { buildPeopleRouteProps } from "./routes/props/buildPeopleRouteProps";
 import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
 import { useScanNativeComposition } from "./hooks/composition/useScanNativeComposition";
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
@@ -1298,8 +1299,8 @@ export const useAppShellComposition = ({
     selectedContact: selectedChatContact,
   });
 
-  const { moneyRouteProps } = usePaymentMoneyComposition({
-    moneyRouteBuilderInput: {
+  const moneyRouteProps = useMemoizedRouteBuilder(
+    {
       canRestoreTokens: (seedMnemonic ?? "").trim().length > 0,
       canSendCashuTokenToContact: contacts.length > 0,
       canWriteNfc,
@@ -1371,7 +1372,8 @@ export const useAppShellComposition = ({
       tokensRestoreIsBusy,
       writeCashuTokenToNfc,
     },
-  });
+    buildMoneyRouteProps,
+  );
 
   const restoreEditingContact = React.useCallback(() => {
     if (!editingId) return;
@@ -1438,8 +1440,8 @@ export const useAppShellComposition = ({
       ],
     );
 
-  const { peopleRouteProps } = useProfilePeopleComposition({
-    peopleRouteBuilderInput: {
+  const peopleRouteProps = useMemoizedRouteBuilder(
+    {
       cashuBalance,
       cashuBalanceAfterMelt,
       cashuIsBusy,
@@ -1552,7 +1554,8 @@ export const useAppShellComposition = ({
       toggleProfileStatusCurrency,
       writeCurrentNpubToNfc,
     },
-  });
+    buildPeopleRouteProps,
+  );
 
   const { mainSwipeRouteProps, pageClassNameWithSwipe } =
     useRoutingViewComposition({

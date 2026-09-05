@@ -1,3 +1,4 @@
+import { useLatest } from "../hooks/useLatest";
 import { Download, FileText, Share2 as ShareIcon } from "lucide-react";
 import React from "react";
 import {
@@ -54,10 +55,7 @@ export function PrivateFileBubble({
     null,
   );
 
-  const onBlobChangeRef = React.useRef(onBlobChange);
-  React.useEffect(() => {
-    onBlobChangeRef.current = onBlobChange;
-  }, [onBlobChange]);
+  const onBlobChangeRef = useLatest(onBlobChange);
 
   React.useEffect(() => {
     if (shouldLoad || typeof IntersectionObserver === "undefined") return;
@@ -108,7 +106,7 @@ export function PrivateFileBubble({
       cancelled = true;
       revokePdfPages(rendered);
     };
-  }, [payload, shouldLoad]);
+  }, [payload, shouldLoad, onBlobChangeRef]);
 
   React.useEffect(() => {
     if (!viewerOpen || !fileBlob) return;

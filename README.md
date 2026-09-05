@@ -168,19 +168,15 @@ docker mints (started via `docker compose -f docker-compose.dev.yml up -d
 `@linky/linkshu-cli` runs its port and argument-parsing tests under `bun test` (no mint needed);
 they are part of `bun run test`.
 
-End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts` and are split into two
-projects. `prod-services` is the original suite and runs against production relays and mints:
-
-```bash
-cd apps/web-app && bunx playwright test --project=prod-services
-```
-
-`local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
+End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts`.
+The `local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
 Nostr relay and paying each other with the local Cashu mint — plus the linkshu storage-migration
 scenario, chat/edit/offline-reaction and top-up recovery, and signup with a real password-save
 form submission. Attachment tests send encrypted images and PDFs between browsers and verify
 decryption, seen receipts, downloads, and bytes handed to the browser sharing API. Owner-lane
 tests verify old and new contacts, messages, transactions, and tokens across devices and reloads.
+Boot and route tests cover fresh profiles, restore, unavailable browser storage, and navigation.
+The full suite and site redemption tests run on pull requests and pushes to main.
 Payments use separate local mints on :3338 and :3339. It needs the
 docker stack up first, because the app is served from it as a production build on :5176:
 

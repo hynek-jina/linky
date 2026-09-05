@@ -1,3 +1,4 @@
+import { useLatest } from "../../hooks/useLatest";
 import type { OwnerId } from "@evolu/common";
 import React from "react";
 import type { CashuTokenRow } from "../../evolu";
@@ -13,10 +14,7 @@ export const useCashuDomain = ({
   appOwnerId,
   cashuTokensAll,
 }: UseCashuDomainParams) => {
-  const cashuTokensAllRef = React.useRef(cashuTokensAll);
-  React.useEffect(() => {
-    cashuTokensAllRef.current = cashuTokensAll;
-  }, [cashuTokensAll]);
+  const cashuTokensAllRef = useLatest(cashuTokensAll);
 
   const optimisticallyKnownCashuTokensRef = React.useRef<Set<string>>(
     new Set(),
@@ -122,7 +120,12 @@ export const useCashuDomain = ({
         return rowMatchesToken(row, raw);
       });
     },
-    [isOptimisticallyKnownCashuToken, normalizeCashuTokenText, rowMatchesToken],
+    [
+      cashuTokensAllRef,
+      isOptimisticallyKnownCashuToken,
+      normalizeCashuTokenText,
+      rowMatchesToken,
+    ],
   );
 
   const isCashuTokenKnownAny = React.useCallback(
@@ -136,7 +139,12 @@ export const useCashuDomain = ({
         return rowMatchesToken(row, raw);
       });
     },
-    [isOptimisticallyKnownCashuToken, normalizeCashuTokenText, rowMatchesToken],
+    [
+      cashuTokensAllRef,
+      isOptimisticallyKnownCashuToken,
+      normalizeCashuTokenText,
+      rowMatchesToken,
+    ],
   );
 
   return {

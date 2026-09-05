@@ -1,3 +1,4 @@
+import { useLatest } from "../hooks/useLatest";
 import { parseTokenText } from "@linky/linkshu";
 import { Radio as NfcIcon } from "lucide-react";
 import type { FC } from "react";
@@ -158,12 +159,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   // we stash the latest reference in a ref to keep the 10s interval
   // from being torn down + restarted on every churn. Without this the
   // tick was effectively firing every couple of seconds under load.
-  const checkSingleIssuedRef = React.useRef(
-    checkSingleIssuedCashuTokenIsClaimed,
-  );
-  React.useEffect(() => {
-    checkSingleIssuedRef.current = checkSingleIssuedCashuTokenIsClaimed;
-  }, [checkSingleIssuedCashuTokenIsClaimed]);
+  const checkSingleIssuedRef = useLatest(checkSingleIssuedCashuTokenIsClaimed);
 
   React.useEffect(() => {
     if (!isIssued) return;
@@ -191,7 +187,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isIssued, navigateTo, routeId, showPaidOverlay, t]);
+  }, [isIssued, routeId, showPaidOverlay, t, checkSingleIssuedRef]);
 
   // If the row vanished after we had loaded it once (claim detector,
   // manual delete, etc.), bounce back to the tokens list instead of
@@ -218,7 +214,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     if (!rowMissing) return;
     if (loadedRouteIdRef.current !== routeId) return;
     navigateTo({ route: "cashuTokens" });
-  }, [navigateTo, routeId, rowMissing]);
+  }, [routeId, rowMissing]);
 
   if (rowMissing) {
     if (!showMissingRecovery) return null;

@@ -1,3 +1,4 @@
+import { useLatest } from "../../../hooks/useLatest";
 import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
 import { Either } from "effect";
@@ -480,10 +481,7 @@ export const useNpubCashClaim = ({
     sweepUpstreamPaidQuotes,
   ]);
 
-  const claimNpubCashOnceLatestRef = React.useRef(claimNpubCashOnce);
-  React.useEffect(() => {
-    claimNpubCashOnceLatestRef.current = claimNpubCashOnce;
-  }, [claimNpubCashOnce]);
+  const claimNpubCashOnceLatestRef = useLatest(claimNpubCashOnce);
 
   return {
     claimNpubCashOnce,

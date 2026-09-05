@@ -16,7 +16,7 @@ import {
   resolveSyncedNostrIdentity,
 } from "../../lib/nostrIdentitySync";
 import { useEvoluContactsOwnerRotation } from "../useEvoluContactsOwnerRotation";
-import { useProfileAuthComposition } from "./useProfileAuthComposition";
+import { useProfileAuthDomain } from "../useProfileAuthDomain";
 import type { Translate } from "../../../i18n";
 
 interface IdentityOwnersNavigation {
@@ -65,7 +65,7 @@ export const useIdentityOwnersComposition = ({
 
   const myProfileMetadataRef = React.useRef<ProfileMetadata | null>(null);
 
-  const profileAuth = useProfileAuthComposition({
+  const profileAuth = useProfileAuthDomain({
     appendIdentityChangeNoticesRef,
     currentNsec,
     lang,

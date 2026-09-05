@@ -36,7 +36,6 @@ import { buildUnknownContactId } from "../messages/contactIdentity";
 import type { DispatchInboxEvent } from "../messages/useLinkstrInboxSync";
 import { useGuideScannerDomain } from "../useGuideScannerDomain";
 import { useScannedTextHandler } from "../useScannedTextHandler";
-import { useScannedTextHandlerRefBridge } from "../useScannedTextHandlerRefBridge";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import {
   consumeNotificationOpenDetailFromHash,
@@ -921,10 +920,9 @@ export const useScanNativeComposition = ({
     [handleScannedText],
   );
 
-  useScannedTextHandlerRefBridge({
-    handleScannedText,
-    scannedTextHandlerRef,
-  });
+  React.useEffect(() => {
+    scannedTextHandlerRef.current = handleScannedText;
+  }, [handleScannedText, scannedTextHandlerRef]);
 
   return {
     cancelPendingNfcWrite,

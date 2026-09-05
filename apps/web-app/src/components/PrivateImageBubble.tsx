@@ -1,3 +1,4 @@
+import { useLatest } from "../hooks/useLatest";
 import { Download, Share2 as ShareIcon } from "lucide-react";
 import React from "react";
 import {
@@ -37,13 +38,7 @@ export function PrivateImageBubble({
     null,
   );
 
-  // Latest-ref so an inline callback identity can't retrigger the decrypt
-  // effect (parents like the bank offer page re-render every second). Must
-  // stay declared before the decrypt effect so it syncs first.
-  const onBlobChangeRef = React.useRef(onBlobChange);
-  React.useEffect(() => {
-    onBlobChangeRef.current = onBlobChange;
-  }, [onBlobChange]);
+  const onBlobChangeRef = useLatest(onBlobChange);
 
   React.useEffect(() => {
     if (shouldLoad || typeof IntersectionObserver === "undefined") return;
@@ -90,7 +85,7 @@ export function PrivateImageBubble({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [payload, shouldLoad]);
+  }, [payload, shouldLoad, onBlobChangeRef]);
 
   React.useEffect(() => {
     if (!viewerOpen) return;

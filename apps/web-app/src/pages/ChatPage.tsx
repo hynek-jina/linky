@@ -1,3 +1,4 @@
+import { useLatest } from "../hooks/useLatest";
 import {
   HeartHandshake as DonateIcon,
   Images as GalleryIcon,
@@ -623,7 +624,7 @@ const ChatComposer = memo(function ChatComposer({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSendDraftRef = useRef<string | null>(null);
   const [draft, setDraft] = useState(chatDraft);
-  const draftRef = useRef(draft);
+  const draftRef = useLatest(draft);
   const [composeCaret, setComposeCaret] = useState(chatDraft.length);
   const isDesktop =
     typeof window !== "undefined" &&
@@ -656,15 +657,11 @@ const ChatComposer = memo(function ChatComposer({
     setComposeCaret(chatDraft.length);
   }, [chatDraft]);
 
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
   useEffect(
     () => () => {
       setChatDraft(draftRef.current);
     },
-    [setChatDraft],
+    [setChatDraft, draftRef],
   );
 
   useEffect(() => {
