@@ -15,6 +15,7 @@ import {
   TokenMessageDraft,
   UnixSeconds,
   classifyPaymentErrorCode,
+  detectTelemetryEnvironment,
 } from "@linky/linkstr";
 import type {
   PaymentTelemetryDirection,
@@ -146,9 +147,19 @@ export const flushPaymentTelemetryQueue = (): Promise<void> => {
     });
   return flushPromise;
 };
+const getTelemetryEnvironment = () =>
+  detectTelemetryEnvironment({
+    userAgent: navigator.userAgent,
+    maxTouchPoints: navigator.maxTouchPoints,
+    displayModeStandalone: window.matchMedia("(display-mode: standalone)")
+      .matches,
+    navigatorStandalone: Reflect.get(navigator, "standalone") === true,
+    nativePlatform: null,
+  });
 export const queuePaymentTelemetry = (
   args: QueuePaymentTelemetryArgs,
 ): void => {
+  const { devicePlatform, appRuntime } = getTelemetryEnvironment();
   const draft = new PaymentTelemetryDraft({
     id: ClientId.make(crypto.randomUUID()),
     createdAtSec: UnixSeconds.make(Math.floor(Date.now() / 1000)),
@@ -162,8 +173,8 @@ export const queuePaymentTelemetry = (
     errorCode: classifyPaymentErrorCode(args.error),
     errorDetail: args.error?.slice(0, 500) ?? null,
     appHost: window.location.host,
-    devicePlatform: null,
-    appRuntime: "web",
+    devicePlatform,
+    appRuntime,
     appVersion: __APP_VERSION__,
   });
   try {

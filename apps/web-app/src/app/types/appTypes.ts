@@ -1,9 +1,9 @@
 import type { ContactId, ContactRow } from "../../evolu";
 import type { I18nKey } from "../../i18n";
 import type {
-  TelemetryAppRuntime,
-  TelemetryDevicePlatform,
-} from "../../platform/runtime";
+  PaymentTelemetryAppRuntime,
+  PaymentTelemetryDevicePlatform,
+} from "@linky/linkstr";
 import type { JsonValue } from "../../types/json";
 
 export type PaymentTelemetryStatus = "declined" | "error" | "ok";
@@ -59,10 +59,10 @@ export type LoggedPaymentEventParams = {
 export type LocalPaymentTelemetryEvent = {
   amountBucket: string | null;
   appHost?: string | null;
-  appRuntime?: TelemetryAppRuntime | null;
+  appRuntime?: PaymentTelemetryAppRuntime | null;
   appVersion: string;
   createdAtSec: number;
-  devicePlatform?: TelemetryDevicePlatform | null;
+  devicePlatform?: PaymentTelemetryDevicePlatform | null;
   direction: "in" | "out";
   errorCode: string | null;
   errorDetail: string | null;

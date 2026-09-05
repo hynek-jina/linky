@@ -46,6 +46,7 @@ export {
   PAYMENT_TELEMETRY_KIND,
   PAYMENT_TELEMETRY_VALUE,
 } from "./paymentTelemetry/codec";
+export * from "./paymentTelemetry/detectTelemetryEnvironment";
 export * from "./paymentTelemetry/domain";
 export * from "./paymentTelemetry/PaymentTelemetry";
 export * from "./profiles/domain";
