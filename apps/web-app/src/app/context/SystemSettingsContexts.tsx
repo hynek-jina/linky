@@ -1,3 +1,4 @@
+import type { MintIcon } from "../../utils/mint";
 /* eslint-disable react-refresh/only-export-components */
 import type { EvoluError, OwnerId, SyncOwner } from "@evolu/common";
 import React from "react";
@@ -83,13 +84,6 @@ export interface EvoluSettingsContextValue {
   setStatus: (message: string) => void;
   syncOwner: SyncOwner | null;
   wipeEvoluStorage: () => Promise<void>;
-}
-
-interface MintIcon {
-  failed: boolean;
-  host: string | null;
-  origin: string | null;
-  url: string | null;
 }
 
 export interface MintSettingsContextValue {

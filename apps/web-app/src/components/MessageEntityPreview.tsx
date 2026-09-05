@@ -5,6 +5,8 @@ import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type { MintUrlInput } from "../app/types/appTypes";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { Avatar } from "./Avatar";
+import { CashuTokenPill } from "./CashuTokenPill";
 import type { NpubMessageContactInfo } from "./ChatMessage";
 
 const ENTITY_PATTERN =
@@ -44,28 +46,13 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
   if (standaloneTokenInfo) {
     const icon = getMintIconUrl(standaloneTokenInfo.mintUrl);
     segments.push(
-      <span
+      <CashuTokenPill
         key="standalone-cashu"
-        className={
-          standaloneTokenInfo.isValid
-            ? "pill chat-token-pill"
-            : "pill pill-muted chat-token-pill"
-        }
-      >
-        {icon.url ? (
-          <img
-            src={icon.url}
-            alt=""
-            width={14}
-            height={14}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        ) : null}
-        <span>
-          {formatDisplayedAmountText(standaloneTokenInfo.amount ?? 0)}
-        </span>
-      </span>,
+        className="chat-token-pill"
+        icon={icon}
+        amountText={formatDisplayedAmountText(standaloneTokenInfo.amount ?? 0)}
+        isMuted={!standaloneTokenInfo.isValid}
+      />,
     );
   }
 
@@ -85,18 +72,12 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
       const pillContent = (
         <>
           <span className="chat-contact-pill-avatar" aria-hidden="true">
-            {avatar ? (
-              <img
-                src={avatar}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="chat-contact-pill-avatar-fallback">
-                {deriveDefaultProfile(contactInfo.npub).name.charAt(0)}
-              </span>
-            )}
+            <Avatar
+              pictureUrl={avatar}
+              fallback={deriveDefaultProfile(contactInfo.npub).name.charAt(0)}
+              fallbackClassName="chat-contact-pill-avatar-fallback"
+              loading="lazy"
+            />
           </span>
           <span className="chat-contact-pill-label">{label}</span>
         </>
@@ -120,26 +101,13 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
     } else if (tokenInfo) {
       const icon = getMintIconUrl(tokenInfo.mintUrl);
       segments.push(
-        <span
+        <CashuTokenPill
           key={`${start}-cashu`}
-          className={
-            tokenInfo.isValid
-              ? "pill chat-token-pill"
-              : "pill pill-muted chat-token-pill"
-          }
-        >
-          {icon.url ? (
-            <img
-              src={icon.url}
-              alt=""
-              width={14}
-              height={14}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
-          <span>{formatDisplayedAmountText(tokenInfo.amount ?? 0)}</span>
-        </span>,
+          className="chat-token-pill"
+          icon={icon}
+          amountText={formatDisplayedAmountText(tokenInfo.amount ?? 0)}
+          isMuted={!tokenInfo.isValid}
+        />,
       );
     } else {
       segments.push(text);

@@ -6,9 +6,11 @@ import {
   LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC,
   LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC,
 } from "../app/lib/bankPaymentOffer";
+import { Avatar } from "../components/Avatar";
 import { BankPaymentAmount } from "../components/BankPaymentAmount";
 import { SettingsStepper } from "../components/SettingsStepper";
 import { navigateTo } from "../hooks/useRouting";
+import type { I18nKey, Translate } from "../i18n";
 import { formatDomesticBankAccount } from "../utils/bankAccount";
 import type { FiatRates } from "../utils/displayAmounts";
 import { formatInteger, getInitials } from "../utils/formatting";
@@ -19,7 +21,6 @@ import {
   type BankPayment,
   type BankPaymentFieldKey,
 } from "../utils/spdPayment";
-import type { I18nKey, Translate } from "../i18n";
 
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
@@ -562,18 +563,12 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
                   aria-hidden="true"
                 >
                   <span className="contact-avatar">
-                    {pictureUrl ? (
-                      <img
-                        src={pictureUrl}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="contact-avatar-fallback">
-                        {getInitials(name)}
-                      </span>
-                    )}
+                    <Avatar
+                      pictureUrl={pictureUrl}
+                      fallback={getInitials(name)}
+                      fallbackClassName="contact-avatar-fallback"
+                      loading="lazy"
+                    />
                   </span>
                   {isSelected ? (
                     <span className="bank-payment-offer-contact-order">

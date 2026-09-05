@@ -1,8 +1,13 @@
-import { Download } from "lucide-react";
+import {
+  Copy as CopyIcon,
+  Download,
+  Pencil as EditIcon,
+  Reply as ReplyIcon,
+  Share2 as ShareIcon,
+} from "lucide-react";
 import type { FC } from "react";
 import { createPortal } from "react-dom";
 import { EmojiPicker } from "./EmojiPicker";
-import { CopyIcon, EditIcon, ReplyIcon, ShareIcon } from "./icons";
 
 interface MessageImageActions {
   canShare: boolean;

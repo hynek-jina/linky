@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveEvoluServerState } from "./evoluServerState";
+import { deriveEvoluServerState } from "../app/lib/evoluServerState";
 
 describe("Evolu relay reachability", () => {
   it("keeps a reachable relay connected when an owner has a sync error", () => {

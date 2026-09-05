@@ -1,9 +1,10 @@
 import React, { type FC } from "react";
+import { Avatar } from "../components/Avatar";
 import type { ContactId } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 import { formatMiddleDots, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import type { Translate } from "../i18n";
 
 interface ManualPayContact {
   id: ContactId;
@@ -80,7 +81,6 @@ export const ManualPayPage: FC<ManualPayPageProps> = ({
   onSubmitText,
   t,
 }) => {
-  const navigateTo = useNavigation();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [value, setValue] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -186,18 +186,12 @@ export const ManualPayPage: FC<ManualPayPageProps> = ({
                   }
                 >
                   <div className="contact-avatar" aria-hidden="true">
-                    {pictureUrl ? (
-                      <img
-                        src={pictureUrl}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="contact-avatar-fallback">
-                        {getInitials(name)}
-                      </span>
-                    )}
+                    <Avatar
+                      pictureUrl={pictureUrl}
+                      fallback={getInitials(name)}
+                      fallbackClassName="contact-avatar-fallback"
+                      loading="lazy"
+                    />
                   </div>
                   <div className="contact-main">
                     <div className="contact-name">{name || t("contact")}</div>

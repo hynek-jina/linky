@@ -1,3 +1,4 @@
+import type { MintIcon } from "../utils/mint";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
@@ -13,19 +14,17 @@ import {
   formatContactMessageTimestamp,
   getInitials,
 } from "../utils/formatting";
-import { getNextMintIconUrl } from "../utils/mint";
+import { Avatar } from "./Avatar";
+import { CashuTokenPill } from "./CashuTokenPill";
 import type { NpubMessageContactInfo } from "./ChatMessage";
 import { MessageEntityPreview } from "./MessageEntityPreview";
 
 interface ContactCardProps {
   avatarUrl: string | null;
   contact: ContactRowLike;
-  getMintIconUrl: (url: MintUrlInput) => {
-    url: string | null;
-    origin?: string | null;
-    host?: string | null;
-    failed?: boolean;
-  };
+  getMintIconUrl: (
+    url: MintUrlInput,
+  ) => Pick<MintIcon, "url"> & Partial<Omit<MintIcon, "url">>;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   hasAttention: boolean;
   isActive?: boolean;
@@ -54,8 +53,7 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     tokenInfo,
     isUnknownContact = false,
   }) => {
-    const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
-      useAppShellCore();
+    const { formatDisplayedAmountText, t } = useAppShellCore();
     const initials = getInitials(String(contact.name ?? ""));
     const contactStatus = formatDisplayGeneralStatus({
       status: statusText,
@@ -112,16 +110,12 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
         <div className="card-header">
           <div className="contact-avatar with-badge" aria-hidden="true">
             <span className="contact-avatar-inner">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="contact-avatar-fallback">{initials}</span>
-              )}
+              <Avatar
+                pictureUrl={avatarUrl}
+                fallback={initials}
+                fallbackClassName="contact-avatar-fallback"
+                loading="lazy"
+              />
             </span>
             {hasAttention ? (
               <span className="contact-unread-dot" aria-hidden="true" />
@@ -151,19 +145,9 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
                 </h4>
               ) : null}
               {lastTime ? (
-                <span
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: 2,
-                  }}
-                >
+                <span className="contact-card-trailing">
                   {lastTime ? (
-                    <span
-                      className="muted"
-                      style={{ fontSize: 10, whiteSpace: "nowrap" }}
-                    >
+                    <span className="muted contact-card-payment-method">
                       {lastTime}
                     </span>
                   ) : null}
@@ -184,19 +168,13 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
               <TokenPreview
                 tokenInfo={tokenInfo}
                 directionSymbol={directionSymbol}
-                formatDisplayedAmountParts={formatDisplayedAmountParts}
                 formatDisplayedAmountText={formatDisplayedAmountText}
                 getMintIconUrl={getMintIconUrl}
                 onIconLoad={onMintIconLoad}
                 onIconError={onMintIconError}
               />
             ) : previewText ? (
-              <div
-                className="muted"
-                style={{ fontSize: 12, marginTop: 4, lineHeight: 1.2 }}
-              >
-                {previewText}
-              </div>
+              <div className="muted contact-card-preview">{previewText}</div>
             ) : null}
           </div>
         </div>
@@ -207,18 +185,10 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
 
 interface TokenPreviewProps {
   directionSymbol: string;
-  formatDisplayedAmountParts: (amountSat: number) => {
-    amountText: string;
-    approxPrefix: string;
-    unitLabel: string;
-  };
   formatDisplayedAmountText: (amountSat: number) => string;
-  getMintIconUrl: (url: MintUrlInput) => {
-    url: string | null;
-    origin?: string | null;
-    host?: string | null;
-    failed?: boolean;
-  };
+  getMintIconUrl: (
+    url: MintUrlInput,
+  ) => Pick<MintIcon, "url"> & Partial<Omit<MintIcon, "url">>;
   onIconError: (origin: string, nextUrl: string | null) => void;
   onIconLoad: (origin: string, url: string | null) => void;
   tokenInfo: CashuTokenMessageInfo;
@@ -226,77 +196,26 @@ interface TokenPreviewProps {
 
 const TokenPreview: React.FC<TokenPreviewProps> = ({
   directionSymbol,
-  formatDisplayedAmountParts,
   formatDisplayedAmountText,
   getMintIconUrl,
   onIconError,
   onIconLoad,
   tokenInfo,
 }) => {
-  const icon = getMintIconUrl(tokenInfo.mintUrl);
-  const displayAmount = formatDisplayedAmountParts(tokenInfo.amount ?? 0);
-  const displayAmountText = formatDisplayedAmountText(tokenInfo.amount ?? 0);
-
+  const amountText = formatDisplayedAmountText(tokenInfo.amount ?? 0);
   return (
-    <div
-      className="muted"
-      style={{
-        fontSize: 12,
-        marginTop: 4,
-        lineHeight: 1.2,
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-      }}
-    >
+    <div className="muted contact-token-preview">
       {directionSymbol ? <span>{directionSymbol}</span> : null}
-      <span
-        className={
-          tokenInfo.isValid
-            ? "pill chat-token-pill"
-            : "pill pill-muted chat-token-pill"
-        }
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "1px 4px",
-          fontSize: 10,
-          lineHeight: "10px",
-        }}
-        aria-label={displayAmountText}
-      >
-        {icon.url ? (
-          <img
-            src={icon.url}
-            alt=""
-            width={14}
-            height={14}
-            style={{
-              borderRadius: 9999,
-              objectFit: "cover",
-            }}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onLoad={() => {
-              if (icon.origin && icon.url) {
-                onIconLoad(icon.origin, icon.url);
-              }
-            }}
-            onError={() => {
-              if (icon.origin) {
-                const next = getNextMintIconUrl(icon.url, icon.origin);
-                onIconError(icon.origin, next);
-              }
-            }}
-          />
-        ) : null}
-        <span>
-          {displayAmount.approxPrefix}
-          {displayAmount.amountText}
-          {displayAmount.unitLabel ? ` ${displayAmount.unitLabel}` : ""}
-        </span>
-      </span>
+      <CashuTokenPill
+        compact
+        icon={getMintIconUrl(tokenInfo.mintUrl)}
+        amountText={amountText}
+        ariaLabel={amountText}
+        className="chat-token-pill"
+        isMuted={!tokenInfo.isValid}
+        onMintIconLoad={onIconLoad}
+        onMintIconError={onIconError}
+      />
     </div>
   );
 };

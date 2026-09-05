@@ -1,7 +1,7 @@
 import { sqliteTrue } from "@evolu/common";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
 import { LOCAL_MINT_INFO_STORAGE_KEY_PREFIX } from "../utils/constants";
 import { normalizeLocale } from "../utils/formatting";
 import { extractPpk, normalizeMintUrl } from "../utils/mint";
@@ -36,7 +36,7 @@ export function MintDetailPage() {
   } = useMintSettingsContext();
   const { lang, route, t } = useAppShellCore();
   const mintUrl = route.kind === "mint" ? route.mintUrl : "";
-  const navigateTo = useNavigation();
+
   const cleaned = normalizeMintUrl(mintUrl);
   const row = mintInfoByUrl.get(cleaned) ?? null;
 
@@ -172,7 +172,7 @@ export function MintDetailPage() {
         </div>
 
         {lastCheckedAtSec ? (
-          <p className="muted" style={{ marginTop: 10 }}>
+          <p className="muted settings-error-note">
             {t("mintLastChecked")}:{" "}
             {new Date(lastCheckedAtSec * 1000).toLocaleString(
               normalizeLocale(lang),

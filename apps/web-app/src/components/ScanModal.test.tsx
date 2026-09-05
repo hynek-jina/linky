@@ -1,16 +1,57 @@
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Translate } from "../i18n";
 import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 
-const { mockNavigate } = vi.hoisted(() => ({
+const { mockNavigate, mockScanCore, mockScanActions } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockScanCore: vi.fn(),
+  mockScanActions: vi.fn(),
 }));
 
 vi.mock("../hooks/useRouting", () => ({
-  useNavigation: () => mockNavigate,
+  navigateTo: mockNavigate,
 }));
 
 import { ScanModal } from "./ScanModal";
+
+vi.mock("../app/context/AppShellContexts", () => ({
+  useAppShellCore: mockScanCore,
+  useAppShellActions: mockScanActions,
+}));
+
+interface ScanModalProps {
+  closeScan: () => void;
+  cycleScanCamera: () => void;
+  onIssueToken: () => void;
+  onPickScanImage: () => void;
+  onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onTypePayment: () => void;
+  onTypeManually: () => void;
+  pasteScanValue: () => Promise<void>;
+  scanCameraLabel: string | null;
+  scanCanSwitchCamera: boolean;
+  scanEntryPoint: "contacts" | "receive" | "send" | null;
+  scanImageInputRef: React.RefObject<HTMLInputElement | null>;
+  scanVideoRef: React.RefObject<HTMLVideoElement | null>;
+  showTypeAction: boolean;
+  showWalletActions: boolean;
+  t: Translate;
+}
+
+function TestScanModal(props: ScanModalProps) {
+  mockScanCore.mockReturnValue({
+    ...props,
+    scanAllowsManualContact: props.showTypeAction,
+  });
+  mockScanActions.mockReturnValue({
+    ...props,
+    openIssueTokenFromScan: props.onIssueToken,
+    openManualPayFromScan: props.onTypePayment,
+    openManualContactFromScan: props.onTypeManually,
+  });
+  return <ScanModal />;
+}
 
 const translate = (key: string): string => {
   switch (key) {
@@ -54,18 +95,18 @@ describe("ScanModal", () => {
     showTypeAction: false,
     showWalletActions: false,
     t: translate,
-  } satisfies React.ComponentProps<typeof ScanModal>;
+  } satisfies ScanModalProps;
 
   it("shows the manual action only when allowed", async () => {
     const { container, root } = await renderIntoDocument(
-      <ScanModal {...baseProps} showTypeAction={true} />,
+      <TestScanModal {...baseProps} showTypeAction={true} />,
     );
 
     expect(container.textContent).toContain("Type");
     expect(container.textContent).toContain("Paste");
 
     await act(async () => {
-      root.render(<ScanModal {...baseProps} showTypeAction={false} />);
+      root.render(<TestScanModal {...baseProps} showTypeAction={false} />);
     });
 
     expect(container.textContent).not.toContain("Type");
@@ -76,7 +117,7 @@ describe("ScanModal", () => {
     const cycleScanCamera = vi.fn();
 
     const { container } = await renderIntoDocument(
-      <ScanModal
+      <TestScanModal
         {...baseProps}
         cycleScanCamera={cycleScanCamera}
         scanCameraLabel="Back Camera 2"
@@ -98,7 +139,7 @@ describe("ScanModal", () => {
     const onTypeManually = vi.fn();
 
     const { container } = await renderIntoDocument(
-      <ScanModal
+      <TestScanModal
         {...baseProps}
         onTypeManually={onTypeManually}
         showTypeAction={true}
@@ -122,7 +163,7 @@ describe("ScanModal", () => {
     const closeScan = vi.fn();
 
     const { container } = await renderIntoDocument(
-      <ScanModal
+      <TestScanModal
         {...baseProps}
         closeScan={closeScan}
         scanEntryPoint="receive"
@@ -145,7 +186,7 @@ describe("ScanModal", () => {
     const onIssueToken = vi.fn();
 
     const { container } = await renderIntoDocument(
-      <ScanModal
+      <TestScanModal
         {...baseProps}
         onIssueToken={onIssueToken}
         scanEntryPoint="send"
@@ -171,7 +212,7 @@ describe("ScanModal", () => {
     const onTypePayment = vi.fn();
 
     const { container } = await renderIntoDocument(
-      <ScanModal
+      <TestScanModal
         {...baseProps}
         onTypePayment={onTypePayment}
         scanEntryPoint="send"

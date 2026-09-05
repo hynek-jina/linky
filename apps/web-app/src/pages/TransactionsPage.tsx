@@ -1,29 +1,31 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
+import { Copy as CompactCopyIcon } from "lucide-react";
 import React from "react";
 import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
-import { CompactCopyIcon } from "../components/icons";
+import { Avatar } from "../components/Avatar";
+
+import { createCashuTokenId } from "../app/lib/cashuTokenIdentity";
 import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
 } from "../app/lib/paymentRequestMessage";
-import { createCashuTokenId } from "../app/lib/cashuTokenIdentity";
+import { calculateTransactionHistoryFee } from "../app/lib/transactionHistoryFee";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
-import { getLightningInvoicePreview } from "../utils/lightningInvoice";
-import { calculateTransactionHistoryFee } from "../app/lib/transactionHistoryFee";
+import type { Translate } from "../i18n";
 import type { JsonValue } from "../types/json";
 import {
   formatInteger,
   getInitials,
   normalizeLocale,
 } from "../utils/formatting";
+import { getLightningInvoicePreview } from "../utils/lightningInvoice";
 import { isRecord } from "../utils/unknown";
 import { asNonEmptyString } from "../utils/validation";
-import type { Translate } from "../i18n";
 
 type TransactionStatus = "declined" | "error" | "ok" | "pending";
 type TransactionDirection = "in" | "out";
@@ -590,16 +592,12 @@ const TransactionCardView = ({
       <article className="transaction-row">
         <div className="contact-avatar transaction-avatar" aria-hidden="true">
           {contact ? (
-            pictureUrl ? (
-              <img
-                src={pictureUrl}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="contact-avatar-fallback">{initials}</span>
-            )
+            <Avatar
+              pictureUrl={pictureUrl}
+              fallback={initials}
+              fallbackClassName="contact-avatar-fallback"
+              loading="lazy"
+            />
           ) : (
             <span className="contact-avatar-fallback transaction-icon-fallback">
               {item.category === "lightning" ? "⚡️" : "🥜"}

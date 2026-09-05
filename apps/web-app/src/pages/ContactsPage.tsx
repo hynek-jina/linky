@@ -1,8 +1,9 @@
+import { UserPlus as ContactAddIcon } from "lucide-react";
 import type { FC } from "react";
 import React from "react";
 import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
-import { ContactAddIcon } from "../components/icons";
+
 import type { Translate } from "../i18n";
 
 interface ContactsPageProps {

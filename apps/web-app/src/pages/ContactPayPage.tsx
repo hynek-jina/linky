@@ -1,6 +1,7 @@
-import { useEffect, type FC } from "react";
 import { Bean, Zap } from "lucide-react";
+import { useEffect, type FC } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { Avatar } from "../components/Avatar";
 import { RequestIcon } from "../components/icons";
 import { LnurlPayPreviewNotices } from "../components/LnurlPayPreviewNotices";
 import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
@@ -128,30 +129,17 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       header={
         <div className="contact-header">
           <div className="contact-avatar is-large" aria-hidden="true">
-            {url ? (
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="contact-avatar-fallback">
-                {getInitials(String(selectedContact.name ?? ""))}
-              </span>
-            )}
+            <Avatar
+              pictureUrl={url}
+              fallback={getInitials(String(selectedContact.name ?? ""))}
+              fallbackClassName="contact-avatar-fallback"
+              loading="lazy"
+            />
           </div>
           <div className="contact-header-text">
             {selectedContact.name && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <h3 style={{ margin: 0 }}>{selectedContact.name}</h3>
+              <div className="contact-pay-heading-row">
+                <h3 className="unspaced">{selectedContact.name}</h3>
                 <button
                   type="button"
                   className={

@@ -6756,3 +6756,356 @@ dd {
 .scan-action-btn-label {
   color: #f9fbfc !important;
 }
+
+.cashu-token-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+button.cashu-token-pill {
+  cursor: pointer;
+}
+.cashu-token-pill img {
+  border-radius: 9999px;
+  object-fit: cover;
+}
+.cashu-token-pill .chat-token-pill-fallback {
+  font-size: 10px;
+  line-height: 14px;
+}
+.cashu-token-pill-compact {
+  padding: 1px 4px;
+  font-size: 10px;
+  line-height: 10px;
+}
+.contact-token-preview {
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.error-boundary {
+  padding: 40px;
+  color: #ff6b6b;
+  font-family: monospace;
+}
+.error-boundary-details {
+  overflow: auto;
+  background: #1a1a1a;
+  padding: 10px;
+}
+.hidden-input {
+  display: none;
+}
+.contact-card-trailing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.contact-card-payment-method {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.contact-card-preview {
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.2;
+}
+.mint-icon {
+  border-radius: 9999px;
+  object-fit: cover;
+}
+.mint-icon-fallback {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  background: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+.section-actions {
+  margin-top: 12px;
+}
+.form-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.contact-pay-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.unspaced {
+  margin: 0;
+}
+.panel-layout {
+  padding-top: 8px;
+}
+.evolu-data-scroll {
+  max-height: 600px;
+  overflow: auto;
+}
+.evolu-data-card {
+  margin-bottom: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background-color: var(--color-bg-secondary);
+}
+.evolu-data-card-header {
+  padding: 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-tertiary) 0%,
+    var(--color-bg-secondary) 100%
+  );
+}
+.evolu-owner-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.evolu-owner-summary-stack {
+  display: grid;
+  gap: 10px;
+}
+.evolu-owner-stat {
+  padding: 9px 11px;
+  border-radius: 12px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+}
+.evolu-owner-stat-line {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.evolu-owner-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin-left: auto;
+  text-align: right;
+}
+.evolu-owner-progress-label {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.evolu-data-card-body {
+  padding: 12px;
+}
+.evolu-data-table {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.evolu-data-row {
+  background-color: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+}
+.evolu-data-heading-cell {
+  padding: 4px;
+  text-align: left;
+}
+.evolu-data-cell {
+  padding: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.evolu-data-button {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+  word-break: break-all;
+}
+.evolu-data-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.evolu-usage-summary {
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+.evolu-usage-caption {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 12px;
+}
+.evolu-data-section {
+  margin-top: 16px;
+}
+.evolu-data-heading {
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+.evolu-owner-tabs {
+  gap: 8px;
+  display: flex;
+  margin-bottom: 12px;
+}
+.evolu-data-actions {
+  margin-top: 16px;
+  gap: 8px;
+  display: flex;
+}
+.section-note {
+  margin-top: 8px;
+}
+.evolu-data-preview-scroll {
+  max-height: 400px;
+  overflow: auto;
+}
+.evolu-data-table-group {
+  margin-bottom: 16px;
+}
+.evolu-data-table-heading {
+  margin-bottom: 8px;
+}
+.evolu-data-header-row {
+  background-color: var(--color-bg-tertiary);
+}
+.evolu-data-bordered-heading {
+  padding: 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.evolu-data-id-cell {
+  padding: 4px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 10px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.evolu-data-value-cell {
+  padding: 4px;
+  border-bottom: 1px solid var(--color-border);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.evolu-data-timestamp-cell {
+  padding: 4px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.evolu-data-count {
+  margin-left: 8px;
+  font-size: 12px;
+}
+.evolu-data-footnote {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.evolu-data-load-more {
+  margin-top: 16px;
+  text-align: center;
+}
+.panel-header-layout {
+  margin-top: 14px;
+}
+.settings-error-note {
+  margin-top: 10px;
+}
+.evolu-server-empty {
+  margin-top: 0;
+}
+.evolu-server-list {
+  margin-bottom: 24px;
+}
+.evolu-server-status-label {
+  margin-left: 10px;
+}
+.settings-row-layout {
+  cursor: pointer;
+}
+.mints-content {
+  margin-bottom: 14px;
+}
+.nostr-relay-note {
+  margin-top: 2px;
+}
+.profile-field-label {
+  display: flex;
+  gap: 8px;
+}
+.push-debug-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: #666;
+}
+.push-debug-details {
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mono-box-layout {
+  margin-bottom: 12px;
+}
+
+.evolu-data-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+.evolu-data-title-row.has-owner-summary {
+  margin-bottom: 12px;
+}
+.evolu-usage-progress {
+  display: block;
+  appearance: none;
+  border: 0;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border);
+}
+.evolu-usage-progress.is-error {
+  color: var(--color-error);
+  --progress-color: var(--color-error);
+}
+.evolu-usage-progress.is-warning {
+  color: var(--color-warning);
+  --progress-color: var(--color-warning);
+}
+.evolu-usage-progress.is-success {
+  color: var(--color-success);
+  --progress-color: var(--color-success);
+}
+.evolu-usage-progress::-webkit-progress-bar {
+  background: var(--color-border);
+}
+.evolu-usage-progress::-webkit-progress-value {
+  background: var(--progress-color);
+  transition: width 0.3s ease;
+}
+.evolu-usage-progress::-moz-progress-bar {
+  background: var(--progress-color);
+}

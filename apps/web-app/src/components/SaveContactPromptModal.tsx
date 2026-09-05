@@ -2,7 +2,8 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { parseDefaultLightningAddressNpub } from "../derivedProfile";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
+import { ModalSheet } from "./ModalSheet";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
@@ -22,7 +23,7 @@ export function SaveContactPromptModal({
   setContactNewPrefill,
 }: SaveContactPromptModalProps): React.ReactElement {
   const { formatDisplayedAmountParts, t } = useAppShellCore();
-  const navigateTo = useNavigation();
+
   const displayAmount = formatDisplayedAmountParts(amountSat);
 
   const handleSave = () => {
@@ -41,32 +42,29 @@ export function SaveContactPromptModal({
   };
 
   return (
-    <div
+    <ModalSheet
       className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
       aria-label={t("saveContactPromptTitle")}
+      sheetClassName="modal-sheet"
     >
-      <div className="modal-sheet">
-        <div className="modal-title">{t("saveContactPromptTitle")}</div>
-        <div className="modal-body">
-          {t("saveContactPromptBody")
-            .replace(
-              "{amount}",
-              `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-            )
-            .replace("{unit}", displayAmount.unitLabel)
-            .replace("{lnAddress}", lnAddress)}
-        </div>
-        <div className="modal-actions">
-          <button className="btn-wide" onClick={handleSave}>
-            {t("saveContactPromptSave")}
-          </button>
-          <button className="btn-wide secondary" onClick={onClose}>
-            {t("saveContactPromptSkip")}
-          </button>
-        </div>
+      <div className="modal-title">{t("saveContactPromptTitle")}</div>
+      <div className="modal-body">
+        {t("saveContactPromptBody")
+          .replace(
+            "{amount}",
+            `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+          )
+          .replace("{unit}", displayAmount.unitLabel)
+          .replace("{lnAddress}", lnAddress)}
       </div>
-    </div>
+      <div className="modal-actions">
+        <button className="btn-wide" onClick={handleSave}>
+          {t("saveContactPromptSave")}
+        </button>
+        <button className="btn-wide secondary" onClick={onClose}>
+          {t("saveContactPromptSkip")}
+        </button>
+      </div>
+    </ModalSheet>
   );
 }

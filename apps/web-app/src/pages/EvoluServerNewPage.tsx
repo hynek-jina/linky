@@ -5,7 +5,7 @@ import {
   useEvoluSettingsContext,
 } from "../app/context/SystemSettingsContexts";
 import { normalizeEvoluServerUrl } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
 
 export function EvoluServerNewPage(): React.ReactElement {
   const {
@@ -17,7 +17,7 @@ export function EvoluServerNewPage(): React.ReactElement {
   } = useEvoluSettingsContext();
   const { t } = useAppShellCore();
   const { pushToast } = useAdvancedSettingsContext();
-  const navigateTo = useNavigation();
+
   return (
     <section className="panel">
       <label htmlFor="evoluServerUrl">{t("evoluAddServerLabel")}</label>
@@ -31,7 +31,7 @@ export function EvoluServerNewPage(): React.ReactElement {
         spellCheck={false}
       />
 
-      <div className="panel-header" style={{ marginTop: 14 }}>
+      <div className="panel-header panel-header-layout">
         <button
           type="button"
           onClick={() => {

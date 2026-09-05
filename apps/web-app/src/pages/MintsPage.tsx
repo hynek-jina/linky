@@ -206,7 +206,7 @@ export function MintsPage() {
 
   return (
     <section className="panel">
-      <div className="settings-row" style={{ marginBottom: 14 }}>
+      <div className="settings-row mints-content">
         <div className="mint-choice-list">
           <div className="mint-choice-group">
             {standardMints.map((mint) => renderMintButton(mint))}
@@ -233,7 +233,7 @@ export function MintsPage() {
         spellCheck={false}
       />
 
-      <div className="panel-header" style={{ marginTop: 14 }}>
+      <div className="panel-header panel-header-layout">
         {canSave ? (
           <button
             type="button"

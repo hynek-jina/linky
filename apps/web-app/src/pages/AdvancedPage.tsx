@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Bell,
   Bean,
+  Bell,
   Bitcoin,
   BrushCleaning,
   Bug,
@@ -10,6 +9,7 @@ import {
   Coins,
   Copy,
   Download,
+  MessageCircle as FeedbackIcon,
   Landmark,
   Languages,
   LogOut,
@@ -20,6 +20,7 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   useAppShellActions,
   useAppShellCore,
@@ -30,12 +31,12 @@ import {
   overallRelayStatus,
   useRelayHealth,
 } from "../app/hooks/useRelayHealth";
-import { FeedbackIcon } from "../components/icons";
+
 import { SettingsLinkRow, SettingsToggleRow } from "../components/SettingsRows";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
+import type { I18nKey } from "../i18n";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
-import type { I18nKey } from "../i18n";
 
 export function AdvancedPage(): React.ReactElement {
   const {
@@ -63,7 +64,7 @@ export function AdvancedPage(): React.ReactElement {
   const relayHealth = useRelayHealth();
   const connectedRelayCount = countConnectedRelays(relayUrls, relayHealth);
   const nostrRelayOverallStatus = overallRelayStatus(relayUrls, relayHealth);
-  const navigateTo = useNavigation();
+
   const {
     currentNsec,
     formatDisplayedAmountParts,
@@ -389,7 +390,7 @@ export function AdvancedPage(): React.ReactElement {
           ref={importDataFileInputRef}
           type="file"
           accept=".txt,.json,application/json,text/plain"
-          style={{ display: "none" }}
+          className="hidden-input"
           onChange={(e) => {
             const file = e.target.files?.[0] ?? null;
             e.currentTarget.value = "";

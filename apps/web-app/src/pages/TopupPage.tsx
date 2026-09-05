@@ -1,10 +1,14 @@
+import {
+  CircleEllipsis as NoAmountIcon,
+  Copy as PasteIcon,
+} from "lucide-react";
 import type { FC } from "react";
 import { useAppShellActions } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
-import { NoAmountIcon, PasteIcon } from "../components/icons";
+
 import { Keypad } from "../components/Keypad";
 import { useAmountInputKeypad } from "../components/useAmountInputKeypad";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
 import type { Translate } from "../i18n";
 
 interface TopupPageProps {
@@ -25,7 +29,7 @@ export const TopupPage: FC<TopupPageProps> = ({
   topupInvoiceIsBusy,
 }) => {
   const { pasteScanValue } = useAppShellActions();
-  const navigateTo = useNavigation();
+
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
   const invalid =
     !currentNpub ||

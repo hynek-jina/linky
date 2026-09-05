@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, Share2 as ShareIcon } from "lucide-react";
 import React from "react";
 import {
   renderPdfPages,
@@ -14,7 +14,7 @@ import {
   decryptPrivateImageMessage,
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
-import { ShareIcon } from "./icons";
+
 import type { Translate } from "../i18n";
 
 interface PrivateFileBubbleProps {

@@ -1,15 +1,15 @@
-import type { LocalNostrMessage } from "../types/appTypes";
+import { Option, Schema } from "effect";
 import type { Translate } from "../../i18n";
+import { NonBlankString, PositiveFiniteNumber } from "../../utils/schema";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageKeys,
   safeLocalStorageRemove,
   safeLocalStorageSetJson,
 } from "../../utils/storage";
-import { Option, Schema } from "effect";
-import { NonBlankString, PositiveFiniteNumber } from "../../utils/schema";
 import { nowSeconds } from "../../utils/time";
 import { asNonEmptyString } from "../../utils/validation";
+import type { LocalNostrMessage } from "../types/appTypes";
 
 export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
@@ -652,3 +652,38 @@ export const formatRemainingTime = (
     .replace("{minutes}", String(minutes))
     .replace("{seconds}", String(seconds).padStart(2, "0"));
 };
+
+export const getBankPaymentOfferStatusLabel = (
+  status: LinkyBankPaymentOfferStatus,
+  isIncoming: boolean,
+  t: Translate,
+): string => {
+  switch (status) {
+    case "accepted":
+      return t("bankPaymentOfferStatusAccepted");
+    case "accepted_by_other":
+      return t("bankPaymentOfferStatusAcceptedByOther");
+    case "bank_details_sent":
+      return isIncoming
+        ? t("bankPaymentOfferStatusBankDetailsReceived")
+        : t("bankPaymentOfferStatusBankDetailsSent");
+    case "bank_paid":
+      return t("bankPaymentOfferStatusBankPaid");
+    case "canceled":
+      return t("bankPaymentOfferStatusCanceled");
+    case "declined":
+      return t("bankPaymentOfferStatusDeclined");
+    case "settled":
+      return t("bankPaymentOfferStatusSettled");
+    case "offered":
+      return t("bankPaymentOfferStatusOffered");
+  }
+};
+
+export const hasBankPaymentOfferTimedPhase = (
+  status: LinkyBankPaymentOfferStatus,
+): boolean =>
+  status === "accepted" ||
+  status === "bank_details_sent" ||
+  status === "bank_paid" ||
+  status === "offered";

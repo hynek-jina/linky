@@ -351,23 +351,11 @@ export function PushDebugPage(): React.ReactElement {
 
       {status ? (
         <div className="settings-row">
-          <div style={{ padding: "8px", fontSize: "12px", color: "#666" }}>
-            {status}
-          </div>
+          <div className="push-debug-empty">{status}</div>
         </div>
       ) : null}
 
-      <pre
-        style={{
-          overflowX: "auto",
-          overflowWrap: "anywhere",
-          whiteSpace: "pre-wrap",
-          fontSize: 12,
-          lineHeight: 1.4,
-        }}
-      >
-        {reportText}
-      </pre>
+      <pre className="push-debug-details">{reportText}</pre>
     </section>
   );
 }

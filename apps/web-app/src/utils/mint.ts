@@ -1,3 +1,10 @@
+export interface MintIcon {
+  failed: boolean;
+  host: string | null;
+  origin: string | null;
+  url: string | null;
+}
+
 const envMainMintUrl = (import.meta.env.VITE_MAIN_MINT_URL ?? "").trim();
 
 export const MAIN_MINT_URL = envMainMintUrl || "https://cashu.cz";

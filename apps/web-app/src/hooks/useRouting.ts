@@ -267,5 +267,3 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
   }
 };
-
-export const useNavigation = () => navigateTo;

@@ -1,3 +1,5 @@
+import { parseTokenText } from "@linky/linkshu";
+import { Radio as NfcIcon } from "lucide-react";
 import type { FC } from "react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
@@ -11,13 +13,12 @@ import {
   isCashuTokenUnavailableState,
 } from "../app/lib/cashuTokenState";
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
-import { parseTokenText } from "@linky/linkshu";
-import { NfcIcon } from "../components/icons";
+
+import { getMintDisplay } from "../app/lib/tokenMessageInfo";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId, CashuTokenRow } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
+import { navigateTo } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
-import { getMintDisplay } from "../app/lib/tokenMessageInfo";
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
@@ -59,7 +60,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   writeToNfc,
 }) => {
   const { formatDisplayedAmountText, t } = useAppShellCore();
-  const navigateTo = useNavigation();
+
   const [tokenQr, setTokenQr] = React.useState<string | null>(null);
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,

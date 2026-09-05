@@ -1,6 +1,7 @@
-import React from "react";
 import { Copy, Radio, RefreshCcw, Save } from "lucide-react";
+import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { Avatar } from "../components/Avatar";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
@@ -280,13 +281,7 @@ export function ProfilePage({
                 t={t}
               />
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
+              <div className="form-field-heading">
                 <label htmlFor="profileName">{t("name")}</label>
               </div>
               <input
@@ -296,15 +291,9 @@ export function ProfilePage({
                 placeholder={t("name")}
               />
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
+              <div className="form-field-heading">
                 <label htmlFor="profileLn">{t("lightningAddress")}</label>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="profile-field-label">
                   {canRestoreDefaultLightningAddress &&
                   restoreLightningAddress ? (
                     <button
@@ -364,18 +353,10 @@ export function ProfilePage({
                 ) : null}
               </div>
               {inlineClaimError ? (
-                <p className="muted" style={{ marginTop: 8 }}>
-                  {inlineClaimError}
-                </p>
+                <p className="muted section-note">{inlineClaimError}</p>
               ) : null}
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
+              <div className="form-field-heading">
                 <label htmlFor="profileStatus">{t("status")}</label>
               </div>
               <input
@@ -385,7 +366,7 @@ export function ProfilePage({
                 placeholder={t("status")}
               />
 
-              <div className="panel-header" style={{ marginTop: 14 }}>
+              <div className="panel-header panel-header-layout">
                 {canSaveProfileEdits ? (
                   <button onClick={() => void saveProfileEdits()}>
                     <span className="btn-label-with-icon">
@@ -402,20 +383,14 @@ export function ProfilePage({
             <>
               <div className="profile-detail">
                 <div className="contact-avatar is-xl" aria-hidden="true">
-                  {effectiveProfilePicture ? (
-                    <img
-                      src={effectiveProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="contact-avatar-fallback">
-                      {getInitials(
-                        effectiveProfileName ?? formatShortNpub(currentNpub),
-                      )}
-                    </span>
-                  )}
+                  <Avatar
+                    pictureUrl={effectiveProfilePicture}
+                    fallback={getInitials(
+                      effectiveProfileName ?? formatShortNpub(currentNpub),
+                    )}
+                    fallbackClassName="contact-avatar-fallback"
+                    loading="lazy"
+                  />
                 </div>
 
                 <h2 className="contact-detail-name">
@@ -476,9 +451,7 @@ export function ProfilePage({
                 ) : null}
 
                 {profileStatusText ? (
-                  <p className="muted" style={{ marginTop: 8 }}>
-                    {profileStatusText}
-                  </p>
+                  <p className="muted section-note">{profileStatusText}</p>
                 ) : null}
               </div>
             </>

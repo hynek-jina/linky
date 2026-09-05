@@ -1,8 +1,8 @@
-import React, { type FC } from "react";
 import { Copy } from "lucide-react";
+import React, { type FC } from "react";
 import { WalletBalance } from "../components/WalletBalance";
-import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
 import type { Translate } from "../i18n";
+import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
 
 type TopupInvoiceQrMode = "cashu" | "universal" | "lightning";
 
@@ -330,9 +330,7 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
         <p className="muted">{topupInvoiceError}</p>
       ) : topupInvoice ? (
         <div className="topup-invoice-qr-shell">
-          <div className="mono-box" style={{ marginBottom: 12 }}>
-            {topupInvoice}
-          </div>
+          <div className="mono-box mono-box-layout">{topupInvoice}</div>
           {copyButton}
         </div>
       ) : (

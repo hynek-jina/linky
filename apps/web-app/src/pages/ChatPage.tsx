@@ -1,4 +1,10 @@
 import {
+  HeartHandshake as DonateIcon,
+  Images as GalleryIcon,
+  HandCoins as PayIcon,
+  Send as SendIcon,
+} from "lucide-react";
+import {
   memo,
   useCallback,
   useEffect,
@@ -20,14 +26,14 @@ import {
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
-  getMessageEditorValue,
-  setMessageEditorCaret,
-} from "../app/lib/messageEditorDom";
-import {
   captureChatViewportAnchor,
   restoreChatViewportAnchor,
   type ChatViewportAnchor,
 } from "../app/lib/chatViewport";
+import {
+  getMessageEditorValue,
+  setMessageEditorCaret,
+} from "../app/lib/messageEditorDom";
 import {
   applyMessageMentionSuggestion,
   getMessageMentionQuery,
@@ -48,6 +54,7 @@ import type {
   LocalNostrReaction,
   MintUrlInput,
 } from "../app/types/appTypes";
+import { Avatar } from "../components/Avatar";
 import {
   ChatMessage,
   type BankPaymentOfferPeerNotice,
@@ -55,19 +62,14 @@ import {
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
 import { ChatMessageEditor } from "../components/ChatMessageEditor";
-import {
-  DonateIcon,
-  GalleryIcon,
-  PayIcon,
-  RequestIcon,
-  SendIcon,
-} from "../components/icons";
+import { RequestIcon } from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { navigateTo } from "../hooks/useRouting";
+import type { Translate } from "../i18n";
 import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
+import type { MintIcon } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { nowSeconds } from "../utils/time";
-import type { Translate } from "../i18n";
 
 interface Contact {
   id: string;
@@ -93,12 +95,7 @@ interface ChatPageProps {
   editContext: EditChatContext | null;
   feedbackContactNpub: string;
   getCashuTokenMessageInfo: (id: string) => CashuTokenMessageInfo | null;
-  getMintIconUrl: (mint: MintUrlInput) => {
-    origin: string | null;
-    url: string | null;
-    host: string | null;
-    failed: boolean;
-  };
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   lang: string;
   mentionContacts: MessageMentionContact[];
@@ -339,15 +336,7 @@ const ChatMessageList = memo(function ChatMessageList({
     },
     [setMintIconUrlByMint],
   );
-  const onMintIconError = useCallback(
-    (origin: string, nextUrl: string | null) => {
-      setMintIconUrlByMint((previous) => ({
-        ...previous,
-        [origin]: nextUrl,
-      }));
-    },
-    [setMintIconUrlByMint],
-  );
+
   const messageElRef = useCallback(
     (element: HTMLDivElement | null, messageId: string) => {
       const elements = chatMessageElByIdRef.current;
@@ -537,7 +526,7 @@ const ChatMessageList = memo(function ChatMessageList({
             getMintIconUrl={getMintIconUrl}
             getNpubMessageContactInfo={getNpubMessageContactInfo}
             onMintIconLoad={onMintIconLoad}
-            onMintIconError={onMintIconError}
+            onMintIconError={onMintIconLoad}
             actionLabels={actionLabels}
             canEdit={viewModel.canEdit}
             canReplyOrReact={viewModel.canReplyOrReact}
@@ -790,18 +779,12 @@ const ChatComposer = memo(function ChatComposer({
                 onClick={() => selectMentionSuggestion(suggestion)}
               >
                 <span className="chat-contact-pill-avatar" aria-hidden="true">
-                  {info?.pictureUrl ? (
-                    <img
-                      src={info.pictureUrl}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="chat-contact-pill-avatar-fallback">
-                      {suggestion.contact.name.charAt(0)}
-                    </span>
-                  )}
+                  <Avatar
+                    pictureUrl={info?.pictureUrl ? info.pictureUrl : null}
+                    fallback={suggestion.contact.name.charAt(0)}
+                    fallbackClassName="chat-contact-pill-avatar-fallback"
+                    loading="lazy"
+                  />
                 </span>
                 <span className="chat-mention-suggestion-label">
                   {suggestion.contact.name}

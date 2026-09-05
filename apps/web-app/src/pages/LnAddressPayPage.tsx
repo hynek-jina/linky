@@ -1,5 +1,6 @@
 import { useEffect, type FC } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { Avatar } from "../components/Avatar";
 import { LnurlPayPreviewNotices } from "../components/LnurlPayPreviewNotices";
 import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
 import {
@@ -106,18 +107,12 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
         <div className="contact-header">
           {knownContact ? (
             <div className="contact-avatar is-large" aria-hidden="true">
-              {knownContactPictureUrl ? (
-                <img
-                  src={knownContactPictureUrl}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="contact-avatar-fallback">
-                  {getInitials(String(knownContact.name ?? ""))}
-                </span>
-              )}
+              <Avatar
+                pictureUrl={knownContactPictureUrl}
+                fallback={getInitials(String(knownContact.name ?? ""))}
+                fallbackClassName="contact-avatar-fallback"
+                loading="lazy"
+              />
             </div>
           ) : null}
           <div className="contact-header-text">

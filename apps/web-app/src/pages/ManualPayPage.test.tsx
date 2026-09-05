@@ -4,7 +4,7 @@ import { renderIntoDocument } from "../testUtils/renderIntoDocument";
 import { ManualPayPage } from "./ManualPayPage";
 
 vi.mock("../hooks/useRouting", () => ({
-  useNavigation: () => vi.fn(),
+  navigateTo: vi.fn(),
 }));
 
 const translate = (key: string): string => {

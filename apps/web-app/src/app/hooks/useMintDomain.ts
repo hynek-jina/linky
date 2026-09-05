@@ -1,6 +1,7 @@
 import type { OwnerId } from "@evolu/common";
 import React from "react";
 import type { CashuTokenRow } from "../../evolu";
+import type { MintIcon } from "../../utils/mint";
 import {
   GENERIC_MINT_ICON_DATA_URL,
   getMintIconOverride,
@@ -20,12 +21,7 @@ interface UseMintDomainParams {
 }
 
 interface UseMintDomainResult {
-  getMintIconUrl: (mint: MintUrlInput) => {
-    failed: boolean;
-    host: string | null;
-    origin: string | null;
-    url: string | null;
-  };
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   getMintRuntime: (
     mintUrl: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;

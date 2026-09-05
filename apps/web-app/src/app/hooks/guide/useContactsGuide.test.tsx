@@ -8,11 +8,10 @@ const { navigateToMock } = vi.hoisted(() => ({
 
 vi.mock("../../../hooks/useRouting", () => ({
   navigateTo: navigateToMock,
-  useNavigation: () => navigateToMock,
 }));
 
-import { useContactsGuide } from "./useContactsGuide";
 import type { Route } from "../../../types/route";
+import { useContactsGuide } from "./useContactsGuide";
 
 type GuideApi = ReturnType<typeof useContactsGuide>;
 

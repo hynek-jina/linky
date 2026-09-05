@@ -1,8 +1,18 @@
-import { Check, CheckCheck, FolderPlus, Info, Plus, X } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  FolderPlus,
+  Info,
+  HandCoins as PayIcon,
+  Plus,
+  X,
+} from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
   formatRemainingTime,
+  getBankPaymentOfferStatusLabel,
+  hasBankPaymentOfferTimedPhase,
   isLinkyBankPaymentOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   type LinkyBankPaymentOfferInfo,
@@ -10,16 +20,16 @@ import {
 } from "../app/lib/bankPaymentOffer";
 import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
 import {
+  extractMessageLinks,
+  normalizeMessageLinkMatch,
+} from "../app/lib/messageLinks";
+import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
+import {
   canSharePrivateImage,
   downloadPrivateImageBlob,
   isCancelledShareError,
   sharePrivateImageBlob,
 } from "../app/lib/privateImageFile";
-import {
-  extractMessageLinks,
-  normalizeMessageLinkMatch,
-} from "../app/lib/messageLinks";
-import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
 import {
   isPrivatePdfPayload,
   parsePrivateImageMessage,
@@ -32,23 +42,17 @@ import type {
   MintUrlInput,
 } from "../app/types/appTypes";
 import { deriveDefaultProfile } from "../derivedProfile";
-import { getNextMintIconUrl } from "../utils/mint";
+import type { MintIcon } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import { EditIndicator } from "./EditIndicator";
-import { PayIcon } from "./icons";
+import { Avatar } from "./Avatar";
+import { CashuTokenPill } from "./CashuTokenPill";
+
+import type { I18nKey, Translate } from "../i18n";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
 import { PrivateFileBubble } from "./PrivateFileBubble";
 import { PrivateImageBubble } from "./PrivateImageBubble";
-import type { I18nKey, Translate } from "../i18n";
-
-interface MintIcon {
-  failed: boolean;
-  host: string | null;
-  origin: string | null;
-  url: string | null;
-}
 
 export interface NpubMessageContactInfo {
   displayName: string;
@@ -214,8 +218,7 @@ function ChatMessageComponent({
   replyQuoteText,
   settleBankPaymentOfferBusy,
 }: ChatMessageProps) {
-  const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
-    useAppShellCore();
+  const { formatDisplayedAmountText, t } = useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [privateImageBlob, setPrivateImageBlob] = React.useState<Blob | null>(
     null,
@@ -279,10 +282,7 @@ function ChatMessageComponent({
     : "";
   const bankOfferPhaseTtlSec =
     bankPaymentOfferInfo &&
-    (bankPaymentOfferInfo.status === "accepted" ||
-      bankPaymentOfferInfo.status === "bank_details_sent" ||
-      bankPaymentOfferInfo.status === "bank_paid" ||
-      bankPaymentOfferInfo.status === "offered")
+    hasBankPaymentOfferTimedPhase(bankPaymentOfferInfo.status)
       ? LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC
       : null;
   const bankOfferPhaseStartedAtSec =
@@ -353,77 +353,25 @@ function ChatMessageComponent({
 
   const renderCashuTokenPill = React.useCallback(
     (info: CashuTokenMessageInfo, key?: string) => {
-      const icon = getMintIconUrl(info.mintUrl);
-      const showMintFallback = icon.failed || !icon.url;
-      const displayAmount = formatDisplayedAmountParts(info.amount ?? 0);
-      const displayAmountText = formatDisplayedAmountText(info.amount ?? 0);
-      const displayUnitLabel = String(displayAmount.unitLabel ?? "").trim();
-
+      const amountText = formatDisplayedAmountText(info.amount ?? 0);
       return (
-        <span
+        <CashuTokenPill
           key={key}
-          className={
-            info.isValid
-              ? "pill chat-token-pill"
-              : "pill pill-muted chat-token-pill"
-          }
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-          aria-label={
+          icon={getMintIconUrl(info.mintUrl)}
+          amountText={amountText}
+          ariaLabel={
             info.mintDisplay
-              ? `${displayAmountText} · ${info.mintDisplay}`
-              : displayAmountText
+              ? `${amountText} · ${info.mintDisplay}`
+              : amountText
           }
-        >
-          {icon.url ? (
-            <img
-              src={icon.url}
-              alt=""
-              width={14}
-              height={14}
-              style={{
-                borderRadius: 9999,
-                objectFit: "cover",
-              }}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              onLoad={() => {
-                if (icon.origin) {
-                  onMintIconLoad(icon.origin, icon.url);
-                }
-              }}
-              onError={() => {
-                if (icon.origin) {
-                  const next = getNextMintIconUrl(icon.url, icon.origin);
-                  onMintIconError(icon.origin, next);
-                }
-              }}
-            />
-          ) : null}
-          {showMintFallback && icon.host ? (
-            <span
-              className="muted chat-token-pill-fallback"
-              style={{
-                fontSize: 10,
-                lineHeight: "14px",
-              }}
-            >
-              {icon.host}
-            </span>
-          ) : null}
-          <span className="chat-token-pill-label">
-            {displayAmount.approxPrefix}
-            {displayAmount.amountText}
-            {displayUnitLabel ? ` ${displayUnitLabel}` : ""}
-          </span>
-        </span>
+          className="chat-token-pill"
+          isMuted={!info.isValid}
+          onMintIconLoad={onMintIconLoad}
+          onMintIconError={onMintIconError}
+        />
       );
     },
     [
-      formatDisplayedAmountParts,
       formatDisplayedAmountText,
       getMintIconUrl,
       onMintIconError,
@@ -497,18 +445,14 @@ function ChatMessageComponent({
                 </span>
               ) : null}
               <span className="chat-contact-pill-avatar" aria-hidden="true">
-                {npubContactInfo.pictureUrl ? (
-                  <img
-                    src={npubContactInfo.pictureUrl}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="chat-contact-pill-avatar-fallback">
-                    {deriveDefaultProfile(npubContactInfo.npub).name.charAt(0)}
-                  </span>
-                )}
+                <Avatar
+                  pictureUrl={npubContactInfo.pictureUrl}
+                  fallback={deriveDefaultProfile(
+                    npubContactInfo.npub,
+                  ).name.charAt(0)}
+                  fallbackClassName="chat-contact-pill-avatar-fallback"
+                  loading="lazy"
+                />
               </span>
               <span className="chat-contact-pill-label">
                 {npubContactInfo.displayName}
@@ -790,7 +734,11 @@ function ChatMessageComponent({
             canReplyOrReact={canReplyOrReact}
             imageActions={imageActions}
             isOpen={menuOpen}
-            labels={actionLabels}
+            labels={
+              privateImageInfo && isPrivatePdfPayload(privateImageInfo)
+                ? { ...actionLabels, save: t("chatPdfSave") }
+                : actionLabels
+            }
             onReply={() => onReply(message)}
             onEdit={() => onEdit(message)}
             onReact={(emoji) => onReact(message, emoji)}
@@ -824,23 +772,11 @@ function ChatMessageComponent({
                     <span
                       className={`chat-payment-request-status is-${bankPaymentOfferInfo.status}`}
                     >
-                      {bankPaymentOfferInfo.status === "accepted"
-                        ? t("bankPaymentOfferStatusAccepted")
-                        : bankPaymentOfferInfo.status === "accepted_by_other"
-                          ? t("bankPaymentOfferStatusAcceptedByOther")
-                          : bankPaymentOfferInfo.status === "bank_details_sent"
-                            ? isOut
-                              ? t("bankPaymentOfferStatusBankDetailsSent")
-                              : t("bankPaymentOfferStatusBankDetailsReceived")
-                            : bankPaymentOfferInfo.status === "bank_paid"
-                              ? t("bankPaymentOfferStatusBankPaid")
-                              : bankPaymentOfferInfo.status === "canceled"
-                                ? t("bankPaymentOfferStatusCanceled")
-                                : bankPaymentOfferInfo.status === "declined"
-                                  ? t("bankPaymentOfferStatusDeclined")
-                                  : bankPaymentOfferInfo.status === "settled"
-                                    ? t("bankPaymentOfferStatusSettled")
-                                    : t("bankPaymentOfferStatusOffered")}
+                      {getBankPaymentOfferStatusLabel(
+                        bankPaymentOfferInfo.status,
+                        !isOut,
+                        t,
+                      )}
                     </span>
                   </div>
                   <div className="chat-bank-payment-amount-row">
@@ -1035,10 +971,12 @@ function ChatMessageComponent({
                 <>
                   {" "}
                   ·{" "}
-                  <EditIndicator
-                    label={actionLabels.edited}
-                    originalContent={message.originalContent ?? null}
-                  />
+                  <span
+                    className="edited-indicator"
+                    title={message.originalContent || undefined}
+                  >
+                    {actionLabels.edited}
+                  </span>
                 </>
               ) : null}
               {isPending ? ` · ${chatPendingLabel}` : ""}

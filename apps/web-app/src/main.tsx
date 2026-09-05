@@ -3,20 +3,20 @@ import { StrictMode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
-import { BootCommitSignal } from "./components/BootCommitSignal";
-import { installIosViewportHeal } from "./platform/iosViewportHeal";
 import "./index.css";
 import {
   type OpfsProbeIssue,
   prepareEvoluWebStorage,
   shouldUseInMemoryEvoluStorage,
 } from "./platform/evoluWebStorage";
+import { installIosViewportHeal } from "./platform/iosViewportHeal";
 import type {
   BroadcastChannelLike,
   BroadcastMessageHandler,
   LockManagerLike,
 } from "./types/browser";
 import type { JsonValue } from "./types/json";
+import { decodeBase64Url, encodeBase64Url } from "./utils/base64";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import {
   handlePwaUpdateAvailable,
@@ -24,7 +24,6 @@ import {
   recordPwaControllerChange,
   recordPwaRegistered,
 } from "./utils/pwaUpdate";
-import { decodeBase64Url, encodeBase64Url } from "./utils/base64";
 import { getUnknownErrorMessage, isRecord } from "./utils/unknown";
 
 type BufferFromArgs =
@@ -663,8 +662,7 @@ const bootstrap = async () => {
         <StrictMode>
           <EvoluProvider value={evolu}>
             <ErrorBoundary>
-              <BootCommitSignal onCommit={recordAppCommit} />
-              <App />
+              <App onCommit={recordAppCommit} />
             </ErrorBoundary>
           </EvoluProvider>
         </StrictMode>,

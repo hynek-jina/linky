@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Share2 as ShareIcon } from "lucide-react";
 import React from "react";
 import {
   downloadPrivateImageBlob,
@@ -9,7 +9,7 @@ import {
   decryptPrivateImageMessage,
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
-import { ShareIcon } from "./icons";
+
 import type { Translate } from "../i18n";
 
 interface PrivateImageBubbleProps {

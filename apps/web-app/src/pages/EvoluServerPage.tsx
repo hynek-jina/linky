@@ -1,10 +1,10 @@
 import React from "react";
-import { EvoluReloadNotice } from "./EvoluReloadNotice";
-import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
-import { useNavigation } from "../hooks/useRouting";
-import { deriveEvoluServerState } from "./evoluServerState";
+import { deriveEvoluServerState } from "../app/lib/evoluServerState";
+import { navigateTo } from "../hooks/useRouting";
+import { EvoluReloadNotice } from "./EvoluReloadNotice";
+import { EvoluSyncErrorNotice } from "./EvoluSyncErrorNotice";
 
 export function EvoluServerPage(): React.ReactElement {
   const {
@@ -21,7 +21,7 @@ export function EvoluServerPage(): React.ReactElement {
   } = useEvoluSettingsContext();
   const { route, t } = useAppShellCore();
   const selectedEvoluServerUrl = route.kind === "evoluServer" ? route.id : null;
-  const navigateTo = useNavigation();
+
   return (
     <section className="panel">
       <EvoluSyncErrorNotice />
@@ -93,11 +93,11 @@ export function EvoluServerPage(): React.ReactElement {
                 </div>
 
                 {isLastServer ? (
-                  <p className="muted" style={{ marginTop: 10 }}>
+                  <p className="muted settings-error-note">
                     {t("evoluDefaultServerCannotRemove")}
                   </p>
                 ) : (
-                  <div className="settings-row" style={{ marginTop: 10 }}>
+                  <div className="settings-row settings-error-note">
                     <button
                       type="button"
                       className="btn-wide danger"

@@ -1,9 +1,10 @@
 import React from "react";
 import type { AvatarEditorControlId } from "../derivedProfile";
+import type { Translate } from "../i18n";
 import { formatShortNpub, getInitials } from "../utils/formatting";
+import { Avatar } from "./Avatar";
 import { AvatarControlGrid } from "./AvatarControlGrid";
 import { AvatarPhotoInput } from "./AvatarPhotoInput";
-import type { Translate } from "../i18n";
 
 interface ProfileAvatarEditorProps {
   currentNpub: string;
@@ -49,18 +50,12 @@ export function ProfileAvatarEditor({
           className="contact-avatar is-xl onboarding-avatar-previewImage"
           aria-hidden="true"
         >
-          {previewPicture ? (
-            <img
-              src={previewPicture}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span className="contact-avatar-fallback">
-              {getInitials(previewName)}
-            </span>
-          )}
+          <Avatar
+            pictureUrl={previewPicture}
+            fallback={getInitials(previewName)}
+            fallbackClassName="contact-avatar-fallback"
+            loading="lazy"
+          />
         </div>
       </div>
 

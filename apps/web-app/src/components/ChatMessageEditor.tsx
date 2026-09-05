@@ -95,8 +95,8 @@ const appendCashuPill = (
 ) => {
   const pill = document.createElement("span");
   pill.className = info.isValid
-    ? "pill chat-token-pill chat-compose-inline-pill"
-    : "pill pill-muted chat-token-pill chat-compose-inline-pill";
+    ? "pill cashu-token-pill chat-token-pill chat-compose-inline-pill"
+    : "pill pill-muted cashu-token-pill chat-token-pill chat-compose-inline-pill";
   pill.contentEditable = "false";
   pill.dataset.messageEntityValue = rawValue;
   pill.setAttribute("aria-label", amountText);
