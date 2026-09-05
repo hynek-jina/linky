@@ -178,7 +178,12 @@ export const redeemToken = (
     const parsed = parseTokenText(token);
     if (!parsed?.mint) throw new Error("Invalid token");
     const mint = parsed.mint;
-    if (isTestMintUrl(mint) && import.meta.env.VITE_ALLOW_TEST_MINT !== "1")
+    const info = await run(
+      Effect.flatMap(Mints, (mints) => mints.info(mint)),
+    );
+    const allowTestMint =
+      import.meta.env.VITE_ALLOW_TEST_MINT === "1" && isTestMintUrl(mint);
+    if (info.isFakeLightning && !allowTestMint)
       throw new RedeemError(
         "This testing mint cannot send a real Lightning payment",
         "melt",

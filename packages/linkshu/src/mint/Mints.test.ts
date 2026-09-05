@@ -120,6 +120,7 @@ describe("Mints.info", () => {
         name: "Test mint",
         inputFeePpk: 120,
         supportsMpp: true,
+        isFakeLightning: false,
         iconUrl: "https://mint.example/icon.png",
       }),
     );
@@ -132,6 +133,22 @@ describe("Mints.info", () => {
         result: exit.value,
       }),
     ]);
+  });
+
+  it.each([
+    { url: "https://mint.example", description: "Uses FakeWallet for testing" },
+    { url: "https://mint.example", description: "All your Lightning invoices will always be marked paid" },
+    { url: "https://testnut.cashu.space", description: "Testing" },
+  ])("identifies simulated Lightning at $url from $description", async ({ url, description }) => {
+    const loaded = fakeWallet({
+      getMintInfo: () => new CashuMintInfo({ ...baseInfo, description }),
+    });
+    const exit = await runMints(
+      Layer.mergeAll(stubInstances(loaded), stubTokenStore([]), stubKv({}), Inspector.disabled),
+      Effect.flatMap(Mints, (mints) => mints.info(MintUrl.make(url))),
+    );
+    assert(Exit.isSuccess(exit));
+    expect(exit.value.isFakeLightning).toBe(true);
   });
 
   it("reports absent optional mint fields as null and mpp as false", async () => {
@@ -164,6 +181,7 @@ describe("Mints.info", () => {
         name: "Test mint",
         inputFeePpk: null,
         supportsMpp: false,
+        isFakeLightning: false,
         iconUrl: null,
       }),
     );

@@ -1,9 +1,48 @@
 import { expect, test } from "@playwright/test";
+import { getEncodedToken } from "@cashu/cashu-ts";
+import { Schema } from "effect";
 import {
   fundToken,
   loadMintWallet,
   targetMintUrl,
 } from "../../../packages/linkshu/tests/integration/helpers";
+
+test("an unlisted mint advertising simulated Lightning cannot consume a token", async ({ page }) => {
+  const source = await loadMintWallet();
+  const original = await fundToken(64);
+  const decoded = source.decodeToken(original);
+  const token = getEncodedToken({ ...decoded, mint: "https://unlisted-mint.example" });
+  let invoiceRequests = 0;
+  let meltRequests = 0;
+  await page.route("https://unlisted-mint.example/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.includes("/melt")) meltRequests += 1;
+    const response = await route.fetch({ url: `http://localhost:3338${url.pathname}${url.search}` });
+    if (url.pathname === "/v1/info") {
+      const info = Schema.decodeUnknownSync(Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })))(await response.text());
+      return route.fulfill({ response, json: { ...info, description: "Uses FakeWallet for simulated payments" } });
+    }
+    await route.fulfill({ response });
+  });
+  await page.route("https://site-lnurl.example/**", async (route) => {
+    invoiceRequests += 1;
+    await route.abort("failed");
+  });
+  await page.addInitScript(() => localStorage.setItem("linky.lang", "en"));
+  await page.goto("/cashu/");
+  await page.locator("#cashu-token-input").fill(token);
+  await page.locator(".cashu-form button[type=submit]").click();
+  await expect(page.locator(".cashu-token-amount")).toContainText("64");
+  await page.getByRole("button", { name: /Show options/ }).click();
+  await page.locator("#cashu-ln-address").fill("alice@site-lnurl.example");
+  await page.locator(".cashu-redeem-form button[type=submit]").click();
+  await expect(page.locator(".cashu-status-error")).toContainText("cannot send a real Lightning payment");
+  await expect(page.locator(".cashu-success-title")).toHaveCount(0);
+  expect(invoiceRequests).toBe(0);
+  expect(meltRequests).toBe(0);
+  const states = await source.checkProofsStates(decoded.proofs);
+  expect(states.every((state) => state.state === "UNSPENT")).toBe(true);
+});
 
 for (const mode of [
   "direct",
