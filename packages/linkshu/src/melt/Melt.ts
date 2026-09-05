@@ -497,12 +497,13 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
         const keysetId = yield* boundKeysetId(draft.mint, wallet);
         const scope: CounterScope = { mint: draft.mint, unit: sat, keysetId };
 
+        const quoteId = draft.quoteId;
         const priced =
-          draft.quoteId === undefined
+          quoteId === undefined
             ? yield* createQuoteAt(wallet, draft)
             : yield* Effect.gen(function* () {
                 const raw = yield* Effect.tryPromise({
-                  try: () => wallet.checkMeltQuoteBolt11(draft.quoteId!),
+                  try: () => wallet.checkMeltQuoteBolt11(quoteId),
                   catch: (error) => classifyMintError(draft.mint, error),
                 });
                 if (raw.request !== draft.invoice)
