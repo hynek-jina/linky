@@ -101,7 +101,7 @@ function readListEnv(
 function readRelayList(env: Record<string, string | undefined>): string[] {
   const relays = readListEnv(
     env,
-    "PUSH_DEFAULT_NOSTR_RELAYS",
+    "PUSH_DEFAULT_RELAYS",
     DEFAULT_NOSTR_RELAYS.join(","),
   );
   return [...new Set(relays.map(normalizeRelayUrl))];
@@ -133,7 +133,7 @@ function normalizeRelayUrl(value: string): string {
     parsed.protocol = "wss:";
   } else if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
     throw new ConfigError(
-      `PUSH_DEFAULT_NOSTR_RELAYS contains unsupported protocol in ${value}`,
+      `PUSH_DEFAULT_RELAYS contains unsupported protocol in ${value}`,
     );
   }
 

@@ -71,6 +71,7 @@ for (const mode of [
   "proxy",
   "interrupted",
   "swap-interrupted",
+  "rejected",
 ] as const) {
   test(`redeem a token through ${mode} LNURL and preserve payment across reload`, async ({
     page,
@@ -117,6 +118,27 @@ for (const mode of [
     let interrupted = false;
     let reloaded = false;
     let meltCalls = 0;
+    let blockStateChecks = false;
+    await page.route("http://localhost:3338/v1/checkstate", (route) =>
+      blockStateChecks ? route.abort("failed") : route.continue(),
+    );
+    if (mode === "rejected") {
+      await page.route(
+        "http://localhost:3338/v1/melt/bolt11",
+        async (route) => {
+          if (route.request().method() !== "POST") return route.continue();
+          meltCalls += 1;
+          if (meltCalls > 1) return route.continue();
+          await route.fulfill({
+            status: 400,
+            json: {
+              code: 11000,
+              detail: "not enough inputs provided for melt",
+            },
+          });
+        },
+      );
+    }
     if (mode === "interrupted" || mode === "swap-interrupted") {
       await page.route(
         mode === "swap-interrupted"
@@ -165,6 +187,16 @@ for (const mode of [
             ? "different@site-lnurl.example"
             : "alice@site-lnurl.example",
         );
+      if (mode === "interrupted") {
+        // The paid melt's inputs are only known spent once NUT-07 answers;
+        // an unreachable check must not complete the payment with them as change.
+        blockStateChecks = true;
+        await page.locator(".cashu-redeem-form button[type=submit]").click();
+        await expect(page.locator(".cashu-status-error")).toContainText(
+          "Could not recover payment change",
+        );
+        blockStateChecks = false;
+      }
       await page.locator(".cashu-redeem-form button[type=submit]").click();
       await expect(page.locator(".cashu-success-address")).toContainText(
         "alice@site-lnurl.example",
@@ -185,6 +217,10 @@ for (const mode of [
     expect(errors).toEqual([]);
     if (mode === "proxy") expect(proxyCalls).toBeGreaterThan(1);
     if (mode === "interrupted") expect(interrupted).toBe(true);
+    if (mode === "rejected") {
+      expect(meltCalls).toBe(2);
+      expect(paidQuotes.length).toBeGreaterThan(1);
+    }
     await page.reload();
     await expect(page.locator("#cashu-token-input")).toBeVisible();
   });

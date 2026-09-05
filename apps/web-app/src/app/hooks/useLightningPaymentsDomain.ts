@@ -10,18 +10,16 @@ import {
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
 import type { DisplayAmountParts } from "../../utils/displayAmounts";
 import {
+  buildPaymentAmountAttempts,
+  buildPaymentFailureAmountAttempts,
   getLightningInvoicePreview,
+  isRetryablePaymentAmountFailure,
   type LightningInvoicePreview,
 } from "@linky/linkshu";
 import { normalizeMintUrl } from "../../utils/mint";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { describeTaggedCashuError } from "../lib/cashuStoredError";
-import {
-  buildPaymentAmountAttempts,
-  buildPaymentFailureAmountAttempts,
-  isRetryablePaymentAmountFailure,
-} from "../lib/paymentAmountFallback";
 import { selectSendMintForAmount } from "../lib/paymentMintSelection";
 import type { SendMintBalance } from "../lib/paymentMintSelection";
 import type {

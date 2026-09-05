@@ -138,6 +138,7 @@ export const inspectToken = (token: string): Promise<TokenSnapshot> =>
   withWallet(token, async (run, key) => {
     const parsed = parseTokenText(token);
     if (!parsed?.mint) throw new Error("Invalid token");
+    const mint = parsed.mint;
     const pending = localStorage.getItem(`${key}.payment`);
     if (!pending) {
       const report = await run(
@@ -148,10 +149,8 @@ export const inspectToken = (token: string): Promise<TokenSnapshot> =>
     const balance = await run(
       Effect.flatMap(Tokens, (tokens) => tokens.balances),
     );
-    const info = await run(
-      Effect.flatMap(Mints, (mints) => mints.info(parsed.mint!)),
-    );
-    const mintHost = new URL(parsed.mint).host;
+    const info = await run(Effect.flatMap(Mints, (mints) => mints.info(mint)));
+    const mintHost = new URL(mint).host;
     const amount = pending
       ? Schema.decodeUnknownSync(PendingPayment)(pending).quote.amount
       : balance.total;
@@ -159,7 +158,7 @@ export const inspectToken = (token: string): Promise<TokenSnapshot> =>
       amount,
       totalAmount: parsed.amount,
       isValid: amount > 0,
-      mint: parsed.mint,
+      mint,
       mintHost,
       unit: parsed.unit ?? "sat",
       iconUrl:
@@ -210,6 +209,30 @@ export const redeemToken = (
       localStorage.removeItem(`${key}.payment`);
       return result;
     };
+    const returnReservedRows = () =>
+      run(
+        Effect.gen(function* () {
+          const tokens = yield* Tokens;
+          for (const row of yield* tokens.list) {
+            if (row.state === "reserved") yield* tokens.returnToWallet(row.id);
+          }
+        }),
+      );
+    // A rejected melt frees its inputs only once the mint itself reports the quote unpaid.
+    const releaseUnpaidAttempt = async () => {
+      const pendingText = localStorage.getItem(`${key}.payment`);
+      if (!pendingText) return;
+      const { quote } = Schema.decodeUnknownSync(PendingPayment)(pendingText);
+      const state = await run(
+        Effect.orElseSucceed(
+          Effect.flatMap(Melt, (melt) => melt.status(quote)),
+          () => null,
+        ),
+      );
+      if (state !== "UNPAID") return;
+      await returnReservedRows();
+      localStorage.removeItem(`${key}.payment`);
+    };
     const pendingText = localStorage.getItem(`${key}.payment`);
     if (pendingText) {
       const pending = Schema.decodeUnknownSync(PendingPayment)(pendingText);
@@ -221,27 +244,20 @@ export const redeemToken = (
           "Payment is pending. Check again before sending another payment.",
           "melt",
         );
-      await run(
-        Effect.gen(function* () {
-          const tokens = yield* Tokens;
-          for (const row of yield* tokens.list) {
-            if (row.state === "reserved") yield* tokens.returnToWallet(row.id);
-          }
-        }),
-      );
+      await returnReservedRows();
       const restored = await run(
         Effect.flatMap(Restore, (restore) =>
           restore.restore(new RestoreDraft({ mints: [mint] })),
         ),
       );
-      if (restored.unavailableMints.length)
+      const validated = await run(
+        Effect.flatMap(Validation, (validation) => validation.checkAll),
+      );
+      if (restored.unavailableMints.length || validated.unavailableMints.length)
         throw new RedeemError(
           "Could not recover payment change from the mint. Try again.",
           "melt",
         );
-      await run(
-        Effect.flatMap(Validation, (validation) => validation.checkAll),
-      );
       if (state === "PAID")
         return finish(pending.quote.amount, null, pending.address);
       // The mint confirmed the invoice unpaid. Deterministic outputs are recovered before another attempt.
@@ -310,9 +326,11 @@ export const redeemToken = (
               : getErrorMessage(error, "Redeem failed");
         if (error instanceof InsufficientFunds)
           localStorage.removeItem(`${key}.payment`);
-        if (localStorage.getItem(`${key}.payment`))
-          throw new RedeemError(message, phase);
-        if (!isRetryablePaymentAmountFailure(message))
+        else if (error instanceof MintRejected) await releaseUnpaidAttempt();
+        if (
+          localStorage.getItem(`${key}.payment`) ||
+          !isRetryablePaymentAmountFailure(message)
+        )
           throw new RedeemError(message, phase);
         for (const retry of buildPaymentFailureAmountAttempts(
           amount,
