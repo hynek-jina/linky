@@ -1,6 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 const LOCAL_STACK_SPECS = [
+  "**/owner-lanes.spec.ts",
+  "**/private-attachments.spec.ts",
   "**/chat-payment-request.spec.ts",
   "**/chat-recovery.spec.ts",
   "**/evolu-sync.spec.ts",

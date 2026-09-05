@@ -178,7 +178,10 @@ cd apps/web-app && bunx playwright test --project=prod-services
 `local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
 Nostr relay and paying each other with the local Cashu mint — plus the linkshu storage-migration
 scenario, chat/edit/offline-reaction and top-up recovery, and signup with a real password-save
-form submission. Payments use separate local mints on :3338 and :3339. It needs the
+form submission. Attachment tests send encrypted images and PDFs between browsers and verify
+decryption, seen receipts, downloads, and bytes handed to the browser sharing API. Owner-lane
+tests verify old and new contacts, messages, transactions, and tokens across devices and reloads.
+Payments use separate local mints on :3338 and :3339. It needs the
 docker stack up first, because the app is served from it as a production build on :5176:
 
 ```bash
