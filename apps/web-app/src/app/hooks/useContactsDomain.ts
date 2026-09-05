@@ -1,3 +1,4 @@
+import { toContactTextFields } from "../lib/contactFields";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
@@ -174,7 +175,7 @@ export const useContactsDomain = ({
       .filter((row) => {
         if (typeof row !== "object" || row === null) return false;
         const maybeDeleted = "isDeleted" in row ? row.isDeleted : null;
-        return !isDeletedRow(maybeDeleted as OptionalBooleanTextNumber);
+        return !isDeletedRow(maybeDeleted);
       })
       .sort(
         (a, b) =>
@@ -328,7 +329,7 @@ export const useContactsDomain = ({
           }
         }
 
-        const keepId = keep.id as ContactId;
+        const keepId = keep.id;
         let mergedName = normalize(keep.name) ? keep.name : null;
         let mergedNpub = normalize(keep.npub) ? keep.npub : null;
         let mergedLn = normalize(keep.lnAddress) ? keep.lnAddress : null;
@@ -362,17 +363,13 @@ export const useContactsDomain = ({
           const result = writeContactProfileUpdate(
             {
               id: keepId,
-              name: mergedName as typeof Evolu.NonEmptyString1000.Type | null,
-              npub: mergedNpub as typeof Evolu.NonEmptyString1000.Type | null,
-              lnAddress: mergedLn as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null,
-              groupName: mergedGroup as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null,
-              groupNamesJson: mergedGroupsJson as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null,
+              ...toContactTextFields({
+                name: mergedName,
+                npub: mergedNpub,
+                lnAddress: mergedLn,
+                groupName: mergedGroup,
+                groupNamesJson: mergedGroupsJson,
+              }),
             },
             keep,
           );
@@ -383,7 +380,7 @@ export const useContactsDomain = ({
         }
 
         for (const contact of group) {
-          const duplicateId = contact.id as ContactId;
+          const duplicateId = contact.id;
           if (duplicateId === keepId) continue;
 
           movedMessages += reassignContactMessages(duplicateId, keepId);
@@ -437,40 +434,14 @@ export const useContactsDomain = ({
 
     for (const contact of contacts) {
       const payload = {
-        id: contact.id as ContactId,
-        name: String(contact.name ?? "").trim()
-          ? (String(
-              contact.name ?? "",
-            ).trim() as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        npub: String(contact.npub ?? "").trim()
-          ? (String(
-              contact.npub ?? "",
-            ).trim() as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        lnAddress: String(contact.lnAddress ?? "").trim()
-          ? (String(
-              contact.lnAddress ?? "",
-            ).trim() as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        groupName: String(contact.groupName ?? "").trim()
-          ? (String(
-              contact.groupName ?? "",
-            ).trim() as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        groupNamesJson: String(contact.groupNamesJson ?? "").trim()
-          ? (String(
-              contact.groupNamesJson ?? "",
-            ).trim() as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        archivedAtSec:
-          typeof contact.archivedAtSec === "number" &&
-          Number.isFinite(contact.archivedAtSec) &&
-          contact.archivedAtSec > 0
-            ? (contact.archivedAtSec as typeof Evolu.PositiveInt.Type)
-            : contact.archivedAtSec
-              ? (Number(contact.archivedAtSec) as typeof Evolu.PositiveInt.Type)
-              : null,
+        id: contact.id,
+        ...toContactTextFields(contact),
+        archivedAtSec: (() => {
+          const parsed = Evolu.PositiveInt.fromUnknown(
+            Number(contact.archivedAtSec),
+          );
+          return parsed.ok ? parsed.value : null;
+        })(),
       };
 
       const result = upsert("contact", payload, { ownerId: appOwnerId });
@@ -535,7 +506,7 @@ export const useContactsDomain = ({
       .trim()
       .toLowerCase();
 
-    if (!normalized) return [] as string[];
+    if (!normalized) return [];
     return normalized.split(/\s+/).filter(Boolean);
   }, [contactsSearch]);
 

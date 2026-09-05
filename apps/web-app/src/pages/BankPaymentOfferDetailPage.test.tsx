@@ -10,7 +10,7 @@ import { BankPaymentOfferDetailPage } from "./BankPaymentOfferDetailPage";
 
 const { appShellMock } = vi.hoisted(() => ({
   appShellMock: {
-    allowedDisplayCurrencies: ["sat"] as string[],
+    allowedDisplayCurrencies: ["sat"],
     cycleDisplayCurrency: vi.fn(),
     t: (key: string): string => key,
   },

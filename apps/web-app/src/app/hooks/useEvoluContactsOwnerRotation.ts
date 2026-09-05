@@ -227,10 +227,8 @@ const upsertOwnerMetaSnapshot = (
     "ownerMeta",
     {
       id: createMetaPointerRowId(scope),
-      scope: scope as typeof Evolu.NonEmptyString100.Type,
-      value: encodeRotationSnapshot(
-        snapshot,
-      ) as typeof Evolu.NonEmptyString1000.Type,
+      scope: Evolu.NonEmptyString100.orThrow(scope),
+      value: Evolu.NonEmptyString1000.orThrow(encodeRotationSnapshot(snapshot)),
     },
     { ownerId },
   );

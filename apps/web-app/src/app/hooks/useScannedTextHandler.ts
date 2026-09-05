@@ -2,7 +2,7 @@ import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import { decodeNpub } from "@linky/linkstr";
 import React from "react";
-import type { ContactId } from "../../evolu";
+import { ContactId } from "../../evoluIds";
 import { navigateTo } from "../../hooks/useRouting";
 import {
   fetchLnurlWithdrawPreview,
@@ -188,7 +188,10 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
             );
             closeScan();
             if (existing?.id) {
-              navigateTo({ route: "contact", id: existing.id as ContactId });
+              navigateTo({
+                route: "contact",
+                id: ContactId.orThrow(existing.id),
+              });
             }
             return;
           }
@@ -204,7 +207,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
                 "contact",
                 {
                   name: null,
-                  npub: normalized as typeof Evolu.NonEmptyString1000.Type,
+                  npub: Evolu.NonEmptyString1000.orThrow(normalized),
                   lnAddress: null,
                   groupName: null,
                 },
@@ -212,7 +215,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
               )
             : insert("contact", {
                 name: null,
-                npub: normalized as typeof Evolu.NonEmptyString1000.Type,
+                npub: Evolu.NonEmptyString1000.orThrow(normalized),
                 lnAddress: null,
                 groupName: null,
               });
@@ -248,7 +251,10 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
 
         closeScan();
         if (existing?.id) {
-          navigateTo({ route: "contactPay", id: existing.id as ContactId });
+          navigateTo({
+            route: "contactPay",
+            id: ContactId.orThrow(existing.id),
+          });
           return;
         }
 
@@ -295,7 +301,10 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
 
         closeScan();
         if (existing?.id) {
-          navigateTo({ route: "contactPay", id: existing.id as ContactId });
+          navigateTo({
+            route: "contactPay",
+            id: ContactId.orThrow(existing.id),
+          });
           return;
         }
         navigateTo({ route: "lnAddressPay", lnAddress: maybeLnAddress });

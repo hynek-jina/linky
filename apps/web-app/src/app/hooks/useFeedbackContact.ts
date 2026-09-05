@@ -1,7 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { OwnerId } from "@evolu/common";
-import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import { FEEDBACK_CONTACT_NPUB } from "../../utils/constants";
 import type { ContactNameRowLike } from "../types/appTypes";
@@ -40,10 +39,10 @@ export const useFeedbackContact = <
 
     if (existing?.id) {
       if (String(existing.name ?? "") === "Feedback") {
-        update("contact", { id: existing.id as ContactId, name: null });
+        update("contact", { id: existing.id, name: null });
       }
       openFeedbackContactPendingRef.current = false;
-      navigateTo({ route: "chat", id: existing.id as ContactId });
+      navigateTo({ route: "chat", id: existing.id });
       return;
     }
 
@@ -51,7 +50,7 @@ export const useFeedbackContact = <
 
     const payload = {
       name: null,
-      npub: targetNpub as typeof Evolu.NonEmptyString1000.Type,
+      npub: Evolu.NonEmptyString1000.orThrow(targetNpub),
       lnAddress: null,
       groupName: null,
     };
@@ -76,7 +75,7 @@ export const useFeedbackContact = <
     if (!existing?.id) return;
 
     openFeedbackContactPendingRef.current = false;
-    navigateTo({ route: "chat", id: existing.id as ContactId });
+    navigateTo({ route: "chat", id: existing.id });
   }, [contacts]);
 
   return {

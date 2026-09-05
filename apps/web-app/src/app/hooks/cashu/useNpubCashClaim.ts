@@ -1,8 +1,9 @@
+import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
 import { Either } from "effect";
 import React from "react";
 import { parseTokenText } from "@linky/linkshu";
-import type { JsonValue } from "../../../types/json";
+import { JsonValue } from "../../../types/json";
 import {
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
   LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
@@ -307,7 +308,7 @@ export const useNpubCashClaim = ({
       headers: { Authorization: auth },
     });
     if (!res.ok) return;
-    const json = (await res.json()) as JsonValue;
+    const json = Schema.decodeUnknownSync(JsonValue)(await res.json());
     for (const tokenText of extractUniqueClaimTokens(json)) {
       await acceptAndStoreCashuToken(tokenText);
     }

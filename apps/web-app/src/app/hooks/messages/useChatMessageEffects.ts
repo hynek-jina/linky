@@ -246,8 +246,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
     }
 
     if (chatMessages.length > prevCount) {
-      const isOut =
-        String((last as LocalNostrMessage).direction ?? "") === "out";
+      const isOut = String(last.direction ?? "") === "out";
       if (isOut) {
         requestAnimationFrame(() => {
           const chatContainer = chatMessagesRef.current;

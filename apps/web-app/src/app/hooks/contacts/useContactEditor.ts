@@ -1,3 +1,4 @@
+import { toEvoluText, toContactTextFields } from "../../lib/contactFields";
 import * as Evolu from "@evolu/common";
 import {
   decodeNpub,
@@ -12,7 +13,8 @@ import {
 } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import React from "react";
-import { evolu, type ContactId, type TransactionId } from "../../../evolu";
+import { evolu } from "../../../evolu";
+import { ContactId, TransactionId } from "../../../evoluIds";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
   getProfilePictureUrl,
@@ -269,35 +271,21 @@ export const useContactEditor = ({
               : null,
         id: payload.id,
         name:
-          payload.name !== undefined
-            ? payload.name
-            : (asNonEmptyString(source.name) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+          payload.name !== undefined ? payload.name : toEvoluText(source.name),
         npub:
-          payload.npub !== undefined
-            ? payload.npub
-            : (asNonEmptyString(source.npub) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+          payload.npub !== undefined ? payload.npub : toEvoluText(source.npub),
         lnAddress:
           payload.lnAddress !== undefined
             ? payload.lnAddress
-            : (asNonEmptyString(source.lnAddress) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.lnAddress),
         groupName:
           payload.groupName !== undefined
             ? payload.groupName
-            : (asNonEmptyString(source.groupName) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.groupName),
         groupNamesJson:
           payload.groupNamesJson !== undefined
             ? payload.groupNamesJson
-            : (asNonEmptyString(source.groupNamesJson) as
-                | typeof Evolu.NonEmptyString1000.Type
-                | null),
+            : toEvoluText(source.groupNamesJson),
       };
     },
     [appOwnerId, contacts],
@@ -370,7 +358,7 @@ export const useContactEditor = ({
 
         updateTransactionFields(
           {
-            id: transactionId as TransactionId,
+            id: TransactionId.orThrow(transactionId),
             contactId,
           },
           "ownerId" in row ? row.ownerId : null,
@@ -430,7 +418,7 @@ export const useContactEditor = ({
       selectedContactMetadata,
     );
     setContactEditInitial({
-      id: selectedContact.id as ContactId,
+      id: selectedContact.id,
       name: resolvedProfile.localName,
       npub: String(selectedContact.npub ?? ""),
       lnAddress: resolvedProfile.localLnAddress,
@@ -550,23 +538,19 @@ export const useContactEditor = ({
 
       if (duplicate?.id) {
         setStatus(t("contactExists"));
-        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        navigateTo({ route: "contact", id: ContactId.orThrow(duplicate.id) });
         setIsSavingContact(false);
         return;
       }
     }
 
-    const payload = {
-      name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
-      npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
-      lnAddress: lnAddress
-        ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
-        : null,
-      groupName: group ? (group as typeof Evolu.NonEmptyString1000.Type) : null,
-      groupNamesJson: groups.length
-        ? (groupNamesJson as typeof Evolu.NonEmptyString1000.Type)
-        : null,
-    };
+    const payload = toContactTextFields({
+      name,
+      npub,
+      lnAddress,
+      groupName: group,
+      groupNamesJson: groups.length ? groupNamesJson : null,
+    });
     let savedContactId: ContactId | null = editingId;
     const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
     const cachedMetadata = npub
@@ -967,7 +951,7 @@ export const useContactEditor = ({
       );
       if (duplicate?.id) {
         setStatus(t("contactExists"));
-        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        navigateTo({ route: "contact", id: ContactId.orThrow(duplicate.id) });
         return;
       }
 
@@ -978,13 +962,11 @@ export const useContactEditor = ({
         name: typeof Evolu.NonEmptyString1000.Type;
         npub: typeof Evolu.NonEmptyString1000.Type;
       }> = {
-        npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        npub: Evolu.NonEmptyString1000.orThrow(npub),
       };
-      if (name)
-        createPayload.name = name as typeof Evolu.NonEmptyString1000.Type;
+      if (name) createPayload.name = Evolu.NonEmptyString1000.orThrow(name);
       if (lnAddress) {
-        createPayload.lnAddress =
-          lnAddress as typeof Evolu.NonEmptyString1000.Type;
+        createPayload.lnAddress = Evolu.NonEmptyString1000.orThrow(lnAddress);
       }
 
       setIsSavingContact(true);
@@ -1057,7 +1039,7 @@ export const useContactEditor = ({
     );
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
-    navigateTo({ route: "contact", id: existing.id as ContactId });
+    navigateTo({ route: "contact", id: ContactId.orThrow(existing.id) });
   }, [contacts]);
 
   // Drops the local override: writes the watch-fed cached profile value into

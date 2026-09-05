@@ -1,3 +1,5 @@
+import { Schema, Option } from "effect";
+import { UnknownRecord } from "../../utils/schema";
 // Cross-device propagation of independent, pointer-only owner-lane rotations.
 // Each scope writes one synced `ownerMeta` row so adopters converge on the
 // active index and its rotation boundary without copying historical rows.
@@ -72,8 +74,10 @@ export const decodeRotationSnapshot = (
     } catch {
       return null;
     }
-    if (typeof parsed !== "object" || parsed === null) return null;
-    const obj = parsed as Record<string, unknown>;
+    const obj = Option.getOrNull(
+      Schema.decodeUnknownOption(UnknownRecord)(parsed),
+    );
+    if (!obj) return null;
     const index = sanitizeNonNegativeInt(obj.index);
     if (index === null) return null;
     return {

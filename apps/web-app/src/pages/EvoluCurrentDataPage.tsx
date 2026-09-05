@@ -117,40 +117,48 @@ export function EvoluCurrentDataPage(): React.ReactElement {
     );
 
     return Object.fromEntries(
-      Object.entries(currentData).map(([tableName, rows]) => {
-        if (!isTrackedTable(tableName)) {
-          return [tableName, rows];
-        }
-        if (tableName === "contact") {
-          if (!activeContactsOwnerId) return [tableName, []];
-          return [
-            tableName,
-            rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
-          ];
-        }
-        if (tableName === "cashuToken") {
-          if (visibleCashuOwnerIds.size === 0) return [tableName, []];
-          return [
-            tableName,
-            rows.filter((row) => visibleCashuOwnerIds.has(readRowOwnerId(row))),
-          ];
-        }
-        if (tableName === "transaction") {
-          if (visibleTransactionOwnerIds.size === 0) return [tableName, []];
+      Object.entries(currentData).map(
+        ([tableName, rows]): [string, typeof rows] => {
+          if (!isTrackedTable(tableName)) {
+            return [tableName, rows];
+          }
+          if (tableName === "contact") {
+            if (!activeContactsOwnerId) return [tableName, []];
+            return [
+              tableName,
+              rows.filter(
+                (row) => readRowOwnerId(row) === activeContactsOwnerId,
+              ),
+            ];
+          }
+          if (tableName === "cashuToken") {
+            if (visibleCashuOwnerIds.size === 0) return [tableName, []];
+            return [
+              tableName,
+              rows.filter((row) =>
+                visibleCashuOwnerIds.has(readRowOwnerId(row)),
+              ),
+            ];
+          }
+          if (tableName === "transaction") {
+            if (visibleTransactionOwnerIds.size === 0) return [tableName, []];
+            return [
+              tableName,
+              rows.filter((row) =>
+                visibleTransactionOwnerIds.has(readRowOwnerId(row)),
+              ),
+            ];
+          }
+          if (visibleMessageOwnerIds.size === 0) return [tableName, []];
           return [
             tableName,
             rows.filter((row) =>
-              visibleTransactionOwnerIds.has(readRowOwnerId(row)),
+              visibleMessageOwnerIds.has(readRowOwnerId(row)),
             ),
           ];
-        }
-        if (visibleMessageOwnerIds.size === 0) return [tableName, []];
-        return [
-          tableName,
-          rows.filter((row) => visibleMessageOwnerIds.has(readRowOwnerId(row))),
-        ];
-      }),
-    ) as Awaited<ReturnType<typeof loadEvoluCurrentData>>;
+        },
+      ),
+    );
   }, [
     currentData,
     evoluCashuOwnerId,

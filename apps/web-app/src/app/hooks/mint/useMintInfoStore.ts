@@ -133,7 +133,7 @@ export const useMintInfoStore = ({
 
       const existing = mintInfoByUrl.get(cleaned);
 
-      const now = Math.floor(nowSec) as typeof Evolu.PositiveInt.Type;
+      const now = Evolu.PositiveInt.orThrow(Math.floor(nowSec));
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return;
 

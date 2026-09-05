@@ -2960,8 +2960,8 @@ export const useContactsMessagingComposition = ({
     const bestName = unknownNameByNpub[npub] ?? null;
     const savedName = buildSavedContactName(bestName, npub);
     const payload = {
-      name: savedName as typeof Evolu.NonEmptyString1000.Type,
-      npub: npub as typeof Evolu.NonEmptyString1000.Type,
+      name: Evolu.NonEmptyString1000.orThrow(savedName),
+      npub: Evolu.NonEmptyString1000.orThrow(npub),
       lnAddress: null,
       groupName: null,
     };
@@ -3107,7 +3107,7 @@ export const useContactsMessagingComposition = ({
         (contact) => normalizeNpubIdentifier(contact.npub) === npub,
       );
       if (existing?.id) {
-        navigateTo({ route: "contact", id: existing.id as ContactId });
+        navigateTo({ route: "contact", id: existing.id });
         return;
       }
 
@@ -3129,11 +3129,13 @@ export const useContactsMessagingComposition = ({
 
       const defaultProfile = deriveDefaultProfile(npub, lang);
       const payload = {
-        name: buildSavedContactName(
-          unknownNameByNpub[npub] ?? defaultProfile.name,
-          npub,
-        ) as typeof Evolu.NonEmptyString1000.Type,
-        npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        name: Evolu.NonEmptyString1000.orThrow(
+          buildSavedContactName(
+            unknownNameByNpub[npub] ?? defaultProfile.name,
+            npub,
+          ),
+        ),
+        npub: Evolu.NonEmptyString1000.orThrow(npub),
         lnAddress: null,
         groupName: null,
       };

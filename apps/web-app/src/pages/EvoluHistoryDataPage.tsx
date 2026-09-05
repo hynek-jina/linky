@@ -55,7 +55,7 @@ export function EvoluHistoryDataPage(): React.ReactElement {
   }, []);
 
   const visibleHistoryData = useMemo(() => {
-    if (allowedOwnerIds.size === 0) return [] as EvoluHistoryRow[];
+    if (allowedOwnerIds.size === 0) return [];
     return historyData.filter((row) =>
       allowedOwnerIds.has(readRowOwnerId(row)),
     );

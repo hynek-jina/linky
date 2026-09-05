@@ -116,6 +116,8 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 
 ### Evolu persistence and owner lanes
 
+- Runtime contact/transaction ID validation lives in `src/evoluIds.ts`, which does not initialize the database. `evolu.ts` re-exports these IDs for existing consumers; lightweight hooks import the schemas directly. Contact import, editing, and owner migration share the text-field constructors in `app/lib/contactFields.ts`.
+
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
 - Web startup probes OPFS before creating Evolu. When the probe rejects (notably Safari Private Browsing, where OPFS is unavailable) or stalls past 3s, boot pauses and shows a consent prompt instead of silently degrading; only an explicit "Continue with temporary session" switches to Evolu's in-memory SQLite driver, while a stalled probe that recovers before the click dismisses the prompt and boots persistently. Consent is remembered per tab in `sessionStorage` (`linky.in_memory_session.v1`) so same-tab reloads (account restore, PWA auto-update) don't re-prompt. In-memory sessions still sync through the configured Evolu transports, so relay-backed data keeps loading. Both boot watchdogs (the bootstrap stuck-stage error and the index.html shell recovery reload) pause via `linky-boot-decision-pending`/`-resolved` events while the prompt awaits a decision
 - Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables) and uses deterministic `messages-n` owner lanes for seed logins (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/4'/<index>'`); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`

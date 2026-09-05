@@ -1,3 +1,5 @@
+import { ContactId, TransactionId } from "./evoluIds";
+export { ContactId, TransactionId } from "./evoluIds";
 import { Schema as EffectSchema } from "effect";
 import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
@@ -365,9 +367,6 @@ const probeWebSocketConnection = (
   });
 };
 
-const ContactId = Evolu.id("Contact");
-export type ContactId = typeof ContactId.Type;
-
 const CashuTokenId = Evolu.id("CashuToken");
 export type CashuTokenId = typeof CashuTokenId.Type;
 
@@ -382,9 +381,6 @@ type NostrReactionId = typeof NostrReactionId.Type;
 
 const OwnerMetaId = Evolu.id("OwnerMeta");
 type OwnerMetaId = typeof OwnerMetaId.Type;
-
-const TransactionId = Evolu.id("Transaction");
-export type TransactionId = typeof TransactionId.Type;
 
 export const Schema = {
   contact: {

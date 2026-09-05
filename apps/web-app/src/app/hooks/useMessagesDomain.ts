@@ -899,9 +899,8 @@ export const useMessagesDomain = ({
       const isOverlayMessage = overlayMessagesRef.current.some(
         (message) => trimString(message.id) === normalizedId,
       );
-      const shadow =
-        nostrMessageUpdateShadowRef.current.get(normalizedId) ??
-        ({} as NostrMessageShadowState);
+      const shadow: NostrMessageShadowState =
+        nostrMessageUpdateShadowRef.current.get(normalizedId) ?? {};
 
       const readShadowText = <K extends keyof NostrMessageShadowState>(
         key: K,
@@ -1233,9 +1232,8 @@ export const useMessagesDomain = ({
       const current = nostrReactionsLatestRef.current.find(
         (reaction) => trimString(reaction.id) === normalizedId,
       );
-      const shadow =
-        nostrReactionUpdateShadowRef.current.get(normalizedId) ??
-        ({} as NostrReactionShadowState);
+      const shadow: NostrReactionShadowState =
+        nostrReactionUpdateShadowRef.current.get(normalizedId) ?? {};
 
       const readShadowText = <K extends keyof NostrReactionShadowState>(
         key: K,
@@ -1769,9 +1767,9 @@ export const useMessagesDomain = ({
     return byMessage;
   }, [nostrReactionsLocal]);
 
-  const chatMessages = React.useMemo(() => {
+  const chatMessages = React.useMemo<LocalNostrMessage[]>(() => {
     const id = trimString(chatContactId);
-    if (!id) return [] as LocalNostrMessage[];
+    if (!id) return [];
 
     const list = messagesByContactId.get(id) ?? [];
     return dedupeChatMessages(list);

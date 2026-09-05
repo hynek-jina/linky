@@ -459,11 +459,7 @@ export const useCashuWalletComposition = ({
           .selectFrom("ownerMeta")
           .selectAll()
           .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .where(
-            "scope",
-            "=",
-            "defaultMint" as typeof Evolu.NonEmptyString100.Type,
-          ),
+          .where("scope", "=", Evolu.NonEmptyString100.orThrow("defaultMint")),
       ),
     [],
   );
@@ -524,8 +520,8 @@ export const useCashuWalletComposition = ({
         "ownerMeta",
         {
           id: ownerMetaDefaultMintRowId,
-          scope: "defaultMint" as typeof Evolu.NonEmptyString100.Type,
-          value: cleaned as typeof Evolu.NonEmptyString1000.Type,
+          scope: Evolu.NonEmptyString100.orThrow("defaultMint"),
+          value: Evolu.NonEmptyString1000.orThrow(cleaned),
         },
         { ownerId: metaOwnerId },
       );
@@ -1246,8 +1242,8 @@ export const useCashuWalletComposition = ({
         normalizedNpub,
       );
       const payload = {
-        name: contactName as typeof Evolu.NonEmptyString1000.Type,
-        npub: normalizedNpub as typeof Evolu.NonEmptyString1000.Type,
+        name: Evolu.NonEmptyString1000.orThrow(contactName),
+        npub: Evolu.NonEmptyString1000.orThrow(normalizedNpub),
         lnAddress: null,
         groupName: null,
       };

@@ -1,3 +1,5 @@
+import { Option, Schema } from "effect";
+import { JsonValue } from "../../../types/json";
 import * as Evolu from "@evolu/common";
 import type { CashuTokenRow } from "../../../evolu";
 import {
@@ -110,7 +112,7 @@ export const getActiveMintInfoRows = (
   mintInfoAll: LocalMintInfoRow[],
 ): LocalMintInfoRow[] => {
   return [...mintInfoAll]
-    .filter((row) => !isMintDeletedRow(row as MintInfoRowLike))
+    .filter((row) => !isMintDeletedRow(row))
     .sort((a, b) => getLastSeenAtSec(b) - getLastSeenAtSec(a));
 };
 
@@ -162,8 +164,8 @@ export const getMintInfoByUrlMap = (
       continue;
     }
 
-    const existingDeleted = isMintDeletedRow(existing as MintInfoRowLike);
-    const rowDeleted = isMintDeletedRow(row as MintInfoRowLike);
+    const existingDeleted = isMintDeletedRow(existing);
+    const rowDeleted = isMintDeletedRow(row);
     if (existingDeleted && !rowDeleted) {
       map.set(url, row);
     }
@@ -241,17 +243,27 @@ export const extractActiveKeysetPpk = (
   keysetsPayload: unknown,
   unit = "sat",
 ): number | null => {
-  if (!isRecord(keysetsPayload)) return null;
-  const list = keysetsPayload.keysets;
-  if (!Array.isArray(list)) return null;
-  const fees = list
-    .filter(isRecord)
-    .filter((keyset) => keyset.active === true && keyset.unit === unit)
-    .map((keyset) => keyset.input_fee_ppk ?? 0)
-    .filter(
-      (fee): fee is number =>
-        typeof fee === "number" && Number.isInteger(fee) && fee >= 0,
-    );
+  const decoded = Schema.decodeUnknownOption(
+    Schema.Struct({
+      keysets: Schema.Array(Schema.Unknown),
+    }),
+  )(keysetsPayload);
+  if (Option.isNone(decoded)) return null;
+  const keysetSchema = Schema.Struct({
+    active: Schema.Boolean,
+    unit: Schema.String,
+    input_fee_ppk: Schema.optionalWith(Schema.Int.pipe(Schema.nonNegative()), {
+      default: () => 0,
+    }),
+  });
+  const fees = decoded.value.keysets.flatMap((value) => {
+    const keyset = Schema.decodeUnknownOption(keysetSchema)(value);
+    return Option.isSome(keyset) &&
+      keyset.value.active &&
+      keyset.value.unit === unit
+      ? [keyset.value.input_fee_ppk]
+      : [];
+  });
   return fees.length ? Math.min(...fees) : null;
 };
 
@@ -263,24 +275,17 @@ export const parseMintInfoPayload = (
   infoJson: string | null;
   supportsMpp: string | null;
 } => {
-  const nuts =
-    (info as { nuts?: unknown }).nuts ??
-    (info as { NUTS?: unknown }).NUTS ??
-    null;
-  const nut15 = (() => {
-    if (!nuts || typeof nuts !== "object") return null;
-    const rec = nuts as Record<string, unknown>;
-    return rec["15"] ?? rec["nut15"] ?? rec["NUT15"] ?? null;
-  })();
-
-  const feesRaw =
-    (info as { fees?: unknown }).fees ??
-    (info as { fee?: unknown }).fee ??
-    null;
+  const decodeRecord = Schema.decodeUnknownOption(
+    Schema.Record({ key: Schema.String, value: JsonValue }),
+  );
+  const payload = Option.getOrNull(decodeRecord(info));
+  const nuts = Option.getOrNull(decodeRecord(payload?.nuts ?? payload?.NUTS));
+  const nut15 = nuts?.["15"] ?? nuts?.nut15 ?? nuts?.NUT15 ?? null;
+  const feesRaw = payload?.fees ?? payload?.fee ?? null;
   const ppk =
     extractActiveKeysetPpk(keysetsPayload) ??
-    extractPpk(feesRaw as Parameters<typeof extractPpk>[0]) ??
-    extractPpk(info as Parameters<typeof extractPpk>[0]);
+    extractPpk(feesRaw) ??
+    extractPpk(payload);
   const fees = ppk !== null ? { ppk, raw: feesRaw } : feesRaw;
 
   return {
@@ -303,9 +308,7 @@ interface DuplicateGroup {
 const getDuplicateGroups = (
   mintInfoAll: LocalMintInfoRow[],
 ): DuplicateGroup[] => {
-  const active = mintInfoAll.filter(
-    (row) => !isMintDeletedRow(row as MintInfoRowLike),
-  );
+  const active = mintInfoAll.filter((row) => !isMintDeletedRow(row));
   if (active.length < 2) return [];
 
   const grouped = new Map<string, DuplicateRow[]>();
@@ -315,10 +318,10 @@ const getDuplicateGroups = (
     if (!key || !id) continue;
     const existing = grouped.get(key);
     const withTypes = {
-      ...(row as MintInfoRowLike),
+      ...row,
       id,
       url: String(row.url ?? ""),
-    } as DuplicateRow;
+    };
     if (existing) existing.push(withTypes);
     else grouped.set(key, [withTypes]);
   }

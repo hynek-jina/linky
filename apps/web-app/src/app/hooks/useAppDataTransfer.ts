@@ -1,7 +1,9 @@
+import { toContactTextFields } from "../lib/contactFields";
+import { Schema } from "effect";
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { CashuTokenRow, ContactId } from "../../evolu";
-import type { JsonValue } from "../../types/json";
+import type { CashuTokenRow } from "../../evolu";
+import { JsonValue } from "../../types/json";
 import { asRecord } from "../../utils/validation";
 import type { ContactRowLike } from "../types/appTypes";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
@@ -50,14 +52,14 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
         state?: typeof Evolu.NonEmptyString100.Type;
       } = {
         id: createCashuTokenId(args.rawToken || args.token),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
+        token: Evolu.NonEmptyString.orThrow(args.token),
       };
 
       const state = String(args.state ?? "").trim();
-      if (state) payload.state = state as typeof Evolu.NonEmptyString100.Type;
+      if (state) payload.state = Evolu.NonEmptyString100.orThrow(state);
 
       const error = String(args.error ?? "").trim();
-      if (error) payload.error = error as typeof Evolu.NonEmptyString1000.Type;
+      if (error) payload.error = Evolu.NonEmptyString1000.orThrow(error);
 
       return payload;
     },
@@ -135,7 +137,9 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
 
       let parsed: JsonValue;
       try {
-        parsed = JSON.parse(String(text ?? "")) as JsonValue;
+        parsed = Schema.decodeUnknownSync(Schema.parseJson(JsonValue))(
+          String(text ?? ""),
+        );
       } catch {
         pushToast(t("importInvalid"));
         return;
@@ -209,59 +213,24 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
           continue;
         }
 
-        const payload = {
-          name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
-          npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
-          lnAddress: lnAddress
-            ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          groupName: groupName
-            ? (groupName as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          groupNamesJson: groupNamesJson
-            ? (groupNamesJson as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-        };
+        const payload = toContactTextFields({
+          name,
+          npub,
+          lnAddress,
+          groupName,
+          groupNamesJson,
+        });
 
         if (existing && existing.id) {
-          const id = existing.id as ContactId;
+          const id = existing.id;
+          const previous = toContactTextFields(existing);
           const merged = {
             id,
-            name:
-              payload.name ??
-              (String(existing.name ?? "").trim()
-                ? (String(
-                    existing.name ?? "",
-                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
-                : null),
-            npub:
-              payload.npub ??
-              (String(existing.npub ?? "").trim()
-                ? (String(
-                    existing.npub ?? "",
-                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
-                : null),
-            lnAddress:
-              payload.lnAddress ??
-              (String(existing.lnAddress ?? "").trim()
-                ? (String(
-                    existing.lnAddress ?? "",
-                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
-                : null),
-            groupName:
-              payload.groupName ??
-              (String(existing.groupName ?? "").trim()
-                ? (String(
-                    existing.groupName ?? "",
-                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
-                : null),
-            groupNamesJson:
-              payload.groupNamesJson ??
-              (String(existing.groupNamesJson ?? "").trim()
-                ? (String(
-                    existing.groupNamesJson ?? "",
-                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
-                : null),
+            name: payload.name ?? previous.name,
+            npub: payload.npub ?? previous.npub,
+            lnAddress: payload.lnAddress ?? previous.lnAddress,
+            groupName: payload.groupName ?? previous.groupName,
+            groupNamesJson: payload.groupNamesJson ?? previous.groupNamesJson,
           };
 
           const result = appOwnerId

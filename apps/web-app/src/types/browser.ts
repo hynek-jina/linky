@@ -13,27 +13,11 @@ export interface BroadcastChannelLike<
   close(): void;
 }
 
-interface BroadcastChannelConstructorLike<TMessage = JsonValue> {
-  new (name: string): BroadcastChannelLike<TMessage>;
-}
-
-export interface GlobalWithOptionalBroadcastChannel<TMessage = JsonValue> {
-  BroadcastChannel?: BroadcastChannelConstructorLike<TMessage>;
-}
-
 export interface LockManagerLike<TResult = JsonValue> {
   request?: (
     name: string,
     callback: () => Promise<TResult>,
   ) => Promise<TResult>;
-}
-
-export interface NavigatorWithOptionalLocks<TResult = JsonValue> {
-  locks?: LockManagerLike<TResult>;
-}
-
-export interface NavigatorWithOptionalStorage {
-  storage?: StorageManager;
 }
 
 // `beforeinstallprompt` event (Chromium-only). The spec is still draft, so
