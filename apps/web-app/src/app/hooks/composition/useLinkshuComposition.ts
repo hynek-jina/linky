@@ -283,10 +283,8 @@ export const useLinkshuComposition = ({
 
   React.useEffect(() => {
     if (!currentNsec) return;
-    // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration
-    // .ts): runs before seed resolution, and the runtime only exists after
-    // the resolved seed lands, so linkshu can never read a counter that
-    // still lives under a legacy key.
+    // Migrate before seed resolution so the runtime sees the copied counters.
+    // Removal gate in docs/architecture.md.
     migrateLegacyCashuLocalState();
     let cancelled = false;
     void resolveLinkshuSeed()

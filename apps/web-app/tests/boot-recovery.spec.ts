@@ -6,7 +6,16 @@ import { setBaseStorage, MOBILE_VIEWPORT } from "./helpers/appState";
 import { createSeedIdentity, setSeedLoginStorage } from "./helpers/identity";
 import { addContactByNpub } from "./helpers/contacts";
 import { watchAppErrors } from "./helpers/diagnostics";
-import { stubFiatRates } from "./helpers/network";
+import { stubFiatRates, stubThirdPartyAssets } from "./helpers/network";
+
+test.use({ serviceWorkers: "block" });
+
+const MAIN_BUNDLE = /\/(?:src\/main\.tsx|assets\/index-[^/]+\.js)(?:\?.*)?$/;
+
+test.beforeEach(async ({ page }) => {
+  await stubFiatRates(page);
+  await stubThirdPartyAssets(page);
+});
 
 test("recovers once when the main bundle cannot start", async ({ page }) => {
   let mainBundleRequests = 0;
@@ -23,7 +32,7 @@ test("recovers once when the main bundle cannot start", async ({ page }) => {
       value: 50,
     });
   });
-  await page.route("**/src/main.tsx*", async (route) => {
+  await page.route(MAIN_BUNDLE, async (route) => {
     mainBundleRequests += 1;
     await route.abort();
   });
@@ -56,7 +65,7 @@ test("does not reload forever when session storage is unavailable", async ({
       value: 50,
     });
   });
-  await page.route("**/src/main.tsx*", async (route) => {
+  await page.route(MAIN_BUNDLE, async (route) => {
     mainBundleRequests += 1;
     await route.abort();
   });
@@ -115,7 +124,6 @@ for (const channelState of ["missing", "blocked"]) {
     page.setDefaultTimeout(20_000);
     await setBaseStorage(page);
     await setSeedLoginStorage(page, await createSeedIdentity());
-    await stubFiatRates(page);
     await page.addInitScript((state) => {
       Object.defineProperty(navigator, "locks", {
         configurable: true,

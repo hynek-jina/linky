@@ -1,20 +1,19 @@
 import { createSlip39Share } from "@linky/identity";
 import { expect, test, type Page } from "@playwright/test";
 import { Effect } from "effect";
-import { nip19 } from "nostr-tools";
 import { MOBILE_VIEWPORT, setBaseStorage } from "./helpers/appState";
 import { setRandomIdentityStorage } from "./helpers/identity";
+import { stubFiatRates, stubThirdPartyAssets } from "./helpers/network";
+
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ page }) => {
+  await stubFiatRates(page);
+  await stubThirdPartyAssets(page);
+});
 
 const CONTACT_NPUB =
   "npub12g0qmc3xa4hc9nxca936chppd6zhkr494xyypstcd7wg0gaa2xzswunml3";
-const decodedContactNpub = nip19.decode(CONTACT_NPUB);
-if (
-  decodedContactNpub.type !== "npub" ||
-  typeof decodedContactNpub.data !== "string"
-) {
-  throw new Error("Invalid test contact npub");
-}
-const CONTACT_PUBKEY_HEX = decodedContactNpub.data;
 
 const setAuthenticatedStorage = async (page: Page) => {
   await setBaseStorage(page);
@@ -318,9 +317,14 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   await archiveButton.click();
   await page.waitForURL(/#(?:contacts)?$/, { timeout: 10_000 });
 
-  const unknownContactId = `unknown:${CONTACT_PUBKEY_HEX}`;
-  await page.goto(`/#chat/${encodeURIComponent(unknownContactId)}`);
+  await expect(page.locator("[data-guide='contact-card']")).toHaveCount(0);
+  await page.goto(`/#contact/${encodeURIComponent(contactId)}`);
+  await expect(
+    page.getByText("Archived contact", { exact: true }),
+  ).toBeVisible();
+  await page.goto(`/#chat/${encodeURIComponent(contactId)}`);
   await expect(
     page.locator(".chat-message").filter({ hasText: "First message" }).first(),
   ).toBeVisible();
+  await expect(editedBubble).toContainText("Reply body edited");
 });

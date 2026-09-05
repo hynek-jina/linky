@@ -673,12 +673,12 @@ export const useCashuWalletComposition = ({
     writeOwnerId: cashuOwnerId,
   });
 
-  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration.ts)
+  // Legacy migration; removal gate in docs/architecture.md
   React.useEffect(() => {
     seedLinkshuSeenMintsFromTokenRows(cashuTokensAll);
   }, [cashuTokensAll]);
 
-  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see legacyAcceptedTokenDrain.ts)
+  // Legacy migration; removal gate in docs/architecture.md
   React.useEffect(() => {
     if (receiveCashuToken === null) return;
     void drainLegacyAcceptedCashuToken(receiveCashuToken);

@@ -22,7 +22,7 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - **NEVER use `as` or `any` to cast types** - validate with a runtime type guard instead of casting
 - Branded ID types from Evolu (`ContactId`, `CashuTokenId`, `MintId`, etc.) - don't use plain strings
 - Components use `interface` for props, not `type`
-- LocalStorage keys use `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`)
+- New browser storage names use the `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`). Existing exceptions are listed in `docs/architecture.md` under "Compatibility and audit decisions"; preserve those names for upgrades.
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first
 - Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
@@ -60,7 +60,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 Two Playwright projects in `apps/web-app/playwright.config.ts`:
 
 - `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — payment, migration, chat/attachment recovery, signup, and owner-lane sync tests listed in `LOCAL_STACK_SPECS`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+- `local-stack` — payment, migration, boot/app-shell recovery, chat/attachment recovery, signup, and owner-lane sync tests listed in `LOCAL_STACK_SPECS`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)
@@ -83,6 +83,10 @@ Playwright starts _every_ `webServer` entry regardless of `--project`, so a Vite
 `.github/workflows/e2e.yml` runs the `local-stack` project on every push to main and is reused (`workflow_call`) as a required job by both Android release workflows. The Vercel production deploy is gated on the same `e2e` check via Deployment Checks in the Vercel dashboard.
 
 Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
+
+## Site E2E tests
+
+`bun run --filter @linky/site test:e2e` uses the existing mints on :3338/:3339 and Nostr relay on :7777, and builds the site on :5180 with `VITE_ALLOW_TEST_MINT=1`.
 
 ## linkshu integration tests
 
