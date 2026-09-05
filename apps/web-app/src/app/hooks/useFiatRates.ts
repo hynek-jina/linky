@@ -6,105 +6,14 @@ import {
 } from "../../utils/constants";
 import type { FiatRates } from "../../utils/displayAmounts";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
-import { readField } from "../../utils/unknown";
+import {
+  decodeFiatRates,
+  isFiatRatesStale,
+  fetchFiatRates,
+} from "@linky/linkshu";
 
-const isFiatRates = (value: unknown): value is FiatRates => {
-  const chfPerBtc = readField(value, "chfPerBtc");
-  const czkPerBtc = readField(value, "czkPerBtc");
-  const eurPerBtc = readField(value, "eurPerBtc");
-  const fetchedAtMs = readField(value, "fetchedAtMs");
-  const usdPerBtc = readField(value, "usdPerBtc");
-
-  return (
-    typeof chfPerBtc === "number" &&
-    Number.isFinite(chfPerBtc) &&
-    chfPerBtc > 0 &&
-    typeof czkPerBtc === "number" &&
-    Number.isFinite(czkPerBtc) &&
-    czkPerBtc > 0 &&
-    typeof eurPerBtc === "number" &&
-    Number.isFinite(eurPerBtc) &&
-    eurPerBtc > 0 &&
-    typeof fetchedAtMs === "number" &&
-    Number.isFinite(fetchedAtMs) &&
-    fetchedAtMs > 0 &&
-    typeof usdPerBtc === "number" &&
-    Number.isFinite(usdPerBtc) &&
-    usdPerBtc > 0
-  );
-};
-
-const readCachedFiatRates = (): FiatRates | null => {
-  const raw = safeLocalStorageGet(FIAT_RATES_CACHE_STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isFiatRates(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
-const isFiatRatesStale = (value: FiatRates | null): boolean => {
-  if (!value) return true;
-  return Date.now() - value.fetchedAtMs >= FIAT_RATES_TTL_MS;
-};
-
-const parseFetchedRates = (value: unknown): FiatRates | null => {
-  const data = readField(value, "data");
-  const rates = readField(data, "rates");
-  const chfRaw = readField(rates, "CHF");
-  const czkRaw = readField(rates, "CZK");
-  const eurRaw = readField(rates, "EUR");
-  const usdRaw = readField(rates, "USD");
-
-  const chf = Number.parseFloat(String(chfRaw ?? ""));
-  const czk = Number.parseFloat(String(czkRaw ?? ""));
-  const eur = Number.parseFloat(String(eurRaw ?? ""));
-  const usd = Number.parseFloat(String(usdRaw ?? ""));
-
-  if (
-    !Number.isFinite(chf) ||
-    chf <= 0 ||
-    !Number.isFinite(czk) ||
-    czk <= 0 ||
-    !Number.isFinite(eur) ||
-    eur <= 0 ||
-    !Number.isFinite(usd) ||
-    usd <= 0
-  ) {
-    return null;
-  }
-
-  return {
-    chfPerBtc: chf,
-    czkPerBtc: czk,
-    eurPerBtc: eur,
-    fetchedAtMs: Date.now(),
-    usdPerBtc: usd,
-  };
-};
-
-const fetchFiatRates = async (
-  signal: AbortSignal,
-): Promise<FiatRates | null> => {
-  const url = new URL("https://api.coinbase.com/v2/exchange-rates");
-  url.searchParams.set("currency", "BTC");
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-    signal,
-  });
-
-  if (!response.ok) return null;
-
-  const payload: unknown = await response.json();
-  return parseFetchedRates(payload);
-};
-
+const readCachedFiatRates = () =>
+  decodeFiatRates(safeLocalStorageGet(FIAT_RATES_CACHE_STORAGE_KEY));
 export const useFiatRates = (): FiatRates | null => {
   const canRunNetworkWork = useDeferredOnlineReady();
   const [fiatRates, setFiatRates] = React.useState<FiatRates | null>(() =>

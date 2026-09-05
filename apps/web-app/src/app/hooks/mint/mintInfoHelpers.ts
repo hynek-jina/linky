@@ -1,5 +1,6 @@
 import { Option, Schema } from "effect";
 import { JsonValue } from "../../../types/json";
+import { findMintInfoIconValue } from "@linky/linkshu";
 import * as Evolu from "@evolu/common";
 import type { CashuTokenRow } from "../../../evolu";
 import {
@@ -25,58 +26,6 @@ interface MintInfoRowLike {
   supportsMpp?: LocalMintInfoRow["supportsMpp"];
   url?: OptionalText;
 }
-
-type MintInfoSearchPrimitive = boolean | number | string | null | undefined;
-
-interface MintInfoSearchObject {
-  [key: string]: MintInfoSearchValue;
-}
-
-type MintInfoSearchValue =
-  | MintInfoSearchObject
-  | MintInfoSearchPrimitive
-  | MintInfoSearchValue[];
-
-const MINT_INFO_ICON_KEYS = [
-  "icon_url",
-  "iconUrl",
-  "icon",
-  "logo",
-  "image",
-  "image_url",
-  "imageUrl",
-];
-
-const isSearchableMintInfoValue = (
-  value: unknown,
-): value is MintInfoSearchObject | MintInfoSearchValue[] => {
-  return typeof value === "object" && value !== null;
-};
-
-const findMintInfoIconValue = (
-  value: unknown,
-  seen: Set<MintInfoSearchObject | MintInfoSearchValue[]>,
-): string | null => {
-  if (!isSearchableMintInfoValue(value)) return null;
-  if (seen.has(value)) return null;
-  seen.add(value);
-
-  if (!Array.isArray(value)) {
-    for (const key of MINT_INFO_ICON_KEYS) {
-      const rawValue = value[key];
-      if (typeof rawValue !== "string") continue;
-      const trimmed = rawValue.trim();
-      if (trimmed) return trimmed;
-    }
-  }
-
-  for (const inner of Object.values(value)) {
-    const found = findMintInfoIconValue(inner, seen);
-    if (found) return found;
-  }
-
-  return null;
-};
 
 export const isMintDeletedRow = (row: MintInfoRowLike): boolean =>
   String(row.isDeleted ?? "") === String(Evolu.sqliteTrue);

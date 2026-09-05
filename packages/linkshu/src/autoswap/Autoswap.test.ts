@@ -131,6 +131,7 @@ const makeMelt = (
 ) => {
   const invoices: string[] = [];
   const service = Melt.make({
+    status: () => Effect.succeed("UNPAID"),
     quote: () => Effect.die("melt.quote not under test"),
     melt: (draft: MeltDraft) => {
       const index = invoices.length;

@@ -5,6 +5,7 @@ import { Inspector } from "../inspector/Inspector";
 import { inspectOperation } from "../internal/operations";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
+import { findMintInfoIconValue } from "./icons";
 import { MintInfo } from "./domain";
 import { collectKnownMints } from "./internal/knownMints";
 import { boundKeysetInputFeePpk } from "./internal/keysetFees";
@@ -23,7 +24,15 @@ const buildMintInfo = (mint: MintUrl, wallet: LoadedWallet): MintInfo => {
     name: nullableString(raw.name),
     inputFeePpk: boundKeysetInputFeePpk(wallet),
     supportsMpp: published.isSupported(15).supported,
-    iconUrl: nullableString(raw.icon_url),
+    iconUrl: (() => {
+      const icon = findMintInfoIconValue(raw, new Set());
+      if (!icon) return null;
+      try {
+        return new URL(icon, mint).toString();
+      } catch {
+        return null;
+      }
+    })(),
   });
 };
 

@@ -69,3 +69,7 @@ export * from "./relayLists/RelayLists";
 export * from "./services/LinkstrIdentity";
 export * from "./services/NostrTransport";
 export * from "./services/RelayPolicy";
+
+export * from "./paymentTelemetry/classifyError";
+export * from "./paymentTelemetry/defaults";
+export * from "./defaultRelays";

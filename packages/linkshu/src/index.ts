@@ -31,3 +31,13 @@ export * from "./topup/domain";
 export * from "./topup/Topup";
 export * from "./validation/domain";
 export * from "./validation/Validation";
+
+export * from "./lnurl/lnurlPay";
+export * from "./invoice/paymentAmountFallback";
+export * from "./mint/icons";
+export * from "./fiatRates";
+export {
+  getLightningAddressRequestUrl,
+  splitLightningAddress,
+  stripLightningPrefix,
+} from "./lnurl/lightningAddress";

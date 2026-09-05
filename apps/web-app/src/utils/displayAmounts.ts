@@ -1,3 +1,5 @@
+import type { FiatRates } from "@linky/linkshu";
+export type { FiatRates } from "@linky/linkshu";
 import { formatInteger, normalizeLocale } from "./formatting";
 
 type FiatDisplayCurrency = "czk" | "eur" | "chf" | "usd";
@@ -13,14 +15,6 @@ export const DISPLAY_CURRENCIES: ReadonlyArray<DisplayCurrency> = [
   "usd",
   "hidden",
 ];
-
-export interface FiatRates {
-  chfPerBtc: number;
-  czkPerBtc: number;
-  eurPerBtc: number;
-  fetchedAtMs: number;
-  usdPerBtc: number;
-}
 
 export interface DisplayAmountOptions {
   displayCurrency: DisplayCurrency;

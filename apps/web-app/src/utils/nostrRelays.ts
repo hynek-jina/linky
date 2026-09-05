@@ -1,14 +1,9 @@
+import { DEFAULT_NOSTR_RELAYS } from "@linky/linkstr";
 import { RelayUrl } from "@linky/linkstr";
 import { Schema } from "effect";
 import { safeLocalStorageGetJson, safeLocalStorageSetJson } from "./storage";
 
 const isRelayUrl = Schema.is(RelayUrl);
-
-const DEFAULT_NOSTR_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.0xchat.com",
-];
 
 const envRelays = Array.from(
   new Set(

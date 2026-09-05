@@ -1,4 +1,8 @@
 import {
+  isLightningAddress,
+  getLightningAddressRequestUrl,
+} from "@linky/linkshu/lightning-address";
+import {
   getFirstQueryValue,
   parseJsonObject,
   sendProxyFailure,
@@ -8,19 +12,13 @@ import {
 } from "./_npubcash.js";
 import { isAllowedTarget, safeFetch } from "./_safeFetch.js";
 
-const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:?#\\%]+\.[^@\s/:?#\\%]+$/;
 const MILLISAT_AMOUNT_PATTERN = /^\d{1,15}$/;
 const MAX_COMMENT_LENGTH = 1000;
 
 const getLnurlpEndpoint = (lightningAddress: string): URL | null => {
-  if (!LIGHTNING_ADDRESS_PATTERN.test(lightningAddress)) return null;
-  const atIndex = lightningAddress.lastIndexOf("@");
-  const user = lightningAddress.slice(0, atIndex);
-  const domain = lightningAddress.slice(atIndex + 1);
+  if (!isLightningAddress(lightningAddress)) return null;
   try {
-    const endpoint = new URL(
-      `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`,
-    );
+    const endpoint = new URL(getLightningAddressRequestUrl(lightningAddress));
     return isAllowedTarget(endpoint) ? endpoint : null;
   } catch {
     return null;

@@ -3,7 +3,7 @@
 Linky is a mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments.
 It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 
-The repo also contains a separate public website in `apps/site/` intended for `linky.fit`, while the product app remains a distinct deployment on `app.linky.fit`.
+The repo also contains a separate public website in `apps/site/` intended for `linky.fit`, while the product app remains a distinct deployment on `app.linky.fit`. Its `/cashu/` redemption page uses the shared linkshu wallet and linkstr delivery packages, with local recovery for interrupted payments.
 
 ## Protocols and stack
 
@@ -235,7 +235,10 @@ Workspace-scoped commands (public site only):
 bun run --filter @linky/site dev
 bun run --filter @linky/site build
 bun run --filter @linky/site preview
+bun run --filter @linky/site test:e2e
 ```
+
+The site smoke suite needs the local mints on 3338/3339 and Nostr relay on 7777. It builds and serves the site on 5180, enabling test-mint redemption only for that build. It covers direct and proxied LNURL payments plus reload recovery after lost swap and melt responses.
 
 Workspace-scoped commands (native shell):
 
